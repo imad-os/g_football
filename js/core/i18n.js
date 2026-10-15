@@ -316,6 +316,81 @@
     'mypc.restart': 'إعادة البداية', 'mypc.abandon': 'انسحاب'
   };
 
+
+  // ---- button mapping ----
+  Object.assign(D.en, {
+    'mv.lowpass': 'Low pass', 'mv.through': 'Through pass', 'mv.long': 'Long pass', 'mv.shoot': 'Shoot', 'mv.curve': 'Curve shot',
+    'mv.chip': 'Chip shot', 'mv.onetwo': 'One-two', 'mv.tackle': 'Tackle', 'mv.slide': 'Slide tackle', 'mv.press': 'Press',
+    'mv.teampress': 'Team press', 'mv.switch': 'Switch player', 'mv.sprint': 'Sprint / dribble',
+    'tier.0': 'tap', 'tier.1': 'hold', 'tier.2': 'hold+', 'tier.3': 'long hold', 'tier.hold': 'hold',
+    'btn.jump': 'OK', 'btn.run': 'RUN', 'btn.cancel': 'CANCEL', 'btn.b': 'B',
+    'map.unbound': 'not set', 'map.title': 'Button mapping',
+    'map.sub': 'Pick an action, then press the real button on your controller or keyboard. Press two buttons together for a combination, hold longer for hold actions.',
+    'map.group.move': 'MOVEMENT', 'map.group.att': 'WITH THE BALL', 'map.group.def': 'WITHOUT THE BALL',
+    'map.prompt': 'Press the button (or two together) now. Tap it, or hold it for a hold / long-hold action.',
+    'map.prompt.sprint': 'Press and hold the button you want for sprint / dribble.',
+    'map.waiting': 'Waiting for a button...', 'map.detected': 'Detected:', 'map.conflict': 'unbound, same button',
+    'map.reset': 'Reset buttons', 'map.reset.done': 'Default buttons restored.', 'map.clear': 'Unbind selected', 'map.cleared': 'Action unbound.',
+    'map.timeout': 'No button detected.',
+    'map.note': 'My PC sends OK (A / Enter / Space), RUN (X / Y / Shift) and CANCEL (Backspace). Gamepad B = RUN + CANCEL together.',
+    'set.buttons': 'Button mapping', 'step.buttons': 'BUTTON MAPPING',
+    'hud.hint': 'OK: pass \u2022 hold OK: through / long / shot \u2022 more moves and your own buttons: Settings > Button mapping'
+  });
+  Object.assign(D.fr, {
+    'mv.lowpass': 'Passe rasante', 'mv.through': 'Passe en profondeur', 'mv.long': 'Longue passe', 'mv.shoot': 'Tir', 'mv.curve': 'Tir enroule',
+    'mv.chip': 'Lob', 'mv.onetwo': 'Une-deux', 'mv.tackle': 'Tacle', 'mv.slide': 'Tacle glisse', 'mv.press': 'Pressing',
+    'mv.teampress': 'Pressing collectif', 'mv.switch': 'Changer de joueur', 'mv.sprint': 'Sprint / dribble',
+    'tier.0': 'appui court', 'tier.1': 'maintenir', 'tier.2': 'maintenir +', 'tier.3': 'maintenir longtemps', 'tier.hold': 'maintenir',
+    'btn.jump': 'OK', 'btn.run': 'COURSE', 'btn.cancel': 'ANNULER', 'btn.b': 'B',
+    'map.unbound': 'non defini', 'map.title': 'Configuration des boutons',
+    'map.sub': 'Choisissez une action, puis appuyez sur le vrai bouton de la manette ou du clavier. Deux boutons ensemble = combinaison, maintenir plus longtemps pour les actions longues.',
+    'map.group.move': 'DEPLACEMENT', 'map.group.att': 'AVEC LE BALLON', 'map.group.def': 'SANS LE BALLON',
+    'map.prompt': 'Appuyez maintenant sur le bouton (ou deux ensemble). Appui court, ou maintenu pour une action longue.',
+    'map.prompt.sprint': 'Appuyez et maintenez le bouton voulu pour le sprint / dribble.',
+    'map.waiting': 'En attente d\u2019un bouton...', 'map.detected': 'Detecte :', 'map.conflict': 'retire, meme bouton',
+    'map.reset': 'Boutons par defaut', 'map.reset.done': 'Boutons par defaut restaures.', 'map.clear': 'Retirer la selection', 'map.cleared': 'Action retiree.',
+    'map.timeout': 'Aucun bouton detecte.',
+    'map.note': 'My PC envoie OK (A / Entree / Espace), COURSE (X / Y / Maj) et ANNULER (Retour arriere). Manette B = COURSE + ANNULER ensemble.',
+    'set.buttons': 'Configuration des boutons', 'step.buttons': 'BOUTONS',
+    'hud.hint': 'OK : passe \u2022 maintenir OK : profondeur / long / tir \u2022 autres actions et boutons : Reglages > Configuration des boutons'
+  });
+  Object.assign(D.es, {
+    'mv.lowpass': 'Pase raso', 'mv.through': 'Pase al hueco', 'mv.long': 'Pase largo', 'mv.shoot': 'Disparo', 'mv.curve': 'Disparo con efecto',
+    'mv.chip': 'Vaselina', 'mv.onetwo': 'Pared', 'mv.tackle': 'Entrada', 'mv.slide': 'Entrada deslizante', 'mv.press': 'Presion',
+    'mv.teampress': 'Presion del equipo', 'mv.switch': 'Cambiar de jugador', 'mv.sprint': 'Sprint / regate',
+    'tier.0': 'toque', 'tier.1': 'mantener', 'tier.2': 'mantener +', 'tier.3': 'mantener mucho', 'tier.hold': 'mantener',
+    'btn.jump': 'OK', 'btn.run': 'CORRER', 'btn.cancel': 'CANCELAR', 'btn.b': 'B',
+    'map.unbound': 'sin asignar', 'map.title': 'Asignacion de botones',
+    'map.sub': 'Elige una accion y pulsa el boton real del mando o teclado. Dos botones juntos = combinacion, mantener mas tiempo para acciones largas.',
+    'map.group.move': 'MOVIMIENTO', 'map.group.att': 'CON EL BALON', 'map.group.def': 'SIN EL BALON',
+    'map.prompt': 'Pulsa ahora el boton (o dos juntos). Toque, o mantenlo para una accion larga.',
+    'map.prompt.sprint': 'Pulsa y mantén el boton que quieres para sprint / regate.',
+    'map.waiting': 'Esperando un boton...', 'map.detected': 'Detectado:', 'map.conflict': 'desasignada, mismo boton',
+    'map.reset': 'Botones por defecto', 'map.reset.done': 'Botones por defecto restaurados.', 'map.clear': 'Quitar seleccion', 'map.cleared': 'Accion quitada.',
+    'map.timeout': 'No se detecto ningun boton.',
+    'map.note': 'My PC envia OK (A / Intro / Espacio), CORRER (X / Y / Mayus) y CANCELAR (Retroceso). Mando B = CORRER + CANCELAR juntos.',
+    'set.buttons': 'Asignacion de botones', 'step.buttons': 'BOTONES',
+    'hud.hint': 'OK: pase \u2022 mantener OK: al hueco / largo / tiro \u2022 mas acciones y tus botones: Ajustes > Asignacion de botones'
+  });
+  Object.assign(D.ar, {
+    'mv.lowpass': 'تمريرة أرضية', 'mv.through': 'تمريرة بينية', 'mv.long': 'تمريرة طويلة', 'mv.shoot': 'تسديد', 'mv.curve': 'تسديدة ملتفة',
+    'mv.chip': 'تسديدة ساقطة', 'mv.onetwo': 'تمريرة حائط', 'mv.tackle': 'تدخل', 'mv.slide': 'تدخل انزلاقي', 'mv.press': 'ضغط',
+    'mv.teampress': 'ضغط الفريق', 'mv.switch': 'تبديل اللاعب', 'mv.sprint': 'ركض / مراوغة',
+    'tier.0': 'ضغطة', 'tier.1': 'إبقاء', 'tier.2': 'إبقاء +', 'tier.3': 'إبقاء طويل', 'tier.hold': 'إبقاء',
+    'btn.jump': 'OK', 'btn.run': 'ركض', 'btn.cancel': 'إلغاء', 'btn.b': 'B',
+    'map.unbound': 'غير محدد', 'map.title': 'تخصيص الأزرار',
+    'map.sub': 'اختر حركة ثم اضغط الزر الحقيقي في ذراع اللعب أو لوحة المفاتيح. زران معًا = تركيبة، والإبقاء أطول للحركات الطويلة.',
+    'map.group.move': 'الحركة', 'map.group.att': 'مع الكرة', 'map.group.def': 'بدون كرة',
+    'map.prompt': 'اضغط الزر الآن (أو زرين معًا). ضغطة سريعة أو إبقاء للحركة الطويلة.',
+    'map.prompt.sprint': 'اضغط مطولًا على الزر المطلوب للركض / المراوغة.',
+    'map.waiting': 'بانتظار زر...', 'map.detected': 'تم اكتشاف:', 'map.conflict': 'أُلغيت، نفس الزر',
+    'map.reset': 'الأزرار الافتراضية', 'map.reset.done': 'تمت استعادة الأزرار الافتراضية.', 'map.clear': 'إلغاء تحديد الحركة', 'map.cleared': 'تم إلغاء الحركة.',
+    'map.timeout': 'لم يتم اكتشاف أي زر.',
+    'map.note': 'يرسل My PC الأزرار OK (A / Enter / Space) وركض (X / Y / Shift) وإلغاء (Backspace). الزر B = ركض + إلغاء معًا.',
+    'set.buttons': 'تخصيص الأزرار', 'step.buttons': 'الأزرار',
+    'hud.hint': 'OK: تمريرة \u2022 إبقاء OK: بينية / طويلة / تسديدة \u2022 المزيد وأزرارك: الإعدادات > تخصيص الأزرار'
+  });
+
   var lang = 'en';
 
   NS.I18n = {

@@ -39,7 +39,7 @@
     NS.Input.setPlayers(s1.active ? 2 : 1);
     s0.player = null;
     s1.player = null;
-    s0.charging = s1.charging = false;
+    s0.evActive = s1.evActive = false;
   }
 
   function assignKickoffCursors() {
@@ -58,7 +58,7 @@
       }
       s.player = pick || fallback;
       used = s.player;
-      s.chargeType = 0; s.chargeFrac = 0; s.pressing = false; s.burstT = 0;
+      s.chargeMove = -1; s.chargeFrac = 0; s.pressing = false; s.burstT = 0; s.evActive = false; s.evMove = -1;
     }
   }
 
@@ -75,6 +75,8 @@
     ball.lastToucher = p.name;
     ball.pickupCooldown = 0.2;
     ball.hard = false;
+    ball.chip = false;
+    if (p.returnTo) p.returnT = 0.28; // one-two: play it back
     p.dribbling = false;
   }
 
@@ -153,7 +155,8 @@
             stamina: 100, animPhase: Math.random() * 6, mesh: mesh,
             stun: 0, tackleT: 0, tackleCd: 0, tackleHit: false, tackleHuman: false,
             runToX: 0, runToZ: 0, runToT: 0, aiCd: Math.random() * 0.3,
-            carry: 0.95, dribbling: false, dBall: 0, rank: 0, gkHold: 0, isCtl: false
+            carry: 0.95, dribbling: false, dBall: 0, rank: 0, gkHold: 0, isCtl: false,
+            tackleSlide: false, returnTo: null, returnT: 0, returnExp: 0
           });
         }
       }
@@ -185,7 +188,7 @@
         p.pos.set(p.homeX, 0, p.homeZ);
         p.vel.set(0, 0, 0);
         p.facing = p.team === 0 ? Math.PI / 2 : -Math.PI / 2;
-        p.stun = 0; p.tackleT = 0; p.tackleCd = 0; p.runToT = 0; p.dribbling = false; p.stamina = 100; p.gkHold = 0;
+        p.stun = 0; p.tackleT = 0; p.tackleCd = 0; p.runToT = 0; p.returnTo = null; p.dribbling = false; p.stamina = 100; p.gkHold = 0;
       }
       World.pressT[0] = 0;
       World.pressT[1] = 0;
@@ -362,6 +365,7 @@
         for (i = 0; i < n; i++) {
           p = players[i];
           if (p.stun > 0 || p.tackleT > 0) continue;
+          if (p === ball.kicker && ball.kickerT > 0) continue;
           var ddx = ball.pos.x - p.pos.x;
           var ddz = ball.pos.z - p.pos.z;
           var d2 = ddx * ddx + ddz * ddz;
@@ -369,6 +373,7 @@
             if (d2 < 7.5 && ball.pos.y < 3.4) {
               var speed = Math.sqrt(bs2);
               var chance = speed < 12 ? 1 : clamp(gkSkill(p.team) - (speed - 20) * 0.01, 0.2, 0.92);
+              if (ball.chip) chance *= 0.4;
               if (Math.random() < chance) {
                 if (speed < 28) {
                   takeBall(p);

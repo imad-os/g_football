@@ -69,6 +69,17 @@
     p.dribbling = nearOpp < 5;
     p.carry = p.dribbling ? 0.7 + 0.4 * Math.abs(Math.sin(p.animPhase * 0.5)) : 0.95;
 
+    if (p.returnTo) {
+      // one-two: give it straight back to the player who passed
+      p.returnT -= dt;
+      if (p.returnT <= 0) {
+        var back = p.returnTo;
+        p.returnTo = null;
+        Actions.kick(p, ACT.THROUGH, 0.6, 0, 0, 1, back);
+      }
+      return;
+    }
+
     p.aiCd -= dt;
     if (p.aiCd > 0) return;
     p.aiCd = 0.28;
@@ -132,6 +143,10 @@
 
       p.dribbling = false;
       p.carry = 0.95;
+      if (p.returnTo) {
+        p.returnExp -= dt; // the one-two pass never arrived: forget it
+        if (p.returnExp <= 0) p.returnTo = null;
+      }
       var attack = p.team === 0 ? 1 : -1;
       var carrier = ball.owner;
       var ownBall = carrier !== null && carrier.team === p.team;

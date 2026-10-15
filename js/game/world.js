@@ -16,14 +16,16 @@
     lastTouchTeam: 0,
     lastToucher: '',
     hard: false, // true after a shot: fast enough to be deflected
+    kicker: null, kickerT: 0, // the last kicker cannot take the ball straight back
+    chip: false, // lofted shot: the keeper is much less likely to save it
     pickupCooldown: 0
   };
 
   function makeSlot(idx) {
     return {
       idx: idx, active: false, team: 0, player: null,
-      charging: false, direct: false, okT: 0, holdArmed: false, pressing: false,
-      chargeType: 0, chargeFrac: 0, burstT: 0, lockT: 0
+            chargeMove: -1, chargeFrac: -1, pressing: false, teamPress: false, evPlayer: null, burstT: 0, lockT: 0,
+      evActive: false, evMask: 0, evT: 0, evSettle: 0, evCtx: 0, evMove: -1, evPrev: 0
     };
   }
 
@@ -62,6 +64,7 @@
     // Advances the ball. Returns the scoring team (0 = home, +x goal; 1 = away) or -1.
     stepBall: function (dt) {
       if (ball.pickupCooldown > 0) ball.pickupCooldown -= dt;
+      if (ball.kickerT > 0) ball.kickerT -= dt;
 
       var o = ball.owner;
       if (o) {
@@ -85,7 +88,7 @@
         ball.vel.y -= 24.0 * dt;
       } else {
         ball.pos.y = R;
-        if (ball.vel.y < -2.0) { ball.vel.y = -ball.vel.y * 0.52; ball.vel.x *= 0.6; ball.vel.z *= 0.6; ball.hard = false; } else ball.vel.y = 0;
+        if (ball.vel.y < -2.0) { ball.vel.y = -ball.vel.y * 0.52; ball.vel.x *= 0.6; ball.vel.z *= 0.6; ball.hard = false; ball.chip = false; } else ball.vel.y = 0;
         var drag = Math.pow(0.28, dt);
         ball.vel.x *= drag;
         ball.vel.z *= drag;

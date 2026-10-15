@@ -18,9 +18,11 @@
       }
       var saved = MyPC.load('settings', null);
       settings = NS.mergeSettings(MyPC.app_config, saved);
+      NS.Bindings.load(MyPC.load('bindings', null));
       return settings;
     },
     getSettings: function () { return settings; },
+    saveBindings: function () { MyPC.save('bindings', NS.Bindings.serialize()); },
     getStats: function () { return stats; },
     saveSettings: function () {
       MyPC.save('settings', settings);

@@ -3,7 +3,7 @@
   'use strict';
 
   // The 3D engine or one of our scripts did not load: let My PC show Retry / Back instead of hanging.
-  if (typeof THREE === 'undefined' || !NS.World || !NS.Scene || !NS.UI || !NS.Match) {
+  if (typeof THREE === 'undefined' || !NS.Bindings || !NS.World || !NS.Scene || !NS.UI || !NS.Match) {
     var noop = function () {};
     MyPC.init({
       onInit: function () { MyPC.fail('Game files failed to load. Check the network.'); },
@@ -137,6 +137,7 @@
     },
 
     onPause: function () {
+      NS.Mapper.cancel(); // never leave a button capture running under My PC's menu
       stopLoop();
       NS.Input.releaseAll();
       NS.Audio.suspend();

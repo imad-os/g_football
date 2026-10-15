@@ -25,7 +25,6 @@
 
   function pad2(n) { return n < 10 ? '0' + n : '' + n; }
 
-  var TYPE_KEYS = ['', 'act.pass', 'act.through', 'act.long', 'act.shoot'];
   // cache keys and element ids are built once, not per frame
   var PK = [null, null];
   (function () {
@@ -94,7 +93,7 @@
         text(k.r, el[k.role], player.roleText);
         width(k.s, el[k.stamina], player.stamina);
       }
-      var frac = slot && slot.charging ? slot.chargeFrac : -1;
+      var frac = slot ? slot.chargeFrac : -1;
       var mark = el[k.mark];
       if (frac < 0) {
         if (last[k.m] !== -1) { last[k.m] = -1; mark.style.visibility = 'hidden'; }
@@ -102,13 +101,17 @@
         var pct = Math.round(frac * 100);
         if (last[k.m] !== pct) { last[k.m] = pct; mark.style.visibility = 'visible'; mark.style.left = pct + '%'; }
       }
-      var type = slot && slot.charging ? slot.chargeType : 0;
-      if (last[k.t] !== type) {
-        last[k.t] = type;
+      var mv = slot && frac >= 0 ? slot.chargeMove : -1;
+      if (last[k.t] !== mv) {
+        last[k.t] = mv;
         var chip = el[k.act];
-        chip.textContent = type ? NS.I18n.t(TYPE_KEYS[type]) : '';
-        chip.style.visibility = type ? 'visible' : 'hidden';
-        chip.setAttribute('data-act', type);
+        if (mv >= 0) {
+          chip.textContent = NS.I18n.t('mv.' + NS.Bindings.MOVES[mv].id);
+          chip.setAttribute('data-act', NS.Bindings.MOVES[mv].cls);
+        } else {
+          chip.textContent = '';
+        }
+        chip.style.visibility = mv >= 0 ? 'visible' : 'hidden';
       }
     },
 

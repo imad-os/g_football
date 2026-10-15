@@ -1,40 +1,40 @@
-/* Human control: movement, dribble, the action button (pass / through / long / shot / tackle / press) and player switching.
+/* Human control: movement, dribble sprint, player switching and the button-map gesture engine.
  *
- * One button is enough (TV remote: arrows + OK):
- *   with the ball  : tap OK = pass, hold a little = through ball, longer = long ball, longest = shot (power grows)
- *                    OK + RUN (B / Shift / X) = shot straight away, RUN alone = dribble sprint
- *   without ball   : tap OK = tackle (if an opponent carries the ball close), otherwise switch player
- *                    hold OK = press the ball carrier (team-mates close in too)
- *   CANCEL (C / Backspace) = switch player, hold CANCEL = open the game menu
- *   double-tap a direction = sprint burst
+ * A "press event" starts when a button that takes part in a move goes down (a second button within 60 ms joins it as a
+ * combination). With the ball the move is chosen by the button(s) and how long they were held and fires on release
+ * (shots get their power from the hold time). Without the ball the move starts as soon as its gesture is reached
+ * (tackle on press, press / team press while held). All of it comes from NS.Bindings, so the player can remap it.
+ * Defaults: OK tap = low pass / tackle, OK hold = through ball / press, longer = long ball, longest = shot / team press,
+ * CANCEL + OK = curve shot / slide tackle, CANCEL = one-two / switch player, RUN = sprint (with the ball: dribble sprint).
  */
 (function (NS) {
   'use strict';
 
   var World = NS.World;
   var ACT = NS.ACT;
-  var Z = NS.ZONES;
   var Actions = NS.Actions;
   var Input = NS.Input;
+  var B = NS.Bindings;
+  var TH = B.TH;
+
+  var I_LOW = B.index('lowpass');
+  var I_THR = B.index('through');
+  var I_LONG = B.index('long');
+  var I_SHOOT = B.index('shoot');
+  var I_CURVE = B.index('curve');
+  var I_CHIP = B.index('chip');
+  var I_ONETWO = B.index('onetwo');
+  var I_TACKLE = B.index('tackle');
+  var I_SLIDE = B.index('slide');
+  var I_TEAM = B.index('teampress');
+  var I_SWITCH = B.index('switch');
+
+  var MENU_HOLD = 1.0;
+  var FULL_CHARGE = 1.28;
 
   function otherPlayer(slot) {
     var o = World.slots[1 - slot.idx];
     return o.active ? o.player : null;
-  }
-
-  function zoneType(t, direct) {
-    if (direct) return ACT.SHOOT;
-    if (t < Z.PASS_MAX) return ACT.PASS;
-    if (t < Z.THROUGH_MAX) return ACT.THROUGH;
-    if (t < Z.LONG_MAX) return ACT.LONG;
-    return ACT.SHOOT;
-  }
-
-  function shotPower(t, direct) {
-    var v;
-    if (direct) v = 0.3 + t / 0.9 * 0.7;
-    else v = 0.4 + (t - Z.LONG_MAX) / (Z.SHOOT_FULL - Z.LONG_MAX) * 0.6;
-    return v < 0.3 ? 0.3 : (v > 1 ? 1 : v);
   }
 
   function switchCursor(slot) {
@@ -47,23 +47,56 @@
     if (n) slot.player = n;
   }
 
-  function tackleOrSwitch(slot) {
+  // Tackle when an opponent carries the ball close, otherwise switch to the player nearest the ball.
+  function tackleOrSwitch(slot, slide) {
     var p = slot.player;
     var c = World.ball.owner;
     if (c && c.team !== p.team && p.tackleCd <= 0) {
       var dx = c.pos.x - p.pos.x;
       var dz = c.pos.z - p.pos.z;
-      if (dx * dx + dz * dz < 17.6) { Actions.startTackle(p, c, true); return; }
+      if (dx * dx + dz * dz < (slide ? 56 : 17.6)) { Actions.startTackle(p, c, true, slide); return; }
     }
     switchCursor(slot);
   }
 
-  function resetCharge(slot) {
-    slot.charging = false;
+  function endEvent(slot) {
+    slot.evActive = false;
+    slot.evMove = -1;
+    slot.chargeMove = -1;
+    slot.chargeFrac = -1;
     slot.pressing = false;
-    slot.holdArmed = false;
-    slot.chargeType = 0;
-    slot.chargeFrac = 0;
+    slot.teamPress = false;
+  }
+
+  function shotPower(mi, d) {
+    var v = 0.35 + (d - TH[B.MOVES[mi].tier]) * 0.9;
+    return v < 0.35 ? 0.35 : (v > 1 ? 1 : v);
+  }
+
+  function fireAttack(slot, p, mi, d, pad) {
+    var type;
+    var follow = true;
+    var power = 0.6;
+    if (mi === I_LOW) type = ACT.PASS;
+    else if (mi === I_THR) type = ACT.THROUGH;
+    else if (mi === I_LONG) type = ACT.LONG;
+    else if (mi === I_SHOOT) { type = ACT.SHOOT; power = shotPower(mi, d); follow = false; }
+    else if (mi === I_CURVE) { type = ACT.CURVE; power = shotPower(mi, d); follow = false; }
+    else if (mi === I_CHIP) { type = ACT.CHIP; power = shotPower(mi, d); follow = false; }
+    else if (mi === I_ONETWO) { Actions.oneTwo(p, pad.x, pad.y); slot.lockT = 1.4; return; }
+    else return;
+    Actions.kick(p, type, power, pad.x, pad.y, 1);
+    var target = Actions.lastTarget;
+    if (follow && target && World.settings.switchMode === 'AUTO' && target !== otherPlayer(slot)) {
+      slot.player = target;
+      slot.lockT = 1.2; // stay on the receiver while the ball travels
+    }
+  }
+
+  function fireDefense(slot, mi) {
+    if (mi === I_TACKLE) tackleOrSwitch(slot, false);
+    else if (mi === I_SLIDE) tackleOrSwitch(slot, true);
+    else if (mi === I_SWITCH) switchCursor(slot);
   }
 
   var assignT = 0;
@@ -83,7 +116,7 @@
         var other = otherPlayer(s);
         var cur = s.player;
         if (!cur) { s.player = Actions.nearestToBall(s.team, other, null); continue; }
-        if (s.lockT > 0 && !o) continue;
+        if (s.lockT > 0 || s.evActive) continue; // never change player in the middle of a button gesture
         if (o && o.team === s.team) {
           if (auto && o !== cur && o !== other) s.player = o;
         } else if (auto) {
@@ -104,75 +137,90 @@
       var ball = World.ball;
       if (slot.lockT > 0) slot.lockT -= dt;
 
-      // cancel: tap = switch player, hold = game menu
-      if (pad.cancelHeld) {
-        pad.cancelT += dt;
-        // gamepad B sends RUN + CANCEL together: holding it to sprint must not open the menu
-        if (pad.run) pad.cancelFired = true;
-        else if (pad.cancelT > 0.6 && !pad.cancelFired) { pad.cancelFired = true; NS.Match.requestMenu(); }
-      }
-      if (pad.cancelUp) {
-        pad.cancelUp = false;
-        if (!pad.cancelFired && pad.cancelT < 0.35 && ball.owner !== p) { switchCursor(slot); p = slot.player; }
-        pad.cancelT = 0;
+      // hold CANCEL alone for a second: game menu
+      if (pad.cur === NS.BTN.CANCEL) { // CANCEL alone (gamepad B = RUN + CANCEL never opens it)
+        pad.menuT += dt;
+        if (pad.menuT > MENU_HOLD && !pad.menuFired) {
+          pad.menuFired = true;
+          endEvent(slot);
+          NS.Match.requestMenu();
+          return;
+        }
+      } else {
+        pad.menuT = 0;
+        pad.menuFired = false;
       }
 
+      var rel = B.relevant();
+      var cur = pad.cur & rel;
+      var held = (pad.cur | pad.latch) & rel;
+      pad.latch = 0;
+      var rising = held & ~slot.evPrev;
+      slot.evPrev = cur;
+
+      if (slot.evActive && slot.evPlayer !== p) endEvent(slot);
+
       if (p.stun > 0 || p.tackleT > 0) {
-        pad.okDown = false;
-        if (pad.okUp) { pad.okUp = false; resetCharge(slot); }
+        endEvent(slot);
         return;
       }
 
       var has = ball.owner === p;
 
-      if (pad.okDown) {
-        pad.okDown = false;
-        slot.okT = 0;
-        slot.pressing = false;
-        if (has) {
-          slot.charging = true;
-          slot.direct = pad.run;
-          slot.holdArmed = false;
+      // ---- gesture engine ----
+      if (rising) {
+        if (slot.evActive && slot.evSettle > 0) {
+          slot.evMask |= held;
         } else {
-          slot.charging = false;
-          slot.holdArmed = true;
-          tackleOrSwitch(slot);
-          p = slot.player;
-          has = ball.owner === p;
-          if (p.tackleT > 0) return;
+          slot.evActive = true;
+          slot.evMask = held;
+          slot.evT = 0;
+          slot.evMove = -1;
+          slot.evCtx = has ? 1 : 2;
+          slot.evPlayer = p;
+          slot.evSettle = B.needsSettle(held) ? 0.06 : 0;
         }
       }
 
-      if (pad.ok) {
-        slot.okT += dt;
-        if (!has && slot.holdArmed && slot.okT > 0.28) slot.pressing = true;
-      }
-      if (has) slot.pressing = false;
-
-      if (slot.charging) {
-        if (!has) {
-          resetCharge(slot);
-        } else {
-          slot.chargeType = zoneType(slot.okT, slot.direct);
-          slot.chargeFrac = slot.direct ? 0.45 + 0.55 * Math.min(1, slot.okT / 0.9) : Math.min(1, slot.okT / Z.SHOOT_FULL);
-        }
-      }
-
-      if (pad.okUp) {
-        pad.okUp = false;
-        if (slot.charging && has) {
-          var type = zoneType(slot.okT, slot.direct);
-          var power = type === ACT.SHOOT ? shotPower(slot.okT, slot.direct) : 0.6;
-          Actions.kick(p, type, power, pad.x, pad.y, 1);
-          var target = Actions.lastTarget;
-          if (target && type !== ACT.SHOOT && World.settings.switchMode === 'AUTO' && target !== otherPlayer(slot)) {
-            slot.player = target;
-            slot.lockT = 1.2; // stay on the receiver while the ball travels
+      if (slot.evActive) {
+        var ended = (cur & slot.evMask) !== slot.evMask;
+        if (slot.evSettle > 0) slot.evSettle -= dt;
+        else slot.evT += dt;
+        var mv;
+        if (slot.evCtx === 1) {
+          if (!has) {
+            endEvent(slot);
+          } else {
+            mv = B.resolve(1, slot.evMask, slot.evT);
+            slot.chargeMove = mv;
+            slot.chargeFrac = slot.evT > 0.06 ? Math.min(1, slot.evT / FULL_CHARGE) : -1;
+            if (ended) {
+              if (mv >= 0) fireAttack(slot, p, mv, slot.evT, pad);
+              endEvent(slot);
+              p = slot.player;
+              has = ball.owner === p;
+            }
           }
+        } else if (has) {
+          endEvent(slot);
+        } else {
+          if (slot.evSettle <= 0 || ended) {
+            mv = B.resolve(2, slot.evMask, slot.evT);
+            if (mv !== slot.evMove) {
+              slot.evMove = mv;
+              if (mv >= 0 && B.MOVES[mv].kind === 0) {
+                fireDefense(slot, mv);
+                p = slot.player;
+                slot.evPlayer = p; // a switch keeps the press gesture going
+                has = ball.owner === p;
+                if (p.tackleT > 0) return;
+              }
+            }
+            slot.pressing = mv >= 0 && B.MOVES[mv].kind === 2;
+            slot.teamPress = mv === I_TEAM;
+          }
+          if (ended) endEvent(slot);
         }
-        resetCharge(slot);
-        p = slot.player;
-        has = ball.owner === p;
       }
 
       // ---- movement ----
@@ -182,16 +230,17 @@
       var mx = pad.x;
       var mz = pad.y;
       var len = Math.sqrt(mx * mx + mz * mz);
-      var sprint = pad.run && p.stamina > 8;
-      var dribbling = has && pad.run;
+      var sprint = B.sprintDown(pad.cur) && p.stamina > 8;
+      var dribbling = has && sprint;
       var burst = slot.burstT > 0;
+      var charging = slot.evActive && slot.evCtx === 1 && slot.evT > 0.06;
       var speed;
       var drain = 0;
       if (has) {
         if (dribbling) { speed = 12.2; drain = 12; }
         else if (burst) { speed = 12.8; drain = 9; }
         else speed = 9.4;
-        if (slot.charging) speed *= 0.6;
+        if (charging) speed *= 0.6;
       } else {
         if (slot.pressing) speed = 12.4;
         else if (sprint) { speed = 13.4; drain = 14; }
@@ -199,7 +248,7 @@
         else speed = 10.8;
       }
 
-      // pressing: lean towards the ball carrier even without input
+      // pressing: lean towards the ball carrier even without input; team press brings the team-mates too
       var carrier = ball.owner;
       if (slot.pressing && carrier && carrier.team !== p.team) {
         var cx = carrier.pos.x - p.pos.x;
@@ -208,7 +257,7 @@
         if (len > 0.1) { mx = mx / len * 0.5 + cx / cl * 0.5; mz = mz / len * 0.5 + cz / cl * 0.5; }
         else { mx = cx / cl; mz = cz / cl; }
         len = Math.sqrt(mx * mx + mz * mz) || 1;
-        World.pressT[p.team] = 0.3;
+        if (slot.teamPress) World.pressT[p.team] = 0.3;
       }
 
       // no stick input but a pass was played into space for this player: run onto it

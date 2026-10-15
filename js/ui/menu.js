@@ -9,7 +9,7 @@
 
   var root;
   var screens = {};
-  var order = ['MAIN', 'SIDES', 'TEAMS', 'GAMEPLAN', 'PAUSE', 'SETTINGS', 'HELP'];
+  var order = ['MAIN', 'SIDES', 'TEAMS', 'GAMEPLAN', 'PAUSE', 'SETTINGS', 'HELP', 'BUTTONS'];
   var current = 'MAIN';
   var open = true;
   var focused = null;
@@ -17,6 +17,7 @@
   var helpReturn = 'MAIN';
   var gpCanvas, gpCtx;
   var refs = {};
+  var mapLast = -2; // move index (-1 = sprint) of the focused row on the mapping screen
 
   var MODES = [
     { comp: 'EXHIBITION', icon: '⚽', tone: 'sky' },
@@ -62,6 +63,7 @@
     node.classList.add('focus');
     var k = node.getAttribute('data-k');
     if (k) lastFocusKey[current] = k;
+    if (node.hasAttribute('data-mv')) mapLast = +node.getAttribute('data-mv');
     if (!noScroll && node.scrollIntoView) node.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
 
@@ -142,6 +144,8 @@
     if (key === 'TEAMS') renderTeams();
     if (key === 'GAMEPLAN') renderGamePlan();
     if (key === 'SETTINGS') syncSettings();
+    if (key === 'HELP') renderHelp();
+    if (key === 'BUTTONS') renderButtons();
     if (key === 'PAUSE') updatePauseSummary();
     NS.UI.refreshStats();
     NS.Input.clearEdges();
@@ -166,6 +170,7 @@
   }
 
   function back() {
+    if (current === 'BUTTONS') { show('SETTINGS'); return; }
     var running = matchRunning();
     if (running) {
       if (current === 'PAUSE') resumeMatch();
@@ -626,6 +631,7 @@
       NS.App.applySettings();
       syncSettings();
     }));
+    foot.appendChild(btn('', T('set.buttons'), 'mapbtn', function () { show('BUTTONS'); }));
     foot.appendChild(btn('primary', T('set.done'), 'done', function () {
       if (matchRunning()) show('PAUSE'); else show('MAIN');
     }));
@@ -644,26 +650,151 @@
 
   function buildHelp() {
     var wrap = screens.HELP;
-    var cols = el('div', 'help-cols');
-    var groups = [
-      ['help.attack', ['help.a1', 'help.a2', 'help.a3', 'help.a4', 'help.a5', 'help.a6', 'help.a7']],
-      ['help.defense', ['help.d1', 'help.d2', 'help.d3', 'help.d4']],
-      ['help.general', ['help.g1', 'help.g2', 'help.g3']]
-    ];
-    groups.forEach(function (g) {
-      var card = el('div', 'panel-card');
-      card.appendChild(el('div', 'tag amber', T(g[0])));
-      var ul = el('ul', 'help-list');
-      g[1].forEach(function (k) { ul.appendChild(el('li', null, T(k))); });
-      card.appendChild(ul);
-      cols.appendChild(card);
-    });
-    wrap.appendChild(cols);
+    refs.helpCols = el('div', 'help-cols');
+    wrap.appendChild(refs.helpCols);
     var foot = el('div', 'foot');
     var b = btn('primary', T('nav.back'), 'back', back);
     b.setAttribute('data-default', '1');
     foot.appendChild(b);
+    foot.appendChild(btn('', T('set.buttons'), 'mapbtn', function () { show('BUTTONS'); }));
     wrap.appendChild(foot);
+  }
+
+  function helpRow(ul, idx) {
+    var li = el('li');
+    li.appendChild(el('b', null, T('mv.' + NS.Bindings.MOVES[idx].id) + ': '));
+    li.appendChild(document.createTextNode(NS.Bindings.bindingLabel(idx)));
+    ul.appendChild(li);
+  }
+
+  // The controls list always shows the player's own button map.
+  function renderHelp() {
+    clear(refs.helpCols);
+    var B = NS.Bindings;
+    var groups = [['help.attack', 1], ['help.defense', 2]];
+    groups.forEach(function (g) {
+      var card = el('div', 'panel-card');
+      card.appendChild(el('div', 'tag amber', T(g[0])));
+      var ul = el('ul', 'help-list');
+      if (g[1] === 1) {
+        var li = el('li');
+        li.appendChild(el('b', null, T('mv.sprint') + ': '));
+        li.appendChild(document.createTextNode(B.maskLabel(B.sprintMask()) + ' • ' + T('tier.hold')));
+        ul.appendChild(li);
+      }
+      for (var i = 0; i < B.MOVES.length; i++) if (B.MOVES[i].ctx === g[1]) helpRow(ul, i);
+      card.appendChild(ul);
+      refs.helpCols.appendChild(card);
+    });
+    var gen = el('div', 'panel-card');
+    gen.appendChild(el('div', 'tag amber', T('help.general')));
+    var gl = el('ul', 'help-list');
+    ['help.a1', 'help.a7', 'help.d4', 'help.g1', 'help.g2', 'help.g3'].forEach(function (k) { gl.appendChild(el('li', null, T(k))); });
+    gen.appendChild(gl);
+    refs.helpCols.appendChild(gen);
+  }
+
+  /* ------------------------------ BUTTON MAPPING ------------------------------ */
+
+  function buildButtons() {
+    var wrap = screens.BUTTONS;
+    var head = el('div', 'screen-head');
+    head.appendChild(el('h2', null, T('map.title')));
+    head.appendChild(el('p', 'muted small', T('map.sub')));
+    wrap.appendChild(head);
+    refs.mapCols = el('div', 'help-cols map-cols');
+    wrap.appendChild(refs.mapCols);
+    refs.mapMsg = el('div', 'map-msg');
+    wrap.appendChild(refs.mapMsg);
+    var foot = el('div', 'foot');
+    var left = el('div', 'row');
+    left.appendChild(btn('', T('nav.back'), 'back', back));
+    left.appendChild(btn('danger', T('map.reset'), 'mapreset', function () {
+      NS.Bindings.reset();
+      NS.Storage.saveBindings();
+      renderButtons('mapreset');
+      refs.mapMsg.textContent = T('map.reset.done');
+    }));
+    foot.appendChild(left);
+    foot.appendChild(btn('', T('map.clear'), 'mapclear', function () {
+      if (mapLast >= 0) {
+        NS.Bindings.clear(mapLast);
+        NS.Storage.saveBindings();
+        renderButtons('mapclear');
+        refs.mapMsg.textContent = T('map.cleared');
+      }
+    }));
+    wrap.appendChild(foot);
+
+    // capture overlay
+    refs.capture = el('div', 'capture hidden');
+    var box = el('div', 'capture-box');
+    refs.capTitle = el('div', 'cap-title');
+    refs.capText = el('div', 'cap-text');
+    refs.capLive = el('div', 'cap-live');
+    box.appendChild(refs.capTitle);
+    box.appendChild(refs.capText);
+    box.appendChild(refs.capLive);
+    box.appendChild(el('div', 'cap-note', T('map.note')));
+    refs.capture.appendChild(box);
+    wrap.appendChild(refs.capture);
+  }
+
+  function mapRow(idx) {
+    var B = NS.Bindings;
+    var sprint = idx === -1;
+    var b = btn('map-row', '', 'mv:' + idx, function () { startCapture(idx); });
+    b.setAttribute('data-mv', String(idx));
+    b.appendChild(el('span', 'map-name', T(sprint ? 'mv.sprint' : 'mv.' + B.MOVES[idx].id)));
+    var val = sprint ? B.maskLabel(B.sprintMask()) + ' • ' + T('tier.hold') : B.bindingLabel(idx);
+    b.appendChild(el('span', 'map-val' + (!sprint && !B.MOVES[idx].mask ? ' off' : ''), val));
+    return b;
+  }
+
+  function renderButtons(focusKey) {
+    var B = NS.Bindings;
+    clear(refs.mapCols);
+    var groups = [['map.group.move', 0], ['map.group.att', 1], ['map.group.def', 2]];
+    groups.forEach(function (g) {
+      var card = el('div', 'panel-card');
+      card.appendChild(el('div', 'tag amber', T(g[0])));
+      var list = el('div', 'stack');
+      if (g[1] === 0) list.appendChild(mapRow(-1));
+      else for (var i = 0; i < B.MOVES.length; i++) if (B.MOVES[i].ctx === g[1]) list.appendChild(mapRow(i));
+      card.appendChild(list);
+      refs.mapCols.appendChild(card);
+    });
+    refs.capture.classList.add('hidden');
+    if (focusKey) { focused = null; if (!focusByKey(focusKey)) focusDefault(); }
+  }
+
+  function startCapture(idx) {
+    var B = NS.Bindings;
+    var sprint = idx === -1;
+    refs.capTitle.textContent = T(sprint ? 'mv.sprint' : 'mv.' + B.MOVES[idx].id);
+    refs.capText.textContent = T(sprint ? 'map.prompt.sprint' : 'map.prompt');
+    refs.capLive.textContent = T('map.waiting');
+    refs.capture.classList.remove('hidden');
+    refs.mapMsg.textContent = '';
+    NS.Mapper.start(sprint, function (mask, tier) {
+      var msg;
+      if (!mask) {
+        msg = T('map.timeout');
+      } else if (sprint) {
+        B.setSprint(mask);
+        msg = T('mv.sprint') + ' = ' + B.maskLabel(mask);
+      } else {
+        var cleared = B.set(idx, mask, tier);
+        msg = T('mv.' + B.MOVES[idx].id) + ' = ' + B.bindingLabel(idx) +
+          (cleared >= 0 ? '   (' + T('mv.' + B.MOVES[cleared].id) + ': ' + T('map.conflict') + ')' : '');
+      }
+      if (mask) NS.Storage.saveBindings();
+      renderButtons('mv:' + idx);
+      refs.mapMsg.textContent = msg;
+      NS.Input.clearEdges();
+    }, function (mask) {
+      refs.capLive.textContent = T('map.detected') + ' ' + B.maskLabel(mask);
+    });
   }
 
   /* ------------------------------ public ------------------------------ */
@@ -683,6 +814,7 @@
       buildPause();
       buildSettings();
       buildHelp();
+      buildButtons();
       NS.Match.syncRosters();
       updateSideSlots();
       lastFocusKey.TEAMS = 'h:' + World.session.homeTeamId;
@@ -713,6 +845,7 @@
       refs.statGoals.textContent = st.goals;
     },
     onInput: function (action, pressed, repeat) {
+      if (NS.Mapper.active()) return; // the mapper is listening to the real buttons
       if (!pressed) return;
       switch (action) {
         case 'left': move(0); break;

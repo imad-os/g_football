@@ -51,22 +51,51 @@
     },
 
     // type: ACT.PASS | THROUGH | LONG | SHOOT, power 0..1, (ax, az) aim input.
-    kick: function (p, type, power, ax, az, accuracy) {
+    kick: function (p, type, power, ax, az, accuracy, forceTarget) {
       var ball = World.ball;
       ball.owner = null;
       ball.pickupCooldown = 0.28;
       ball.lastTouchTeam = p.team;
       ball.lastToucher = p.name;
-      ball.hard = type === ACT.SHOOT;
+      ball.kicker = p;
+      ball.kickerT = 0.5;
+      ball.hard = type === ACT.SHOOT || type === ACT.CURVE;
+      ball.chip = type === ACT.CHIP;
       p.dribbling = false;
       this.lastTarget = null;
       var attack = p.team === 0 ? 1 : -1;
-      NS.Audio.kick(type === ACT.SHOOT);
+      NS.Audio.kick(type >= ACT.SHOOT);
 
       var angle, speed, vy, d, tx, tz;
-      if (type === ACT.SHOOT) {
+      if (type >= ACT.SHOOT) {
         var goalX = attack * HALF_W;
-        var goalZ = (az > 0.1 || az < -0.1) ? az * GOAL_HALF_W * 0.85 : clamp(-p.pos.z * 0.25, -3, 3);
+        var aimed = az > 0.1 || az < -0.1;
+        if (type === ACT.CURVE) {
+          // aim outside the post on the far side and curl back in
+          var side = aimed ? (az > 0 ? 1 : -1) : (p.pos.z > 0 ? -1 : 1);
+          var curveZ = -side * (GOAL_HALF_W + 2);
+          angle = Math.atan2(goalX - p.pos.x, curveZ - p.pos.z);
+          angle += (Math.random() - 0.5) * (1.05 - power) * 0.1 * (accuracy || 1);
+          speed = 30 + power * 12;
+          vy = 4 + power * 4;
+          ball.vel.set(Math.sin(angle) * speed, vy, Math.cos(angle) * speed);
+          ball.spinY = side * attack * 30;
+          return;
+        }
+        if (type === ACT.CHIP) {
+          // lofted shot that drops into the goal over the keeper
+          var dg = Math.abs(goalX - p.pos.x) - 1;
+          if (dg < 3) dg = 3;
+          var Tc = clamp(dg / 15, 0.9, 1.7);
+          var cz = aimed ? az * GOAL_HALF_W * 0.6 : 0;
+          var cdx = goalX - attack - p.pos.x;
+          var cdz = cz - p.pos.z;
+          ball.pos.y = NS.BALL_R + 0.15;
+          ball.vel.set(cdx / Tc, 0.5 * G * Tc, cdz / Tc);
+          ball.spinY = 0;
+          return;
+        }
+        var goalZ = aimed ? az * GOAL_HALF_W * 0.85 : clamp(-p.pos.z * 0.25, -3, 3);
         angle = Math.atan2(goalX - p.pos.x, goalZ - p.pos.z);
         angle += (Math.random() - 0.5) * (1.05 - power) * 0.16 * (accuracy || 1);
         speed = 22 + power * 20;
@@ -76,7 +105,7 @@
         return;
       }
 
-      var mate = this.pickTarget(p, ax, az, type);
+      var mate = forceTarget || this.pickTarget(p, ax, az, type);
       this.lastTarget = mate;
       ball.spinY = 0;
       if (!mate) {
@@ -87,7 +116,7 @@
         d = type === ACT.LONG ? 36 : (type === ACT.THROUGH ? 24 : 14);
         tx = p.pos.x + kx * d; tz = p.pos.z + kz * d;
       } else if (type === ACT.THROUGH) {
-        tx = clamp(mate.pos.x + attack * 7, -HALF_W + 2, HALF_W - 2);
+        tx = clamp(mate.pos.x + mate.vel.x * (forceTarget ? 0.5 : 0.35) + attack * (forceTarget ? 0 : 7), -HALF_W + 2, HALF_W - 2);
         tz = clamp(mate.pos.z + mate.vel.z * 0.4, -HALF_H + 2, HALF_H - 2);
       } else if (type === ACT.LONG) {
         tx = clamp(mate.pos.x + attack * 3, -HALF_W + 2, HALF_W - 2);
@@ -111,7 +140,7 @@
         ball.pos.y = NS.BALL_R + 0.15;
         if (mate) { mate.runToX = tx; mate.runToZ = tz; mate.runToT = T + 0.7; }
       } else if (type === ACT.THROUGH) {
-        speed = clamp(d * DRAG_K + 4, 16, 34);
+        speed = forceTarget ? clamp(d * DRAG_K + 2, 9, 30) : clamp(d * DRAG_K + 4, 16, 34);
         vy = 0.8;
         if (mate) { mate.runToX = tx; mate.runToZ = tz; mate.runToT = 1.5; }
       } else {
@@ -121,18 +150,36 @@
       ball.vel.set(Math.sin(angle) * speed, vy, Math.cos(angle) * speed);
     },
 
-    // Tackle lunge towards the ball carrier.
-    startTackle: function (p, carrier, human) {
+    // One-two: short pass, the receiver plays it straight back into the space the passer runs into.
+    oneTwo: function (p, ax, az) {
+      var attack = p.team === 0 ? 1 : -1;
+      this.kick(p, ACT.PASS, 0.6, ax, az, 1);
+      var m = this.lastTarget;
+      if (m) {
+        m.returnTo = p;
+        m.returnT = 0;
+        m.returnExp = 3;
+        p.runToX = clamp(p.pos.x + attack * 16, -HALF_W + 3, HALF_W - 3);
+        p.runToZ = clamp(p.pos.z + (m.pos.z > p.pos.z ? -7 : 7), -HALF_H + 3, HALF_H - 3);
+        p.runToT = 1.6;
+      }
+      return m;
+    },
+
+    // Tackle lunge towards the ball carrier (slide = longer, wider, riskier).
+    startTackle: function (p, carrier, human, slide) {
       var dx = carrier.pos.x + carrier.vel.x * 0.15 - p.pos.x;
       var dz = carrier.pos.z + carrier.vel.z * 0.15 - p.pos.z;
       var d = Math.sqrt(dx * dx + dz * dz);
       if (d < 0.01) d = 0.01;
-      p.tackleT = 0.3;
-      p.tackleCd = 1.0;
+      p.tackleT = slide ? 0.45 : 0.3;
+      p.tackleCd = slide ? 1.4 : 1.0;
       p.tackleHit = false;
       p.tackleHuman = human;
-      p.vel.x = dx / d * 16;
-      p.vel.z = dz / d * 16;
+      p.tackleSlide = !!slide;
+      var lunge = slide ? 19 : 16;
+      p.vel.x = dx / d * lunge;
+      p.vel.z = dz / d * lunge;
       p.facing = Math.atan2(dx, dz);
       NS.Audio.tackle();
     },
@@ -145,12 +192,12 @@
       if (!p.tackleHit && carrier && carrier.team !== p.team) {
         var dx = carrier.pos.x - p.pos.x;
         var dz = carrier.pos.z - p.pos.z;
-        if (dx * dx + dz * dz < 3.6) {
+        if (dx * dx + dz * dz < (p.tackleSlide ? 6.4 : 3.6)) {
           p.tackleHit = true;
           var vx = -dx, vz = -dz;
           var vl = Math.sqrt(vx * vx + vz * vz) || 1;
           var front = (Math.sin(carrier.facing) * (vx / vl) + Math.cos(carrier.facing) * (vz / vl)); // +1 = tackled from the front
-          var chance = baseChance * (1 - 0.18 * front);
+          var chance = baseChance * (1 - 0.18 * front) + (p.tackleSlide ? 0.08 : 0);
           if (carrier.dribbling) chance *= 0.6;
           chance = clamp(chance, 0.05, 0.92);
           if (Math.random() < chance) {
@@ -165,12 +212,12 @@
             p.vel.set(0, 0, 0);
             NS.Audio.kick(false);
           } else {
-            p.stun = 0.5;
+            p.stun = p.tackleSlide ? 0.9 : 0.5;
             p.tackleT = 0;
           }
         }
       }
-      if (p.tackleT <= 0 && !p.tackleHit) p.stun = 0.3;
+      if (p.tackleT <= 0 && !p.tackleHit) p.stun = p.tackleSlide ? 0.6 : 0.3;
       if (p.tackleT <= 0) { p.vel.x *= 0.3; p.vel.z *= 0.3; }
     },
 
