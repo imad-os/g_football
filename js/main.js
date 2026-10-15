@@ -3,7 +3,7 @@
   'use strict';
 
   // The 3D engine or one of our scripts did not load: let My PC show Retry / Back instead of hanging.
-  if (typeof THREE === 'undefined' || !NS.Bindings || !NS.World || !NS.Scene || !NS.UI || !NS.Match) {
+  if (typeof THREE === 'undefined' || !NS.Bindings || !NS.Gamepad || !NS.World || !NS.Scene || !NS.UI || !NS.Match) {
     var noop = function () {};
     MyPC.init({
       onInit: function () { MyPC.fail('Game files failed to load. Check the network.'); },
@@ -29,6 +29,7 @@
     var elapsed = ts - last;
     last = ts;
     if (elapsed > 250) elapsed = 250;
+    NS.Gamepad.poll(); // real controller buttons (A B X Y, L R, ZL ZR...)
     var m = World.match;
 
     if (m.running) {
@@ -69,6 +70,12 @@
   }
 
   NS.App = {
+    // every action (My PC's onInput, or the controller read directly when standalone)
+    input: function (action, pressed, repeat, dev) {
+      NS.Input.feed(action, pressed, repeat, dev);
+      if (NS.UI.isOpen()) NS.UI.onInput(action, pressed, repeat);
+      else if (action === 'menu' && pressed && !repeat) NS.Match.requestMenu();
+    },
     applySettings: function () {
       var s = World.settings;
       NS.Audio.setEnabled(s.soundEnabled);
@@ -98,7 +105,7 @@
         NS.I18n.applyDom();
         MyPC.progress(0.1);
 
-        NS.Input.setRaw(!!(MyPC.buttons && MyPC.buttons.supported));
+        NS.Gamepad.init(info.standalone);
         var settings = NS.Storage.load();
         World.settings = settings;
         NS.Audio.setEnabled(settings.soundEnabled);
@@ -145,6 +152,7 @@
     },
 
     onResume: function () {
+      NS.Gamepad.resync();
       NS.Audio.resume();
       NS.Quality.resetTimer();
       startLoop();
@@ -158,14 +166,7 @@
       NS.Scene.dispose();
     },
 
-    // every gamepad button by name (My PC API level 9); older My PC versions never call it
-    onButton: function (name, pressed, dev) { NS.Input.button(name, pressed, dev); },
-
-    onInput: function (action, pressed, repeat, dev) {
-      NS.Input.feed(action, pressed, repeat, dev);
-      if (NS.UI.isOpen()) NS.UI.onInput(action, pressed, repeat);
-      else if (action === 'menu' && pressed && !repeat) NS.Match.requestMenu();
-    },
+    onInput: function (action, pressed, repeat, dev) { NS.App.input(action, pressed, repeat, dev); },
 
     onMenu: function (id) { NS.UI.openFromHost(id); },
 

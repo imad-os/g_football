@@ -398,8 +398,8 @@
     'map.prompt': 'Press the button (or two together) now. Tap it, or hold it for a hold / long-hold action.',
     'map.countdown': 'Cancels by itself in %s s if nothing is pressed',
     'map.timeout': 'No button detected in 5 seconds: nothing changed.',
-    'map.note': 'Face buttons are named by position: A = bottom, B = right, X = left, Y = top. L / R = shoulders (L1 R1), ZL / ZR = triggers (L2 R2).',
-    'map.noraw': 'This My PC sends only OK / RUN / CANCEL from gamepads: update My PC to map every gamepad button (L, R, ZL, ZR...).'
+    'map.note': 'Buttons are shown with your controller’s own names (Nintendo L R ZL ZR, Xbox LB RB LT RT, PlayStation L1 R1 L2 R2).',
+    'map.noraw': 'Press any button on your gamepad once: then every button (A B X Y, L R, ZL ZR, L3 R3) can be mapped on the PAD side.'
   });
   Object.assign(D.fr, {
     'map.kb': 'TV / CLAV', 'map.pad': 'MANETTE',
@@ -407,8 +407,8 @@
     'map.prompt': 'Appuyez maintenant sur le bouton (ou deux ensemble). Appui court, ou maintenu pour une action longue.',
     'map.countdown': 'Annulation automatique dans %s s sans appui',
     'map.timeout': 'Aucun bouton detecte en 5 secondes : rien n\u2019a change.',
-    'map.note': 'Boutons de face nommes par position : A = bas, B = droite, X = gauche, Y = haut. L / R = gachettes hautes (L1 R1), ZL / ZR = gachettes (L2 R2).',
-    'map.noraw': 'Ce My PC n\u2019envoie que OK / COURSE / ANNULER depuis les manettes : mettez My PC a jour pour configurer chaque bouton (L, R, ZL, ZR...).'
+    'map.note': 'Les boutons portent les noms de votre manette (Nintendo L R ZL ZR, Xbox LB RB LT RT, PlayStation L1 R1 L2 R2).',
+    'map.noraw': 'Appuyez une fois sur un bouton de la manette : chaque bouton (A B X Y, L R, ZL ZR, L3 R3) pourra alors etre configure cote MANETTE.'
   });
   Object.assign(D.es, {
     'map.kb': 'TV / TECL', 'map.pad': 'MANDO',
@@ -416,8 +416,8 @@
     'map.prompt': 'Pulsa ahora el boton (o dos juntos). Toque, o mantenlo para una accion larga.',
     'map.countdown': 'Se cancela solo en %s s si no pulsas nada',
     'map.timeout': 'Ningun boton detectado en 5 segundos: no ha cambiado nada.',
-    'map.note': 'Botones frontales por posicion: A = abajo, B = derecha, X = izquierda, Y = arriba. L / R = botones superiores (L1 R1), ZL / ZR = gatillos (L2 R2).',
-    'map.noraw': 'Este My PC solo envia OK / CORRER / CANCELAR desde los mandos: actualiza My PC para asignar cada boton (L, R, ZL, ZR...).'
+    'map.note': 'Los botones llevan los nombres de tu mando (Nintendo L R ZL ZR, Xbox LB RB LT RT, PlayStation L1 R1 L2 R2).',
+    'map.noraw': 'Pulsa una vez cualquier boton del mando: despues podras asignar cada boton (A B X Y, L R, ZL ZR, L3 R3) en el lado MANDO.'
   });
   Object.assign(D.ar, {
     'map.kb': 'تلفاز / لوحة', 'map.pad': 'ذراع',
@@ -425,8 +425,8 @@
     'map.prompt': 'اضغط الزر الآن (أو زرين معًا). ضغطة سريعة أو إبقاء للحركة الطويلة.',
     'map.countdown': 'يُلغى تلقائيًا بعد %s ث إن لم تضغط شيئًا',
     'map.timeout': 'لم يُكتشف أي زر خلال 5 ثوانٍ: لم يتغير شيء.',
-    'map.note': 'أزرار الوجه حسب موضعها: A = أسفل، B = يمين، X = يسار، Y = أعلى. L / R = الأزرار العلوية (L1 R1)، ZL / ZR = الزنادات (L2 R2).',
-    'map.noraw': 'هذه النسخة من My PC ترسل OK / ركض / إلغاء فقط من الذراع: حدّث My PC لتخصيص كل زر (L، R، ZL، ZR...).'
+    'map.note': 'تظهر الأزرار بأسمائها في ذراعك (Nintendo L R ZL ZR، Xbox LB RB LT RT، PlayStation L1 R1 L2 R2).',
+    'map.noraw': 'اضغط أي زر في ذراع اللعب مرة واحدة: بعدها يمكن تخصيص كل زر (A B X Y، L R، ZL ZR، L3 R3).'
   });
 
   var lang = 'en';

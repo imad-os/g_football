@@ -5,7 +5,7 @@ Static site, no build step. Plug it into the My PC App Store with the address `h
 
 ## Controls
 
-Every move has two bindings: **TV / KB** (remote, keyboard, touch pad, phone) and **PAD** (a gamepad, every physical button: A B X Y by position, L R, ZL ZR, L3 R3; needs a My PC that sends raw buttons, SDK API 9 `onButton`; older My PC versions send a gamepad as OK / RUN / CANCEL and use the TV / KB side). Detection cancels itself after 5 s without a press; no button cancels it. Gamepad defaults (PES style): A pass, Y through, B long, X shoot, ZR + X curve, L + X chip, L + A one-two, R sprint; without the ball A press, B tackle, X slide, Y team press, L switch.
+Every move has two bindings: **TV / KB** (remote, keyboard, touch pad, phone) and **PAD** (a gamepad, every physical button: A B X Y by position, L R, ZL ZR, L3 R3; read directly with `navigator.getGamepads()` like the other g_ games, shown with the controller's own names (Nintendo, Xbox, PlayStation); until a real press is seen the gamepad uses My PC's OK / RUN / CANCEL and the TV / KB side). Detection cancels itself after 5 s without a press; no button cancels it. Gamepad defaults (PES style): A pass, Y through, B long, X shoot, ZR + X curve, L + X chip, L + A one-two, R sprint; without the ball A press, B tackle, X slide, Y team press, L switch.
 
 On the remote / keyboard side My PC hands games abstract buttons: **OK** (gamepad A, Enter, Space, Z), **RUN** (X / Y / Shift) and **CANCEL** (Backspace; gamepad B sends RUN + CANCEL together), plus the arrows. So every move is bound to a detected button or a two-button
 combination **plus a gesture**: tap, hold, hold+ or long hold. Open **Settings > Button mapping** (also reachable from Controls), pick a move, then press the real button
@@ -60,7 +60,7 @@ index.html            entry page (SDK first, then our files, all with ?v=<versio
 mypc-app.json         My PC manifest (id, scores, owner config, touch pad buttons)
 css/style.css         plain CSS, no framework, no CDN
 vendor/three.min.js   three.js r128 (MIT), self-hosted
-js/core/              config (constants + settings schema), i18n (en fr es ar), bindings (button map), audio, storage (MyPC.save/load), input (MyPC onInput), quality
+js/core/              config (constants + settings schema), i18n (en fr es ar), bindings (button map), gamepad (real controller buttons), audio, storage (MyPC.save/load), input (MyPC onInput), quality
 js/data/              teams (110 clubs and nations), formations
 js/render/            assets (procedural kits and players), scene (three.js scene, camera, stadium)
 js/game/              world (state + ball physics), actions (kicks, tackle), ai (CPU), controls (human), match (flow + fixed step)

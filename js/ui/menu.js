@@ -769,7 +769,7 @@
   function renderButtons(focusKey) {
     var B = NS.Bindings;
     clear(refs.mapCols);
-    refs.mapNote.classList.toggle('hidden', NS.Input.rawEnabled());
+    refs.mapNote.classList.toggle('hidden', NS.Gamepad.live());
     var groups = [['map.group.move', 0], ['map.group.att', 1], ['map.group.def', 2]];
     groups.forEach(function (g) {
       var card = el('div', 'panel-card');

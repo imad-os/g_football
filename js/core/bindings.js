@@ -1,7 +1,7 @@
 /* Button map. Every move has TWO bindings:
  *   kb  = TV remote / keyboard / touch / phone (My PC actions: OK = jump, RUN, CANCEL)
- *   pad = gamepad, every physical button (A B X Y, L R, ZL ZR, L3 R3) when My PC sends raw buttons (SDK API 9);
- *         on an older My PC a gamepad's buttons arrive as OK / RUN / CANCEL and use the kb binding.
+ *   pad = gamepad, every physical button (A B X Y, L R, ZL ZR, L3 R3) read directly (js/core/gamepad.js); until a real
+ *         press is seen there, a gamepad arrives as My PC's OK / RUN / CANCEL and uses the kb binding.
  * A binding is a button or a two-button combination plus a gesture: tap / hold / hold+ / long hold.
  *
  * Moves have a context (1 = with the ball, 2 = without it) and a kind:
@@ -23,8 +23,11 @@
   var RAW_BITS = { a: PA, b: PB, x: PX, y: PY, l: PL, r: PR, zl: PZL, zr: PZR, l3: PL3, r3: PR3 };
   var EXTRA = [8192, 16384, 32768];
   var extraNames = {};
-  var BIT_LABEL = [[J, 'btn.jump'], [R, 'btn.run'], [C, 'btn.cancel'], [PA, 'A'], [PB, 'B'], [PX, 'X'], [PY, 'Y'], [PL, 'L'], [PR, 'R'],
-    [PZL, 'ZL'], [PZR, 'ZR'], [PL3, 'L3'], [PR3, 'R3']];
+  // [bit, kb text key | standard gamepad button index]: gamepad buttons are shown with the controller's own names
+  var BIT_LABEL = [[J, 'btn.jump'], [R, 'btn.run'], [C, 'btn.cancel'], [PA, 0], [PB, 1], [PX, 2], [PY, 3], [PL, 4], [PR, 5],
+    [PZL, 6], [PZR, 7], [PL3, 10], [PR3, 11]];
+  var PAD_FALLBACK = ['A', 'B', 'X', 'Y', 'L', 'R', 'ZL', 'ZR', '', '', 'L3', 'R3'];
+  function padName(i) { return NS.Gamepad ? NS.Gamepad.label(i) : PAD_FALLBACK[i]; }
 
   var TH = [0, 0.16, 0.36, 0.58]; // hold time (s) where each gesture tier starts
 
@@ -183,7 +186,7 @@
       if (!mask) return t('map.unbound');
       var out = '';
       for (var k = 0; k < BIT_LABEL.length; k++) {
-        if (mask & BIT_LABEL[k][0]) out += (out ? ' + ' : '') + (k < 3 ? t(BIT_LABEL[k][1]) : BIT_LABEL[k][1]);
+        if (mask & BIT_LABEL[k][0]) out += (out ? ' + ' : '') + (k < 3 ? t(BIT_LABEL[k][1]) : padName(BIT_LABEL[k][1]));
       }
       for (var n in extraNames) if (mask & extraNames[n]) out += (out ? ' + ' : '') + n.toUpperCase();
       return out;
