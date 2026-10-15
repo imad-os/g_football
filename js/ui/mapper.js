@@ -1,52 +1,79 @@
-/* Button capture for the mapping screen. It listens to the real presses My PC delivers (OK = jump, RUN, CANCEL):
- * the player presses the button (or two buttons together) and holds it for as long as the gesture needs.
- * The result is the button combination plus the gesture tier, taken from how long it was held. */
+/* Button capture for the mapping screen. It listens to the real presses My PC delivers: every gamepad button by name
+ * (A B X Y L R ZL ZR L3 R3, My PC API level 9) and OK / RUN / CANCEL from the remote, keyboard, touch pad or phone.
+ * The player presses the button (or two buttons together) and holds it for as long as the gesture needs; the result is
+ * the button combination plus the gesture tier from how long it was held.
+ * No button cancels a capture (any button may be the one to map): it ends by itself after TIMEOUT seconds without a press. */
 (function (NS) {
   'use strict';
+
+  var TIMEOUT = 5;
 
   var on = false;
   var cbDone = null;
   var cbLive = null;
+  var cbTick = null;
   var held = 0;
   var peak = 0;
   var firstAt = 0;
   var startAt = 0;
   var ignore = 0;       // buttons already down when capture started (the OK that opened it)
   var timer = 0;
-  var sprintOnly = false;
+  var left = 0;
+
+  function stopTimer() {
+    if (timer) clearTimeout(timer);
+    timer = 0;
+  }
 
   function finish(mask, dur) {
     on = false;
-    clearTimeout(timer);
+    stopTimer();
     var cb = cbDone;
     cbDone = null;
     cbLive = null;
+    cbTick = null;
     if (cb) cb(mask, mask ? NS.Bindings.tierOf(dur) : 0);
   }
 
+  // one-second countdown while nothing is pressed; at 0 the capture gives up
+  function tick() {
+    timer = 0;
+    if (!on) return;
+    if (held) { timer = setTimeout(tick, 1000); return; } // a button is down: wait for its release
+    left--;
+    if (left <= 0) { finish(0, 0); return; }
+    if (cbTick) cbTick(left);
+    timer = setTimeout(tick, 1000);
+  }
+
   NS.Mapper = {
+    TIMEOUT: TIMEOUT,
     active: function () { return on; },
 
-    // onDone(mask, tier) (mask 0 = nothing detected), onLive(mask) while buttons are down.
-    start: function (isSprint, onDone, onLive) {
-      sprintOnly = isSprint;
+    // onDone(mask, tier) (mask 0 = nothing detected in time), onLive(mask) while buttons are down, onTick(secondsLeft).
+    start: function (onDone, onLive, onTick) {
       on = true;
       held = 0;
       peak = 0;
       ignore = 0;
       cbDone = onDone;
       cbLive = onLive;
+      cbTick = onTick;
       startAt = performance.now();
-      clearTimeout(timer);
-      timer = setTimeout(function () { if (on && !held) finish(0, 0); }, 15000);
+      left = TIMEOUT;
+      stopTimer();
+      timer = setTimeout(tick, 1000);
+      if (cbTick) cbTick(left);
     },
 
+    // only when the whole game is paused or closed (My PC's menu), never from a button
     cancel: function () {
       if (!on) return;
       on = false;
-      clearTimeout(timer);
+      stopTimer();
       cbDone = null;
       cbLive = null;
+      cbTick = null;
     },
 
     // Fed by NS.Input for every button press / release while capturing.
@@ -57,13 +84,13 @@
         if (!held) { firstAt = performance.now(); peak = 0; }
         held |= bit;
         peak |= bit;
+        left = TIMEOUT;
         if (cbLive) cbLive(peak);
       } else {
         if (ignore & bit) { ignore &= ~bit; return; }
         held &= ~bit;
         if (!held && peak) finish(peak, (performance.now() - firstAt) / 1000);
       }
-    },
-    isSprintCapture: function () { return sprintOnly; }
+    }
   };
 })(window.RS6 = window.RS6 || {});

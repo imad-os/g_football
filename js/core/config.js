@@ -2,7 +2,7 @@
 (function (NS) {
   'use strict';
 
-  NS.VERSION = '1.2.0';
+  NS.VERSION = '1.3.0';
 
   // Pitch geometry (world units; x = length, z = width, y = up)
   NS.PITCH_HALF_W = 46;

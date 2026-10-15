@@ -661,13 +661,14 @@
   }
 
   function helpRow(ul, idx) {
+    var B = NS.Bindings;
     var li = el('li');
-    li.appendChild(el('b', null, T('mv.' + NS.Bindings.MOVES[idx].id) + ': '));
-    li.appendChild(document.createTextNode(NS.Bindings.bindingLabel(idx)));
+    li.appendChild(el('b', null, T('mv.' + B.MOVES[idx].id) + ': '));
+    li.appendChild(document.createTextNode(B.bindingLabel(idx, false) + '   |   ' + T('map.pad') + ': ' + B.bindingLabel(idx, true)));
     ul.appendChild(li);
   }
 
-  // The controls list always shows the player's own button map.
+  // The controls list always shows the player's own button map (remote / keyboard | gamepad).
   function renderHelp() {
     clear(refs.helpCols);
     var B = NS.Bindings;
@@ -679,7 +680,7 @@
       if (g[1] === 1) {
         var li = el('li');
         li.appendChild(el('b', null, T('mv.sprint') + ': '));
-        li.appendChild(document.createTextNode(B.maskLabel(B.sprintMask()) + ' • ' + T('tier.hold')));
+        li.appendChild(document.createTextNode(B.maskLabel(B.sprintMask(false)) + '   |   ' + T('map.pad') + ': ' + B.maskLabel(B.sprintMask(true))));
         ul.appendChild(li);
       }
       for (var i = 0; i < B.MOVES.length; i++) if (B.MOVES[i].ctx === g[1]) helpRow(ul, i);
@@ -701,6 +702,8 @@
     var head = el('div', 'screen-head');
     head.appendChild(el('h2', null, T('map.title')));
     head.appendChild(el('p', 'muted small', T('map.sub')));
+    refs.mapNote = el('p', 'map-note hidden', T('map.noraw'));
+    head.appendChild(refs.mapNote);
     wrap.appendChild(head);
     refs.mapCols = el('div', 'help-cols map-cols');
     wrap.appendChild(refs.mapCols);
@@ -732,9 +735,11 @@
     refs.capTitle = el('div', 'cap-title');
     refs.capText = el('div', 'cap-text');
     refs.capLive = el('div', 'cap-live');
+    refs.capCount = el('div', 'cap-count');
     box.appendChild(refs.capTitle);
     box.appendChild(refs.capText);
     box.appendChild(refs.capLive);
+    box.appendChild(refs.capCount);
     box.appendChild(el('div', 'cap-note', T('map.note')));
     refs.capture.appendChild(box);
     wrap.appendChild(refs.capture);
@@ -746,14 +751,25 @@
     var b = btn('map-row', '', 'mv:' + idx, function () { startCapture(idx); });
     b.setAttribute('data-mv', String(idx));
     b.appendChild(el('span', 'map-name', T(sprint ? 'mv.sprint' : 'mv.' + B.MOVES[idx].id)));
-    var val = sprint ? B.maskLabel(B.sprintMask()) + ' • ' + T('tier.hold') : B.bindingLabel(idx);
-    b.appendChild(el('span', 'map-val' + (!sprint && !B.MOVES[idx].mask ? ' off' : ''), val));
+    var vals = el('span', 'map-vals');
+    var kb = sprint ? B.maskLabel(B.sprintMask(false)) : B.bindingLabel(idx, false);
+    var pad = sprint ? B.maskLabel(B.sprintMask(true)) : B.bindingLabel(idx, true);
+    var v1 = el('span', 'map-val' + (!sprint && !B.MOVES[idx].mask ? ' off' : ''));
+    v1.appendChild(el('i', 'map-dev', T('map.kb')));
+    v1.appendChild(document.createTextNode(kb));
+    var v2 = el('span', 'map-val pad' + (!sprint && !B.MOVES[idx].pmask ? ' off' : ''));
+    v2.appendChild(el('i', 'map-dev', T('map.pad')));
+    v2.appendChild(document.createTextNode(pad));
+    vals.appendChild(v1);
+    vals.appendChild(v2);
+    b.appendChild(vals);
     return b;
   }
 
   function renderButtons(focusKey) {
     var B = NS.Bindings;
     clear(refs.mapCols);
+    refs.mapNote.classList.toggle('hidden', NS.Input.rawEnabled());
     var groups = [['map.group.move', 0], ['map.group.att', 1], ['map.group.def', 2]];
     groups.forEach(function (g) {
       var card = el('div', 'panel-card');
@@ -768,6 +784,8 @@
     if (focusKey) { focused = null; if (!focusByKey(focusKey)) focusDefault(); }
   }
 
+  // Detection: the real button(s) pressed on the remote, keyboard or gamepad. The gamepad side is set when a gamepad
+  // button was pressed, the remote / keyboard side otherwise. Nothing cancels it but the 5 s timeout.
   function startCapture(idx) {
     var B = NS.Bindings;
     var sprint = idx === -1;
@@ -776,24 +794,28 @@
     refs.capLive.textContent = T('map.waiting');
     refs.capture.classList.remove('hidden');
     refs.mapMsg.textContent = '';
-    NS.Mapper.start(sprint, function (mask, tier) {
+    NS.Mapper.start(function (mask, tier) {
       var msg;
+      var pad = B.isPadMask(mask);
       if (!mask) {
         msg = T('map.timeout');
       } else if (sprint) {
         B.setSprint(mask);
-        msg = T('mv.sprint') + ' = ' + B.maskLabel(mask);
+        msg = T('mv.sprint') + ' (' + T(pad ? 'map.pad' : 'map.kb') + ') = ' + B.maskLabel(mask);
       } else {
         var cleared = B.set(idx, mask, tier);
-        msg = T('mv.' + B.MOVES[idx].id) + ' = ' + B.bindingLabel(idx) +
+        msg = T('mv.' + B.MOVES[idx].id) + ' (' + T(pad ? 'map.pad' : 'map.kb') + ') = ' + B.bindingLabel(idx, pad) +
           (cleared >= 0 ? '   (' + T('mv.' + B.MOVES[cleared].id) + ': ' + T('map.conflict') + ')' : '');
       }
       if (mask) NS.Storage.saveBindings();
       renderButtons('mv:' + idx);
       refs.mapMsg.textContent = msg;
       NS.Input.clearEdges();
+      NS.Input.block(350); // the button just mapped must not also press the focused row again
     }, function (mask) {
       refs.capLive.textContent = T('map.detected') + ' ' + B.maskLabel(mask);
+    }, function (secs) {
+      refs.capCount.textContent = T('map.countdown').replace('%s', secs);
     });
   }
 

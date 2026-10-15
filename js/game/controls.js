@@ -69,7 +69,7 @@
   }
 
   function shotPower(mi, d) {
-    var v = 0.35 + (d - TH[B.MOVES[mi].tier]) * 0.9;
+    var v = 0.35 + (d - TH[B.lastTier]) * 0.9;
     return v < 0.35 ? 0.35 : (v > 1 ? 1 : v);
   }
 
@@ -137,8 +137,8 @@
       var ball = World.ball;
       if (slot.lockT > 0) slot.lockT -= dt;
 
-      // hold CANCEL alone for a second: game menu
-      if (pad.cur === NS.BTN.CANCEL) { // CANCEL alone (gamepad B = RUN + CANCEL never opens it)
+      // hold CANCEL alone for a second: game menu (remote / keyboard; a gamepad has Start for that)
+      if (pad.cur === NS.BTN.CANCEL) {
         pad.menuT += dt;
         if (pad.menuT > MENU_HOLD && !pad.menuFired) {
           pad.menuFired = true;

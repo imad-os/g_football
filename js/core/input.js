@@ -1,6 +1,8 @@
 /* Per-player input state fed ONLY by My PC (MyPC.init onInput). No keydown listeners of our own.
  * Buttons: jump (OK / A / Space / Z), run (B / X / Y / Shift), cancel (B / Backspace / C) as bits 1, 2, 4.
- * Directions: left right up down. The device decides the player: keys2 / pad1.. = player 2. */
+ * Directions: left right up down. The device decides the player: keys2 / pad1.. = player 2.
+ * Gamepads: with a My PC that sends raw buttons (SDK API 9, onButton) every button has its own bit (A B X Y L R ZL ZR L3 R3)
+ * and the gamepad's OK / RUN / CANCEL actions are ignored here (menus still use them). */
 (function (NS) {
   'use strict';
 
@@ -23,6 +25,7 @@
   var twoPlayers = false;
   var blockUntil = 0;
   var BIT = { jump: 1, run: 2, cancel: 4 };
+  var rawPads = false; // My PC sends every gamepad button by name
 
   function padOf(dev) {
     if (twoPlayers && (dev === 'keys2' || dev === 'pad1' || dev === 'pad2' || dev === 'pad3')) return pads[1];
@@ -59,6 +62,7 @@
         case 'jump':
         case 'run':
         case 'cancel': {
+          if (rawPads && dev && dev.charAt(0) === 'p') break; // the raw buttons of this pad are used instead
           var bit = BIT[action];
           if (pressed) {
             if (repeat || (p.cur & bit) || (p.ign & bit)) break;
@@ -73,6 +77,29 @@
           }
           break;
         }
+      }
+    },
+    setRaw: function (on) { rawPads = !!on; },
+    rawEnabled: function () { return rawPads; },
+    // A physical gamepad button (MyPC onButton): same press / release handling as the actions above.
+    button: function (name, pressed, dev) {
+      if (!rawPads) {
+        rawPads = true;
+        for (var i = 0; i < 2; i++) pads[i].cur &= ~NS.BTN.KB; // a gamepad OK / RUN / CANCEL seen before must not stay held
+      }
+      var bit = NS.Bindings.bitOf(name);
+      if (!bit) return;
+      var p = padOf(dev);
+      if (pressed) {
+        if ((p.cur & bit) || (p.ign & bit)) return;
+        if (performance.now() < blockUntil) { p.ign |= bit; return; }
+        p.cur |= bit;
+        p.latch |= bit;
+        if (NS.Mapper && NS.Mapper.active()) NS.Mapper.button(bit, true);
+      } else {
+        p.cur &= ~bit;
+        p.ign &= ~bit;
+        if (NS.Mapper && NS.Mapper.active()) NS.Mapper.button(bit, false);
       }
     },
     releaseAll: function () {

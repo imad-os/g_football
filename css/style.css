@@ -286,3 +286,11 @@ h1, h2, p { margin: 0; }
 .cap-live { font-size: 1.6rem; font-weight: 900; color: #7dd3fc; min-height: 2.2rem; }
 .cap-note { font-size: 0.8rem; color: var(--muted); margin-top: 1.2rem; }
 @media (max-aspect-ratio: 1/1) { .map-cols { grid-template-columns: 1fr; } }
+
+/* button mapping v2: two sides per move, countdown */
+.map-row { align-items: flex-start; }
+.map-vals { display: flex; flex-direction: column; align-items: flex-end; gap: 0.1rem; }
+.map-val.pad { color: #fcd34d; }
+.map-dev { font-style: normal; font-size: 0.65rem; font-weight: 900; color: var(--muted); margin-inline-end: 0.35rem; letter-spacing: 0.04em; }
+.map-note { color: #fca5a5; font-size: 0.8rem; margin-top: 0.3rem; }
+.cap-count { font-size: 0.95rem; color: var(--muted); margin-top: 0.6rem; min-height: 1.2rem; }

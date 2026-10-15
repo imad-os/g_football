@@ -5,7 +5,9 @@ Static site, no build step. Plug it into the My PC App Store with the address `h
 
 ## Controls
 
-My PC only hands games abstract buttons: **OK** (gamepad A, Enter, Space, Z), **RUN** (X / Y / Shift) and **CANCEL** (Backspace; gamepad B sends RUN + CANCEL together), plus the arrows. So every move is bound to a detected button or a two-button
+Every move has two bindings: **TV / KB** (remote, keyboard, touch pad, phone) and **PAD** (a gamepad, every physical button: A B X Y by position, L R, ZL ZR, L3 R3; needs a My PC that sends raw buttons, SDK API 9 `onButton`; older My PC versions send a gamepad as OK / RUN / CANCEL and use the TV / KB side). Detection cancels itself after 5 s without a press; no button cancels it. Gamepad defaults (PES style): A pass, Y through, B long, X shoot, ZR + X curve, L + X chip, L + A one-two, R sprint; without the ball A press, B tackle, X slide, Y team press, L switch.
+
+On the remote / keyboard side My PC hands games abstract buttons: **OK** (gamepad A, Enter, Space, Z), **RUN** (X / Y / Shift) and **CANCEL** (Backspace; gamepad B sends RUN + CANCEL together), plus the arrows. So every move is bound to a detected button or a two-button
 combination **plus a gesture**: tap, hold, hold+ or long hold. Open **Settings > Button mapping** (also reachable from Controls), pick a move, then press the real button
 on your controller or keyboard: it is detected and saved (per My PC profile). Defaults work with a TV remote (arrows + OK) for the core moves.
 

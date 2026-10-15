@@ -391,6 +391,44 @@
     'hud.hint': 'OK: تمريرة \u2022 إبقاء OK: بينية / طويلة / تسديدة \u2022 المزيد وأزرارك: الإعدادات > تخصيص الأزرار'
   });
 
+  // ---- button mapping v2: remote / keyboard and gamepad sides, every gamepad button, 5 s detection ----
+  Object.assign(D.en, {
+    'map.kb': 'TV / KB', 'map.pad': 'PAD',
+    'map.sub': 'Pick an action, then press the real button. A gamepad button (A B X Y, L R, ZL ZR, L3 R3) sets the PAD side, the remote or keyboard sets the TV / KB side. Two buttons together = a combination, hold longer for hold actions.',
+    'map.prompt': 'Press the button (or two together) now. Tap it, or hold it for a hold / long-hold action.',
+    'map.countdown': 'Cancels by itself in %s s if nothing is pressed',
+    'map.timeout': 'No button detected in 5 seconds: nothing changed.',
+    'map.note': 'Face buttons are named by position: A = bottom, B = right, X = left, Y = top. L / R = shoulders (L1 R1), ZL / ZR = triggers (L2 R2).',
+    'map.noraw': 'This My PC sends only OK / RUN / CANCEL from gamepads: update My PC to map every gamepad button (L, R, ZL, ZR...).'
+  });
+  Object.assign(D.fr, {
+    'map.kb': 'TV / CLAV', 'map.pad': 'MANETTE',
+    'map.sub': 'Choisissez une action puis appuyez sur le vrai bouton. Un bouton de manette (A B X Y, L R, ZL ZR, L3 R3) regle le cote MANETTE, la telecommande ou le clavier le cote TV / CLAV. Deux boutons ensemble = combinaison, maintenir plus longtemps pour les actions longues.',
+    'map.prompt': 'Appuyez maintenant sur le bouton (ou deux ensemble). Appui court, ou maintenu pour une action longue.',
+    'map.countdown': 'Annulation automatique dans %s s sans appui',
+    'map.timeout': 'Aucun bouton detecte en 5 secondes : rien n\u2019a change.',
+    'map.note': 'Boutons de face nommes par position : A = bas, B = droite, X = gauche, Y = haut. L / R = gachettes hautes (L1 R1), ZL / ZR = gachettes (L2 R2).',
+    'map.noraw': 'Ce My PC n\u2019envoie que OK / COURSE / ANNULER depuis les manettes : mettez My PC a jour pour configurer chaque bouton (L, R, ZL, ZR...).'
+  });
+  Object.assign(D.es, {
+    'map.kb': 'TV / TECL', 'map.pad': 'MANDO',
+    'map.sub': 'Elige una accion y pulsa el boton real. Un boton del mando (A B X Y, L R, ZL ZR, L3 R3) ajusta el lado MANDO, el mando de la TV o el teclado el lado TV / TECL. Dos botones juntos = combinacion, mantener mas tiempo para acciones largas.',
+    'map.prompt': 'Pulsa ahora el boton (o dos juntos). Toque, o mantenlo para una accion larga.',
+    'map.countdown': 'Se cancela solo en %s s si no pulsas nada',
+    'map.timeout': 'Ningun boton detectado en 5 segundos: no ha cambiado nada.',
+    'map.note': 'Botones frontales por posicion: A = abajo, B = derecha, X = izquierda, Y = arriba. L / R = botones superiores (L1 R1), ZL / ZR = gatillos (L2 R2).',
+    'map.noraw': 'Este My PC solo envia OK / CORRER / CANCELAR desde los mandos: actualiza My PC para asignar cada boton (L, R, ZL, ZR...).'
+  });
+  Object.assign(D.ar, {
+    'map.kb': 'تلفاز / لوحة', 'map.pad': 'ذراع',
+    'map.sub': 'اختر حركة ثم اضغط الزر الحقيقي. زر ذراع اللعب (A B X Y، L R، ZL ZR، L3 R3) يضبط جانب الذراع، والريموت أو لوحة المفاتيح يضبطان جانب التلفاز / اللوحة. زران معًا = تركيبة، والإبقاء أطول للحركات الطويلة.',
+    'map.prompt': 'اضغط الزر الآن (أو زرين معًا). ضغطة سريعة أو إبقاء للحركة الطويلة.',
+    'map.countdown': 'يُلغى تلقائيًا بعد %s ث إن لم تضغط شيئًا',
+    'map.timeout': 'لم يُكتشف أي زر خلال 5 ثوانٍ: لم يتغير شيء.',
+    'map.note': 'أزرار الوجه حسب موضعها: A = أسفل، B = يمين، X = يسار، Y = أعلى. L / R = الأزرار العلوية (L1 R1)، ZL / ZR = الزنادات (L2 R2).',
+    'map.noraw': 'هذه النسخة من My PC ترسل OK / ركض / إلغاء فقط من الذراع: حدّث My PC لتخصيص كل زر (L، R، ZL، ZR...).'
+  });
+
   var lang = 'en';
 
   NS.I18n = {

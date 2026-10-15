@@ -98,6 +98,7 @@
         NS.I18n.applyDom();
         MyPC.progress(0.1);
 
+        NS.Input.setRaw(!!(MyPC.buttons && MyPC.buttons.supported));
         var settings = NS.Storage.load();
         World.settings = settings;
         NS.Audio.setEnabled(settings.soundEnabled);
@@ -156,6 +157,9 @@
       NS.Audio.close();
       NS.Scene.dispose();
     },
+
+    // every gamepad button by name (My PC API level 9); older My PC versions never call it
+    onButton: function (name, pressed, dev) { NS.Input.button(name, pressed, dev); },
 
     onInput: function (action, pressed, repeat, dev) {
       NS.Input.feed(action, pressed, repeat, dev);
