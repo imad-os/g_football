@@ -24,8 +24,11 @@
     return (World.slots[0].active && World.slots[0].team === team) || (World.slots[1].active && World.slots[1].team === team);
   }
 
+  // World.levels = ["HARD", "EASY"] lets each CPU team play at its own level (used by the balancing tests).
+  function levelOf(team) { return World.levels ? World.levels[team] : World.settings.difficulty; }
+
   function profFor(team) {
-    return humanTeam(team) ? AI.profiles.NORMAL : AI.profile(World.settings.difficulty);
+    return humanTeam(team) ? AI.profiles.NORMAL : AI.profile(levelOf(team));
   }
 
   function configureSlots() {
@@ -76,12 +79,13 @@
     ball.pickupCooldown = 0.2;
     ball.hard = false;
     ball.chip = false;
+    ball.gkTried = 0;
     if (p.returnTo) p.returnT = 0.28; // one-two: play it back
     p.dribbling = false;
   }
 
   function gkSkill(team) {
-    return humanTeam(team) ? 0.74 : AI.profile(World.settings.difficulty).gkSave;
+    return humanTeam(team) ? 0.74 : AI.profile(levelOf(team)).gkSave;
   }
 
   function triggerGoal(team) {
@@ -156,7 +160,10 @@
             stun: 0, tackleT: 0, tackleCd: 0, tackleHit: false, tackleHuman: false,
             runToX: 0, runToZ: 0, runToT: 0, aiCd: Math.random() * 0.3,
             carry: 0.95, dribbling: false, dBall: 0, rank: 0, gkHold: 0, isCtl: false,
-            tackleSlide: false, returnTo: null, returnT: 0, returnExp: 0
+            tackleSlide: false, returnTo: null, returnT: 0, returnExp: 0,
+            // AI brain state
+            mark: null, icX: 0, icZ: 0, drX: 0, drZ: 0, runT: 0, runCd: 0, runX: 0, runZ: 0,
+            aiT: 0, tgtX: 0, tgtZ: 0, tgtS: 8, gkRT: 0
           });
         }
       }
@@ -188,7 +195,8 @@
         p.pos.set(p.homeX, 0, p.homeZ);
         p.vel.set(0, 0, 0);
         p.facing = p.team === 0 ? Math.PI / 2 : -Math.PI / 2;
-        p.stun = 0; p.tackleT = 0; p.tackleCd = 0; p.runToT = 0; p.returnTo = null; p.dribbling = false; p.stamina = 100; p.gkHold = 0;
+        p.stun = 0; p.tackleT = 0; p.tackleCd = 0; p.runToT = 0; p.returnTo = null; p.dribbling = false;
+        p.mark = null; p.drX = 0; p.drZ = 0; p.runT = 0; p.runCd = 0; p.aiT = 0; p.gkRT = 0; p.stamina = 100; p.gkHold = 0;
       }
       World.pressT[0] = 0;
       World.pressT[1] = 0;
@@ -216,7 +224,10 @@
       this.rebuildTeams();
       m.score[0] = 0; m.score[1] = 0;
       m.timeSeconds = 0;
-      World.kickoffTeam = 0;
+      m.half = 1;
+      // coin toss: either team may kick off; the other one kicks off the second half
+      m.firstKick = Math.random() < 0.5 ? 0 : 1;
+      World.kickoffTeam = m.firstKick;
       m.celebrationTimer = 0;
       m.fullTimeTimer = 0;
       lastSecond = -1;
@@ -290,6 +301,14 @@
       var whole = Math.floor(m.timeSeconds);
       if (whole !== lastSecond) { lastSecond = whole; NS.HUD.setClock(mins, whole % 60); }
       if (mins >= 90) { finish(); return; }
+      if (mins >= 45 && m.half === 1) {
+        m.half = 2;
+        World.kickoffTeam = 1 - m.firstKick;
+        m.celebrationTimer = 2.2; // same pause as after a goal, then the second-half kickoff
+        NS.Audio.whistle();
+        NS.HUD.banner(NS.I18n.t('hud.halftime'), m.score[0] + ' - ' + m.score[1], 0);
+        return;
+      }
 
       // ----- timers, distances, ranks -----
       for (i = 0; i < n; i++) {
@@ -327,13 +346,14 @@
       }
 
       // ----- everyone else, then movement -----
+      AI.teamUpdate(dt);
       var profs0 = profFor(0);
       var profs1 = profFor(1);
       for (i = 0; i < n; i++) {
         p = players[i];
         var prof = p.team === 0 ? profs0 : profs1;
         if (p.tackleT > 0) {
-          Actions.updateTackle(p, dt, p.tackleHuman ? 0.8 : prof.tackle);
+          Actions.updateTackle(p, dt, p.tackleHuman ? 0.88 : prof.tackle);
         } else if (p.stun > 0) {
           p.vel.x *= 0.85;
           p.vel.z *= 0.85;
@@ -359,9 +379,34 @@
         }
       }
 
-      // ----- loose ball: pick-ups, keeper saves -----
-      if (!ball.owner && ball.pickupCooldown <= 0) {
+      // ----- bodies: players cannot run through each other (defenders really block the carrier) -----
+      for (i = 0; i < n; i++) {
+        p = players[i];
+        for (j = i + 1; j < n; j++) {
+          var q2 = players[j];
+          var cx = q2.pos.x - p.pos.x;
+          var cz = q2.pos.z - p.pos.z;
+          var cd2 = cx * cx + cz * cz;
+          if (cd2 >= 1.44 || cd2 < 1e-6) continue;
+          var cd = Math.sqrt(cd2);
+          var nx = cx / cd, nz = cz / cd;
+          var push = (1.2 - cd) * (p.team !== q2.team ? 0.5 : 0.3);
+          p.pos.x -= nx * push; p.pos.z -= nz * push;
+          q2.pos.x += nx * push; q2.pos.z += nz * push;
+          // the one running into the other loses that part of its speed
+          var vp = p.vel.x * nx + p.vel.z * nz;
+          if (vp > 0) { p.vel.x -= nx * vp * 0.6; p.vel.z -= nz * vp * 0.6; }
+          var vq = -(q2.vel.x * nx + q2.vel.z * nz);
+          if (vq > 0) { q2.vel.x += nx * vq * 0.6; q2.vel.z += nz * vq * 0.6; }
+        }
+      }
+
+      // ----- loose ball: keeper saves, then the CLOSEST player in reach gets it (fair for both teams) -----
+      if (!ball.owner) {
         var bs2 = ball.vel.x * ball.vel.x + ball.vel.z * ball.vel.z;
+        var taker = null;
+        var takerD = 1.35;
+        var gkActed = false;
         for (i = 0; i < n; i++) {
           p = players[i];
           if (p.stun > 0 || p.tackleT > 0) continue;
@@ -370,10 +415,15 @@
           var ddz = ball.pos.z - p.pos.z;
           var d2 = ddx * ddx + ddz * ddz;
           if (p.role === 'GK') {
-            if (d2 < 7.5 && ball.pos.y < 3.4) {
+            if (d2 < 7.5 && ball.pos.y < 3.4 && !(ball.gkTried & (1 << p.team))) {
+              ball.gkTried |= 1 << p.team;
+              gkActed = true;
               var speed = Math.sqrt(bs2);
               var chance = speed < 12 ? 1 : clamp(gkSkill(p.team) - (speed - 20) * 0.01, 0.2, 0.92);
               if (ball.chip) chance *= 0.4;
+              // placement: a shot away from where the keeper stands is harder to keep out
+              var reach = Math.abs(ball.pos.z - p.pos.z);
+              if (speed >= 12 && reach > 1) chance *= clamp(1.25 - reach * 0.22, 0.35, 1);
               if (Math.random() < chance) {
                 if (speed < 28) {
                   takeBall(p);
@@ -386,20 +436,21 @@
                   ball.lastTouchTeam = p.team;
                   NS.Audio.kick(false);
                 }
-              } else {
-                ball.pickupCooldown = 0.12;
               }
               break;
             }
-          } else if (ball.pos.y < 1.9 && d2 < 1.35) {
-            if (ball.hard && bs2 > 676 && Math.random() < 0.5) {
-              ball.vel.x *= 0.55;
-              ball.vel.z += (Math.random() - 0.5) * 6;
-              ball.pickupCooldown = 0.15;
-            } else {
-              takeBall(p);
-            }
-            break;
+          } else if (ball.pickupCooldown <= 0 && ball.pos.y < 1.9 && d2 < takerD) {
+            takerD = d2;
+            taker = p;
+          }
+        }
+        if (!gkActed && taker) {
+          if (ball.hard && bs2 > 676 && Math.random() < 0.5) {
+            ball.vel.x *= 0.55;
+            ball.vel.z += (Math.random() - 0.5) * 6;
+            ball.pickupCooldown = 0.15;
+          } else {
+            takeBall(taker);
           }
         }
       }

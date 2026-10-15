@@ -17,6 +17,7 @@
     lastToucher: '',
     hard: false, // true after a shot: fast enough to be deflected
     kicker: null, kickerT: 0, // the last kicker cannot take the ball straight back
+    gkTried: 0,   // bit per team: that keeper already had his one save attempt on this kick
     chip: false, // lofted shot: the keeper is much less likely to save it
     pickupCooldown: 0
   };
@@ -50,7 +51,7 @@
     match: {
       running: false, paused: true,
       score: [0, 0], timeSeconds: 0,
-      celebrationTimer: 0, fullTimeTimer: 0, kickoffTimer: 0
+      celebrationTimer: 0, fullTimeTimer: 0, kickoffTimer: 0, half: 1, firstKick: 0
     },
 
     resetBall: function () {

@@ -51,7 +51,8 @@
     },
 
     // type: ACT.PASS | THROUGH | LONG | SHOOT, power 0..1, (ax, az) aim input.
-    kick: function (p, type, power, ax, az, accuracy, forceTarget) {
+    // The ball leaves the player's foot (shared by every kick).
+    release: function (p, type) {
       var ball = World.ball;
       ball.owner = null;
       ball.pickupCooldown = 0.28;
@@ -59,12 +60,19 @@
       ball.lastToucher = p.name;
       ball.kicker = p;
       ball.kickerT = 0.5;
+      ball.gkTried = 0;
       ball.hard = type === ACT.SHOOT || type === ACT.CURVE;
       ball.chip = type === ACT.CHIP;
       p.dribbling = false;
       this.lastTarget = null;
-      var attack = p.team === 0 ? 1 : -1;
       NS.Audio.kick(type >= ACT.SHOOT);
+      if (this.onKick) this.onKick(p, type);
+    },
+
+    kick: function (p, type, power, ax, az, accuracy, forceTarget) {
+      var ball = World.ball;
+      this.release(p, type);
+      var attack = p.team === 0 ? 1 : -1;
 
       var angle, speed, vy, d, tx, tz;
       if (type >= ACT.SHOOT) {
@@ -125,12 +133,26 @@
         tx = mate.pos.x + mate.vel.x * 0.25;
         tz = mate.pos.z + mate.vel.z * 0.25;
       }
+      this.launch(p, type, tx, tz, mate, accuracy, forceTarget);
+    },
+
+    // AI pass to an exact point (receiver runs onto it).
+    kickTo: function (p, type, tx, tz, mate, accuracy) {
+      this.release(p, type);
+      this.lastTarget = mate;
+      World.ball.spinY = 0;
+      this.launch(p, type, clamp(tx, -HALF_W + 2, HALF_W - 2), clamp(tz, -HALF_H + 2, HALF_H - 2), mate, accuracy, null);
+    },
+
+    launch: function (p, type, tx, tz, mate, accuracy, forceTarget) {
+      var ball = World.ball;
+      var angle, speed, vy, d;
       var dx = tx - p.pos.x;
       var dz = tz - p.pos.z;
       d = Math.sqrt(dx * dx + dz * dz);
       if (d < 0.5) d = 0.5;
       angle = Math.atan2(dx, dz);
-      angle += (Math.random() - 0.5) * 0.05 * (accuracy || 1);
+      angle += (Math.random() - 0.5) * 0.05 * (accuracy || 1) * (d > 25 ? 1.6 : 1);
 
       if (type === ACT.LONG) {
         // lobbed: flight time T, vertical speed from gravity, horizontal speed = distance / T
@@ -144,8 +166,10 @@
         vy = 0.8;
         if (mate) { mate.runToX = tx; mate.runToZ = tz; mate.runToT = 1.5; }
       } else {
-        speed = clamp(d * DRAG_K + 3, 14, 32);
+        speed = clamp(d * DRAG_K + 8, 18, 34); // crisp: arrives with pace instead of dying in front of a defender
         vy = 0.6;
+        // the receiver comes towards the ball to meet it
+        if (mate) { mate.runToX = tx - (dx / d) * 1.5; mate.runToZ = tz - (dz / d) * 1.5; mate.runToT = Math.min(1.0, d / speed + 0.2); }
       }
       ball.vel.set(Math.sin(angle) * speed, vy, Math.cos(angle) * speed);
     },

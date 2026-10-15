@@ -30,6 +30,27 @@ on your controller or keyboard: it is detected and saved (per My PC profile). De
 **Settings > Player switch**: `AUTO` follows the ball (and the pass receiver), `MANUAL` only changes with the switch button.
 Player 2: second keyboard (W A S D + F G) or a second gamepad.
 
+## CPU football brain (js/game/ai.js)
+
+* **Team plan every step**: attack / defend / loose-ball phase, who presses, who covers, man-marking of the most dangerous
+  opponents, one back line, and the player who can **reach a loose ball first** (passes are read and intercepted).
+* **Ball carrier** scores every option: dribble in 5 directions, short pass / through ball / long ball to each team-mate, or
+  a shot. It weighs lane interception risk, space around the receiver, progress, and shot quality (goal angle, distance,
+  blockers, keeper), then plays the best one. Shots aim at the far post with a spread that grows with distance and pressure.
+* **Off the ball**: two players offer passing angles, forwards make runs in behind the last defender, wide players
+  keep width, and everybody stays level with the defensive line.
+* **Defence**: the presser goes goal-side, jockeys and times the tackle; a cover player sits behind; markers stand goal-side,
+  shaded towards the ball to block the lane; the rest keep a compact block. Players have bodies and cannot be run through.
+* **Goalkeeper**: angle positioning, reaction time to shots, rushes out for through balls it can reach first, one save
+  attempt per shot (placement and pace matter), distributes to a free team-mate.
+* **Game state**: a team losing late pushes its line higher and takes more risks; a team leading late keeps the ball.
+  Coin toss for the kickoff, teams swap kickoff at half time.
+* **Difficulty** changes intelligence (reaction time, decision noise, pass/shot accuracy, marking tightness, second presser,
+  keeper) more than raw speed.
+
+Measured with a headless simulator (NORMAL vs NORMAL, 3-minute matches): possession about 50/50, pass completion about 80%,
+4 to 6 shots per team, about 65% on target, 2 to 3 goals per match; HARD beats NORMAL about 2 matches in 3.
+
 ## Layout
 
 ```
