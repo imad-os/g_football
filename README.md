@@ -42,9 +42,10 @@ distance that suits the pass (short, through, long), preferring receivers who ar
 The receiver runs to meet the ball; for a long ball he reads the flight and goes to where it comes down. The stick is ignored
 during that run, until somebody has the ball.
 
-**Headers and first-time touches**: while a ball is coming to you (or is in the air near you), press pass / through / long for a
-headed pass, or shoot for a headed shot. The header happens as soon as the ball is at head height; pressed early, it waits for
-the ball. If the ball arrives on the ground instead, the move is played first time. CPU players head clearances and chances too.
+**Headers and first-time touches**: while a pass is coming to you, or a high ball is right next to you, press pass / through /
+long for a headed pass, or shoot for a headed shot. Only the player closest to the ball can head it (nobody in between). Pressed
+early, the header waits for the ball (briefly). A first-time pass or shot on a ground ball only happens for a pass played to you,
+never after defending. CPU players head clearances and chances; your team-mates never head for you.
 
 **Shots** are driven, not lobbed: the stick picks the side (without it: the far side from the keeper), the power (hold)
 picks the height, from low and placed to rising into the top corner (full power can fly over), with speed 24 to 46. Aimed

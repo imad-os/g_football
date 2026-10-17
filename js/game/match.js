@@ -590,11 +590,9 @@
         if (!gkActed && ball.pos.y > 1.5 && ball.pos.y < 3.3 && ball.vel.y < 0) {
           for (i = 0; i < n; i++) {
             p = players[i];
-            if (p.role === 'GK' || p.isCtl || p.stun > 0 || p.tackleT > 0) continue;
-            if (p === ball.kicker && ball.kickerT > 0) continue;
-            if (p !== ball.receiver && p.rank !== 0) continue;
-            var hx = ball.pos.x - p.pos.x, hz = ball.pos.z - p.pos.z;
-            if (hx * hx + hz * hz >= 2.4) continue;
+            // humans head the ball themselves (their team-mates never do it for them)
+            if (p.role === 'GK' || p.isCtl || humanTeam(p.team) || p.tackleT > 0) continue;
+            if (!Actions.canHead(p)) continue; // in reach, and nobody closer to the ball
             var att = p.team === 0 ? 1 : -1;
             var toGoal = Math.abs(att * HALF_W - p.pos.x) + Math.abs(p.pos.z) * 0.5;
             var shotOn = toGoal < 18 && p.role !== 'DEF';

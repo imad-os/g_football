@@ -353,7 +353,7 @@
       // short pass to feet
       if (md > 4 && md < 34) {
         var sx = mt.pos.x + mt.vel.x * 0.3, sz = mt.pos.z + mt.vel.z * 0.3;
-        var spd = clamp(md * 1.273 + 8, 18, 34);
+        var spd = clamp(md * NS.PHYS.ROLL_K + 12, 21, 40);
         var risk = laneRisk(px, pz, sx, sz, p.team, spd, false);
         var rspace = clamp((oppDist(sx, sz, p.team) - 1.5) / 7, 0, 1);
         var val = 0.26 + 0.45 * (sx - px) * a / 35 + 0.32 * rspace + 0.5 * shotQuality(sx, sz, p.team);
@@ -368,7 +368,7 @@
         if (Math.abs(lx) < HALF_W - 4) {
           var ldx = lx - px, ldz = lz - pz;
           var ld = Math.sqrt(ldx * ldx + ldz * ldz);
-          var tspd = clamp(ld * 1.273 + 4, 16, 34);
+          var tspd = clamp(ld * NS.PHYS.ROLL_K + 8, 18, 38);
           var trisk = laneRisk(px, pz, lx, lz, p.team, tspd, false);
           var mateT = Math.max(0, Math.sqrt((lx - mt.pos.x) * (lx - mt.pos.x) + (lz - mt.pos.z) * (lz - mt.pos.z)) - 1) / 11;
           var race = 1 / (1 + Math.exp(-(mateT - oppArrival(lx, lz, p.team)) * 5));
@@ -590,7 +590,7 @@
       var dx = m.pos.x - p.pos.x, dz = m.pos.z - p.pos.z;
       var d = Math.sqrt(dx * dx + dz * dz);
       var short = d < 32;
-      var risk = laneRisk(p.pos.x, p.pos.z, m.pos.x, m.pos.z, p.team, short ? clamp(d * 1.273 + 3, 14, 32) : 25, !short);
+      var risk = laneRisk(p.pos.x, p.pos.z, m.pos.x, m.pos.z, p.team, short ? clamp(d * NS.PHYS.ROLL_K + 12, 21, 40) : 25, !short);
       var space = clamp((oppDist(m.pos.x, m.pos.z, p.team) - 2) / 8, 0, 1);
       var sc = (1 - risk) * (0.4 + space * 0.6 + (m.pos.x * a + HALF_W) / 200) - risk * 0.8 + (Math.random() - 0.5) * prof.noise;
       if (sc > best) { best = sc; bm = m; bx = m.pos.x; bz = m.pos.z; bt = short ? ACT.PASS : ACT.LONG; }

@@ -11,8 +11,8 @@
   // Ball physics constants (shared with Actions, which aims kicks with the same model).
   var G = 24.0;          // gravity
   var AIR_K = 0.1;       // air drag on the horizontal speed (1/s)
-  var ROLL_K = 1.273;    // rolling drag (1/s): -ln(0.28)
-  var ROLL_F = 0.8;      // rolling resistance (constant deceleration)
+  var ROLL_K = 0.95;     // rolling drag (1/s)
+  var ROLL_F = 1.1;      // rolling resistance (constant deceleration)
   var BOUNCE = 0.55;     // vertical restitution on the grass
   var BOUNCE_GRIP = 0.84; // horizontal speed kept on a bounce
   var MAGNUS = 0.035;    // curl from spin, perpendicular to the flight
@@ -157,7 +157,8 @@
       idx: idx, active: false, team: 0, player: null,
             chargeMove: -1, chargeFrac: -1, pressing: false, teamPress: false, evPlayer: null, burstT: 0, lockT: 0,
       evActive: false, evMask: 0, evT: 0, evSettle: 0, evCtx: 0, evMove: -1, evPrev: 0,
-      headReq: -1, headT: 0, headD: 0 // move pressed before the ball arrived: header or first-time pass
+      evRecv: false,
+      headReq: -1, headT: 0, headD: 0, headRecv: false // move pressed before the ball arrived: header or first-time pass
     };
   }
 

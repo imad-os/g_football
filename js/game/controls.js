@@ -100,22 +100,16 @@
     return !ball.owner && ball.receiver === p;
   }
 
-  // A loose ball in the air not far from this player.
+  // A loose ball in the air right next to this player (a header is possible, nothing else).
   function airNear(p) {
     var ball = World.ball;
-    if (ball.owner || (ball.pos.y < 1.3 && ball.vel.y < 1.5)) return false;
+    if (ball.owner || ball.pos.y < 1.3) return false;
     var dx = ball.pos.x - p.pos.x, dz = ball.pos.z - p.pos.z;
-    return dx * dx + dz * dz < 144;
+    return dx * dx + dz * dz < 25;
   }
 
-  // The ball is at head height and within reach (a little jump included).
-  function inHeadZone(p) {
-    var ball = World.ball;
-    if (ball.owner || ball.pos.y < 1.5 || ball.pos.y > 3.3) return false;
-    if (p === ball.kicker && ball.kickerT > 0) return false;
-    var dx = ball.pos.x - p.pos.x, dz = ball.pos.z - p.pos.z;
-    return dx * dx + dz * dz < 2.4;
-  }
+  // The ball is at head height, in reach, and this player is the closest one to it.
+  function inHeadZone(p) { return Actions.canHead(p); }
 
   // Pass / through / long = headed pass; shot / curve / chip = headed shot.
   function header(slot, p, mi, pad) {
@@ -240,8 +234,10 @@
           slot.evMask = held;
           slot.evT = 0;
           slot.evMove = -1;
-          // 1 = with the ball, 3 = a ball coming to us / in the air (header or first-time touch), 2 = defending
-          slot.evCtx = has ? 1 : ((receiving(p) || airNear(p)) ? 3 : 2);
+          // 1 = with the ball, 3 = a pass coming to us (header or first-time touch) or a high ball right next to us
+          // (header only), 2 = defending (tackle, press, switch)
+          slot.evRecv = receiving(p);
+          slot.evCtx = has ? 1 : ((slot.evRecv || airNear(p)) ? 3 : 2);
           slot.evPlayer = p;
           slot.evSettle = B.needsSettle(held) ? 0.06 : 0;
         }
@@ -272,8 +268,13 @@
           slot.chargeMove = mv;
           slot.chargeFrac = slot.evT > 0.06 ? Math.min(1, slot.evT / FULL_CHARGE) : -1;
           if (has) {
-            // the ball arrived while the button is held: play it first time on release
-            if (ended) { fireAttack(slot, p, mv, slot.evT, pad); endEvent(slot); p = slot.player; has = ball.owner === p; }
+            // a pass arrived while the button is held: play it first time on release (never after a loose ball)
+            if (ended) {
+              if (slot.evRecv) fireAttack(slot, p, mv, slot.evT, pad);
+              endEvent(slot);
+              p = slot.player;
+              has = ball.owner === p;
+            }
           } else if (ball.owner) {
             endEvent(slot);
           } else if (inHeadZone(p) && (ended || slot.evT > 0.12)) {
@@ -282,8 +283,8 @@
             p = slot.player;
             has = false;
           } else if (ended) {
-            // released before the ball got here: do it as soon as it arrives
-            slot.headReq = mv; slot.headD = slot.evT; slot.headT = 1.4;
+            // released before the ball got here: do it as soon as it arrives (shortly; a stale press never fires)
+            slot.headReq = mv; slot.headD = slot.evT; slot.headRecv = slot.evRecv; slot.headT = slot.evRecv ? 1.0 : 0.5;
             endEvent(slot);
           }
         } else if (has) {
@@ -313,10 +314,12 @@
         slot.headT -= dt;
         if (has) {
           slot.headT = 0;
-          fireAttack(slot, p, slot.headReq, slot.headD, pad); // first-time pass / shot
-          p = slot.player;
-          has = ball.owner === p;
-        } else if (ball.owner) {
+          if (slot.headRecv) { // first-time pass / shot, only for a pass played to us
+            fireAttack(slot, p, slot.headReq, slot.headD, pad);
+            p = slot.player;
+            has = ball.owner === p;
+          }
+        } else if (ball.owner || (!slot.headRecv && !airNear(p))) {
           slot.headT = 0;
         } else if (inHeadZone(p)) {
           slot.headT = 0;

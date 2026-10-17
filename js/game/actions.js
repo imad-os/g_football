@@ -124,7 +124,7 @@
           speed = 30 + power * 12;
           var cvx = goalX - p.pos.x, cvz = curveZ - p.pos.z;
           var cT = Math.sqrt(cvx * cvx + cvz * cvz) / speed;
-          vy = (1.3 + power * 0.9 - ball.pos.y) / cT + 0.5 * G * cT;
+          vy = Math.min(9, (1.3 + power * 0.9 - ball.pos.y) / cT + 0.5 * G * cT);
           ball.vel.set(Math.sin(angle) * speed, vy, Math.cos(angle) * speed);
           ball.spinY = side * attack * 30;
           return;
@@ -133,10 +133,12 @@
           // lofted shot that drops into the goal over the keeper
           var dg = Math.abs(goalX - p.pos.x) - 1;
           if (dg < 3) dg = 3;
+          var chipFar = dg > 32; // a chip only carries ~32: from further it drops short
+          if (chipFar) dg = 32;
           var Tc = clamp(dg / 15, 0.9, 1.7);
           var cz = aimed ? az * GOAL_HALF_W * 0.6 : 0;
-          var cdx = goalX - attack - p.pos.x;
-          var cdz = cz - p.pos.z;
+          var cdx = chipFar ? attack * 32 : goalX - attack - p.pos.x;
+          var cdz = chipFar ? 0 : cz - p.pos.z;
           var cd = Math.sqrt(cdx * cdx + cdz * cdz) || 1;
           var cs = airSpeed(cd, Tc);
           ball.pos.y = NS.BALL_R + 0.15;
@@ -166,6 +168,8 @@
         var kd = sd * AIR_K / speed;
         var Ts = kd < 0.9 ? -Math.log(1 - kd) / AIR_K : sd / speed * 1.6; // time to the goal line, air drag included
         vy = (ty - ball.pos.y) / Ts + 0.5 * G * Ts;
+        // a driven shot is never a sky-high lob: from far away it dips and bounces short instead
+        if (vy > 5.5 + power * 4.5) vy = 5.5 + power * 4.5;
         ball.vel.set(Math.sin(angle) * speed, vy, Math.cos(angle) * speed);
         // aimed shots bend a little towards the corner; full-power shots wobble (knuckle)
         ball.spinY = (aimed ? -clamp(az, -1, 1) * attack * 1.6 : 0) + (power > 0.8 ? (Math.random() - 0.5) * 3 : 0);
@@ -236,17 +240,36 @@
         ball.pos.y = NS.BALL_R + 0.15;
         if (mate) { mate.runToX = tx; mate.runToZ = tz; mate.runToT = T + 0.7; }
       } else if (type === ACT.THROUGH) {
-        speed = forceTarget ? clamp(d * DRAG_K + 2, 9, 30) : clamp(d * DRAG_K + 4, 16, 34);
+        speed = forceTarget ? clamp(d * DRAG_K + 4, 11, 32) : clamp(d * DRAG_K + 8, 18, 38);
         vy = 0.8;
         if (mate) { mate.runToX = tx; mate.runToZ = tz; mate.runToT = 1.5; }
       } else {
-        speed = clamp(d * DRAG_K + 8, 18, 34); // crisp: arrives with pace instead of dying in front of a defender
+        speed = clamp(d * DRAG_K + 12, 21, 40); // crisp: arrives with pace instead of dying in front of a defender
         vy = 0.6;
         // the receiver comes towards the ball to meet it
         if (mate) { mate.runToX = tx - (dx / d) * 1.5; mate.runToZ = tz - (dz / d) * 1.5; mate.runToT = Math.min(1.0, d / speed + 0.2); }
       }
       ball.vel.set(Math.sin(angle) * speed, vy, Math.cos(angle) * speed);
       ball.receiver = mate || null;
+    },
+
+    // A header is allowed when the ball is at head height, within reach of p, and nobody is closer to it
+    // (a player between him and the ball would get there first).
+    canHead: function (p) {
+      var ball = World.ball;
+      if (ball.owner || ball.pos.y < 1.5 || ball.pos.y > 3.3 || p.stun > 0) return false;
+      if (p === ball.kicker && ball.kickerT > 0) return false;
+      var dx = ball.pos.x - p.pos.x, dz = ball.pos.z - p.pos.z;
+      var d2 = dx * dx + dz * dz;
+      if (d2 > 1.7) return false;
+      var players = World.players;
+      for (var i = 0; i < players.length; i++) {
+        var q = players[i];
+        if (q === p || q.stun > 0) continue;
+        var qx = ball.pos.x - q.pos.x, qz = ball.pos.z - q.pos.z;
+        if (qx * qx + qz * qz < d2) return false;
+      }
+      return true;
     },
 
     // Header from a ball in the air: a shot at goal (downwards, under the bar) or a headed pass to the team-mate
