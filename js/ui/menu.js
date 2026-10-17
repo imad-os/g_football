@@ -1,4 +1,4 @@
-/* Menus: main, controller sides, teams, game plan, pause, settings, controls help.
+/* Menus: main, controller sides, teams, game plan, competitions (team pick + hub), pause, settings, controls help.
  * Fully usable with a TV remote: arrows move the focus (spatial navigation), OK clicks, Back/cancel goes back.
  * Input arrives from My PC only (UI.onInput); there are no keydown listeners. */
 (function (NS) {
@@ -9,7 +9,7 @@
 
   var root;
   var screens = {};
-  var order = ['MAIN', 'SIDES', 'TEAMS', 'GAMEPLAN', 'PAUSE', 'SETTINGS', 'HELP', 'BUTTONS'];
+  var order = ['MAIN', 'SIDES', 'TEAMS', 'GAMEPLAN', 'COMPPICK', 'COMPHUB', 'PAUSE', 'SETTINGS', 'HELP', 'BUTTONS'];
   var current = 'MAIN';
   var open = true;
   var focused = null;
@@ -21,11 +21,14 @@
 
   var MODES = [
     { comp: 'EXHIBITION', icon: '⚽', tone: 'sky' },
-    { comp: 'CONTINENTAL_CUP', icon: '🏆', tone: 'amber' },
     { comp: 'DOMESTIC_LEAGUE', icon: '🛡️', tone: 'green' },
+    { comp: 'CONTINENTAL_CUP', icon: '🏆', tone: 'amber' },
     { comp: 'WORLD_NATIONALS', icon: '🌍', tone: 'purple' }
   ];
   var PRESETS = ['1P_CPU', '1P_2P', 'COOP_CPU', 'CPU_CPU'];
+  // competition being set up on the team-pick screen
+  var pick = { comp: 'DOMESTIC_LEAGUE', cat: 'LEAGUE_MAR', team: 'WAC', side: '1P_CPU' };
+  var abandonArmed = false;
 
   function el(tag, cls, txt) {
     var e = document.createElement(tag);
@@ -44,6 +47,19 @@
   }
 
   function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+  // Marks the screen's main button: the gamepad / phone + (Start) presses it, and it shows a + badge.
+  function plusKey(b) {
+    b.setAttribute('data-plus', '1');
+    b.appendChild(el('span', 'plus-key', '+'));
+    return b;
+  }
+
+  function plusButton() {
+    var list = screens[current].querySelectorAll('[data-plus]');
+    for (var i = 0; i < list.length; i++) if (list[i].offsetParent !== null && !list[i].disabled) return list[i];
+    return null;
+  }
 
   /* ------------------------------ focus ------------------------------ */
 
@@ -136,10 +152,13 @@
     current = key;
     open = true;
     root.classList.remove('hidden');
-    if (matchRunning()) World.match.paused = true;
+    if (matchRunning()) { World.match.paused = true; NS.Audio.crowd(false); }
     for (var i = 0; i < order.length; i++) screens[order[i]].classList.toggle('hidden', order[i] !== key);
     refs.badge.textContent = T('step.' + key.toLowerCase());
     refreshNav();
+    if (key === 'MAIN') renderMain();
+    if (key === 'COMPPICK') renderCompPick();
+    if (key === 'COMPHUB') { abandonArmed = false; renderCompHub(); }
     if (key === 'SIDES') updateSideSlots();
     if (key === 'TEAMS') renderTeams();
     if (key === 'GAMEPLAN') renderGamePlan();
@@ -166,7 +185,7 @@
     var running = matchRunning();
     refs.btnKickoff.classList.toggle('hidden', running);
     refs.btnResume.classList.toggle('hidden', !running);
-    refs.sidesNext.textContent = running ? T('nav.apply_sides') : T('nav.next_teams');
+    refs.sidesNext.firstChild.textContent = running ? T('nav.apply_sides') : T('nav.next_teams');
   }
 
   function back() {
@@ -178,7 +197,9 @@
       else show('PAUSE');
       return;
     }
-    if (current === 'GAMEPLAN') show('TEAMS');
+    if (current === 'GAMEPLAN') show(NS.Comp.active() ? 'COMPHUB' : 'TEAMS');
+    else if (current === 'COMPHUB') { NS.Comp.leave(); show('MAIN'); }
+    else if (current === 'COMPPICK') show('MAIN');
     else if (current === 'TEAMS') show('SIDES');
     else if (current === 'HELP') show(helpReturn);
     else if (current !== 'MAIN') show('MAIN');
@@ -187,10 +208,12 @@
   function resumeMatch() {
     hide();
     World.match.paused = false;
+    NS.Audio.crowd(true);
     NS.App.syncMenuItems();
   }
 
   function startMatch() {
+    if (!NS.Comp.active()) World.session.compActive = false;
     hide();
     NS.Match.start();
     NS.App.syncMenuItems();
@@ -204,37 +227,295 @@
 
   /* ------------------------------ MAIN ------------------------------ */
 
+  function card(tone, key, icon, tag, title, desc, onClick) {
+    var b = btn('card tone-' + tone, '', key, onClick);
+    b.appendChild(el('div', 'card-icon', icon));
+    b.appendChild(el('div', 'card-tag', tag));
+    b.appendChild(el('h2', 'card-title', title));
+    b.appendChild(el('p', 'card-desc', desc));
+    return b;
+  }
+
   function buildMain() {
-    var wrap = screens.MAIN;
-    var grid = el('div', 'cards');
-    MODES.forEach(function (m, i) {
-      var b = btn('card tone-' + m.tone, '', 'm:' + m.comp, function () {
+    refs.mainGrid = el('div', 'cards');
+    screens.MAIN.appendChild(refs.mainGrid);
+  }
+
+  // Rebuilt each time (the "continue" card follows the saved competition).
+  function renderMain() {
+    var grid = refs.mainGrid;
+    clear(grid);
+    var saved = NS.Comp.saved();
+    if (saved && !saved.done) {
+      var u = NS.Teams.byId(saved.user);
+      var c = card('green', 'm:continue', '▶', T('mode.continue.tag'), T('mode.continue'),
+        T('mode.' + saved.compType) + ' • ' + u.name + ' • ' + NS.Comp.stageLabel(), function () {
+          NS.Comp.enter();
+          show('COMPHUB');
+        });
+      grid.appendChild(c);
+    }
+    MODES.forEach(function (m) {
+      grid.appendChild(card(m.tone, 'm:' + m.comp, m.icon, T('mode.' + m.comp + '.tag'), T('mode.' + m.comp), T('mode.' + m.comp + '.d'), function () {
+        NS.Comp.leave();
         World.session.compType = m.comp;
-        if (m.comp === 'DOMESTIC_LEAGUE') World.session.activeCategory = 'LEAGUE_MAR';
-        else if (m.comp === 'WORLD_NATIONALS') World.session.activeCategory = 'NAT_AFRICA';
-        else if (m.comp === 'CONTINENTAL_CUP') World.session.activeCategory = 'CLUBS_WORLD';
-        show('SIDES');
-      });
-      if (i === 0) b.setAttribute('data-default', '1');
-      b.appendChild(el('div', 'card-icon', m.icon));
-      b.appendChild(el('div', 'card-tag', T('mode.' + m.comp + '.tag')));
-      b.appendChild(el('h2', 'card-title', T('mode.' + m.comp)));
-      b.appendChild(el('p', 'card-desc', T('mode.' + m.comp + '.d')));
-      grid.appendChild(b);
+        if (m.comp === 'EXHIBITION') { show('SIDES'); return; }
+        var cats = NS.Comp.catsFor(m.comp);
+        if (pick.comp !== m.comp) {
+          pick.comp = m.comp;
+          pick.cat = cats[0].id;
+          pick.team = NS.Teams.byCategory(pick.cat)[0].id;
+        }
+        show('COMPPICK');
+      }));
     });
-    var sb = btn('card tone-rose', '', 'm:settings', function () { show('SETTINGS'); });
-    sb.appendChild(el('div', 'card-icon', '⚙️'));
-    sb.appendChild(el('div', 'card-tag', T('mode.settings.tag')));
-    sb.appendChild(el('h2', 'card-title', T('mode.settings')));
-    sb.appendChild(el('p', 'card-desc', T('mode.settings.d')));
-    grid.appendChild(sb);
-    var hb = btn('card tone-teal', '', 'm:help', function () { helpReturn = 'MAIN'; show('HELP'); });
-    hb.appendChild(el('div', 'card-icon', '🎮'));
-    hb.appendChild(el('div', 'card-tag', T('mode.help.tag')));
-    hb.appendChild(el('h2', 'card-title', T('mode.help')));
-    hb.appendChild(el('p', 'card-desc', T('mode.help.d')));
-    grid.appendChild(hb);
-    wrap.appendChild(grid);
+    grid.appendChild(card('rose', 'm:settings', '⚙️', T('mode.settings.tag'), T('mode.settings'), T('mode.settings.d'), function () { show('SETTINGS'); }));
+    grid.appendChild(card('teal', 'm:help', '🎮', T('mode.help.tag'), T('mode.help'), T('mode.help.d'), function () { helpReturn = 'MAIN'; show('HELP'); }));
+    var first = grid.firstChild;
+    if (first) first.setAttribute('data-default', '1');
+  }
+
+  /* ------------------------------ COMPETITION: pick your team ------------------------------ */
+
+  function buildCompPick() {
+    var wrap = screens.COMPPICK;
+    var head = el('div', 'screen-head');
+    refs.cpTitle = el('h2');
+    refs.cpSub = el('p', 'muted');
+    head.appendChild(refs.cpTitle);
+    head.appendChild(refs.cpSub);
+    wrap.appendChild(head);
+    refs.cpTabs = el('div', 'tabs');
+    wrap.appendChild(refs.cpTabs);
+    var cols = el('div', 'cp-cols');
+    var lc = el('div', 'panel-card');
+    lc.appendChild(el('div', 'tag amber', T('cp.team')));
+    refs.cpList = el('div', 'team-list');
+    lc.appendChild(refs.cpList);
+    var rc = el('div', 'panel-card cp-side');
+    rc.appendChild(el('div', 'tag green', T('cp.players')));
+    var st = el('div', 'stack');
+    [['1P_CPU', 'cp.1p'], ['COOP_CPU', 'cp.coop']].forEach(function (o) {
+      var b = btn('wide', T(o[1]), 'cp:' + o[0], function () { pick.side = o[0]; renderCompPick('cp:' + o[0]); });
+      b.setAttribute('data-side', o[0]);
+      st.appendChild(b);
+    });
+    rc.appendChild(st);
+    refs.cpPicked = el('div', 'cp-picked');
+    rc.appendChild(refs.cpPicked);
+    refs.cpWarn = el('p', 'muted small', T('cp.replace'));
+    rc.appendChild(refs.cpWarn);
+    cols.appendChild(lc);
+    cols.appendChild(rc);
+    wrap.appendChild(cols);
+    var foot = el('div', 'foot');
+    foot.appendChild(btn('', T('nav.back'), 'back', back));
+    foot.appendChild(plusKey(btn('primary', T('cp.start'), 'cpstart', function () {
+      NS.Comp.start(pick.comp, pick.team, pick.side);
+      show('COMPHUB');
+    })));
+    wrap.appendChild(foot);
+  }
+
+  function swatchOf(t) {
+    var sw = el('span', 'swatch');
+    sw.style.background = 'linear-gradient(135deg,' + NS.Assets.hexToCss(t.c1) + ' 50%,' + NS.Assets.hexToCss(t.c2) + ' 50%)';
+    return sw;
+  }
+
+  function renderCompPick(keepKey) {
+    refs.cpTitle.textContent = T('mode.' + pick.comp);
+    refs.cpSub.textContent = T('cp.sub.' + pick.comp);
+    clear(refs.cpTabs);
+    NS.Comp.catsFor(pick.comp).forEach(function (cat) {
+      refs.cpTabs.appendChild(btn('tab' + (pick.cat === cat.id ? ' sel' : ''), cat.label, 'cc:' + cat.id, function () {
+        pick.cat = cat.id;
+        renderCompPick('cc:' + cat.id);
+      }));
+    });
+    clear(refs.cpList);
+    NS.Teams.byCategory(pick.cat).forEach(function (t) {
+      var b = btn('team' + (pick.team === t.id ? ' sel home' : ''), '', 'ct:' + t.id, function () {
+        pick.team = t.id;
+        renderCompPick('ct:' + t.id);
+      });
+      if (pick.team === t.id) b.setAttribute('data-default', '1');
+      b.appendChild(swatchOf(t));
+      var box = el('div', 'team-box');
+      box.appendChild(el('div', 'team-name', t.name));
+      box.appendChild(el('div', 'team-sub', t.code + ' • ' + new Array(t.stars + 1).join('★')));
+      b.appendChild(box);
+      refs.cpList.appendChild(b);
+    });
+    var sides = screens.COMPPICK.querySelectorAll('[data-side]');
+    for (var i = 0; i < sides.length; i++) sides[i].classList.toggle('sel', sides[i].getAttribute('data-side') === pick.side);
+    var t = NS.Teams.byId(pick.team);
+    clear(refs.cpPicked);
+    refs.cpPicked.appendChild(swatchOf(t));
+    refs.cpPicked.appendChild(el('b', null, t.name));
+    var saved = NS.Comp.saved();
+    refs.cpWarn.classList.toggle('hidden', !(saved && !saved.done));
+    if (keepKey) { focused = null; if (!focusByKey(keepKey)) focusDefault(); }
+  }
+
+  /* ------------------------------ COMPETITION: hub ------------------------------ */
+
+  function buildCompHub() {
+    var wrap = screens.COMPHUB;
+    var head = el('div', 'screen-head hub-head');
+    refs.chStage = el('span', 'chip');
+    refs.chTitle = el('h2');
+    refs.chMsg = el('p', 'hub-msg');
+    head.appendChild(refs.chStage);
+    head.appendChild(refs.chTitle);
+    head.appendChild(refs.chMsg);
+    wrap.appendChild(head);
+    var cols = el('div', 'hub-cols');
+    refs.chLeft = el('div', 'panel-card hub-left');
+    refs.chRight = el('div', 'panel-card hub-right');
+    cols.appendChild(refs.chLeft);
+    cols.appendChild(refs.chRight);
+    wrap.appendChild(cols);
+    var foot = el('div', 'foot');
+    var left = el('div', 'row');
+    left.appendChild(btn('', T('comp.menu'), 'back', back));
+    refs.chAbandon = btn('danger', T('comp.abandon'), 'abandon', function () {
+      if (!abandonArmed) { abandonArmed = true; refs.chAbandon.textContent = T('comp.abandon2'); return; }
+      NS.Comp.abandon();
+      show('MAIN');
+    });
+    left.appendChild(refs.chAbandon);
+    foot.appendChild(left);
+    refs.chPlay = plusKey(btn('primary kick', T('comp.play'), 'play', function () {
+      var st = NS.Comp.state();
+      if (st && st.done) { pick.comp = st.compType; show('COMPPICK'); return; }
+      if (!NS.Comp.prepareMatch()) return;
+      World.session.editingSquadIdx = 0;
+      World.session.selectedStarterIdx = null;
+      show('GAMEPLAN');
+    }));
+    refs.chPlay.setAttribute('data-default', '1');
+    foot.appendChild(refs.chPlay);
+    wrap.appendChild(foot);
+  }
+
+  function tableEl(ids, user, compact) {
+    var tb = el('table', 'ltable' + (compact ? ' compact' : ''));
+    var hr = el('tr');
+    ['#', T('comp.t.team'), 'P', 'W', 'D', 'L', compact ? null : T('comp.t.gd'), 'Pts'].forEach(function (h) { if (h !== null) hr.appendChild(el('th', null, h)); });
+    tb.appendChild(hr);
+    var st = NS.Comp.state();
+    NS.Comp.sortTable(ids).forEach(function (id, i) {
+      var r = st.table[id];
+      var t = NS.Teams.byId(id);
+      var tr = el('tr', id === user ? 'me' : null);
+      tr.appendChild(el('td', null, String(i + 1)));
+      var td = el('td', 'tn');
+      td.appendChild(swatchOf(t));
+      td.appendChild(document.createTextNode(compact ? t.code : t.name));
+      tr.appendChild(td);
+      [r.p, r.w, r.d, r.l].forEach(function (v) { tr.appendChild(el('td', null, String(v))); });
+      if (!compact) tr.appendChild(el('td', null, String(r.gf - r.ga)));
+      tr.appendChild(el('td', 'pts', String(r.pts)));
+      tb.appendChild(tr);
+    });
+    return tb;
+  }
+
+  function bracketEl(ko, user) {
+    var wrap = el('div', 'bracket');
+    var sizes = [16, 8, 4, 2];
+    var first = ko[0].length * 2;
+    for (var r = 0; r < sizes.length; r++) {
+      if (sizes[r] > first) continue;
+      var idx = sizes.indexOf(first) >= 0 ? r - sizes.indexOf(first) : r;
+      var col = el('div', 'br-col');
+      col.appendChild(el('div', 'br-title', NS.Comp.koLabel(sizes[r])));
+      var round = ko[idx];
+      var n = sizes[r] / 2;
+      for (var k = 0; k < n; k++) {
+        var m = round ? round[k] : null;
+        var box = el('div', 'br-match' + (m && (m.a === user || m.b === user) ? ' me' : ''));
+        if (m) {
+          [[m.a, m.ga, m.pa], [m.b, m.gb, m.pb]].forEach(function (x) {
+            var row = el('div', 'br-team' + (m.w && m.w === x[0] ? ' win' : (m.w ? ' lose' : '')));
+            row.appendChild(el('span', null, NS.Teams.byId(x[0]).code));
+            row.appendChild(el('b', null, x[1] >= 0 ? String(x[1]) + (x[2] >= 0 ? ' (' + x[2] + ')' : '') : ''));
+            box.appendChild(row);
+          });
+        } else {
+          box.appendChild(el('div', 'br-team tbd', '—'));
+          box.appendChild(el('div', 'br-team tbd', '—'));
+        }
+        col.appendChild(box);
+      }
+      wrap.appendChild(col);
+    }
+    return wrap;
+  }
+
+  function renderCompHub() {
+    var st = NS.Comp.state();
+    if (!st) { show('MAIN'); return; }
+    var u = NS.Teams.byId(st.user);
+    refs.chStage.textContent = NS.Comp.stageLabel();
+    refs.chTitle.textContent = T('mode.' + st.compType) + ' • ' + u.name;
+    var msg = st.msg || '';
+    if (st.done && st.champion) msg = (msg ? msg + ' • ' : '') + T('comp.champ_is') + ' ' + NS.Teams.byId(st.champion).name + ' 🏆';
+    refs.chMsg.textContent = msg;
+    refs.chMsg.classList.toggle('gold', !!(st.done && st.champion === st.user));
+
+    clear(refs.chLeft);
+    if (st.type === 'LEAGUE') {
+      refs.chLeft.appendChild(el('div', 'tag amber', T('comp.table')));
+      refs.chLeft.appendChild(tableEl(st.teams, st.user, false));
+    } else if (st.type === 'WORLDCUP' && st.stage === 'G') {
+      refs.chLeft.appendChild(el('div', 'tag amber', T('comp.groups')));
+      var gw = el('div', 'groups');
+      st.groups.forEach(function (g, i) {
+        var box = el('div', 'group');
+        box.appendChild(el('div', 'br-title', T('comp.group') + ' ' + 'ABCD'.charAt(i)));
+        box.appendChild(tableEl(g, st.user, true));
+        gw.appendChild(box);
+      });
+      refs.chLeft.appendChild(gw);
+    } else {
+      refs.chLeft.appendChild(el('div', 'tag amber', T('comp.bracket')));
+      refs.chLeft.appendChild(bracketEl(st.ko, st.user));
+    }
+
+    clear(refs.chRight);
+    var nm = NS.Comp.nextMatch();
+    refs.chRight.appendChild(el('div', 'tag green', st.done ? T('comp.final_word') : T('comp.next')));
+    if (nm) {
+      var vs = el('div', 'vs');
+      [nm.home, nm.away].forEach(function (id, i) {
+        var t = NS.Teams.byId(id);
+        var side = el('div', 'vs-team' + (id === st.user ? ' me' : ''));
+        side.appendChild(swatchOf(t));
+        side.appendChild(el('div', 'vs-name', t.name));
+        side.appendChild(el('div', 'muted small', i === 0 ? T('comp.home') : T('comp.away')));
+        vs.appendChild(side);
+        if (i === 0) vs.appendChild(el('div', 'vs-x', 'VS'));
+      });
+      refs.chRight.appendChild(vs);
+    } else if (st.done && st.champion) {
+      var ch = NS.Teams.byId(st.champion);
+      var cbox = el('div', 'champ');
+      cbox.appendChild(el('div', 'champ-cup', '🏆'));
+      cbox.appendChild(swatchOf(ch));
+      cbox.appendChild(el('div', 'vs-name', ch.name));
+      refs.chRight.appendChild(cbox);
+    }
+    if (st.last && st.last.length) {
+      refs.chRight.appendChild(el('div', 'tag blue', T('comp.results')));
+      var ul = el('ul', 'results');
+      st.last.forEach(function (line) { ul.appendChild(el('li', null, line)); });
+      refs.chRight.appendChild(ul);
+    }
+    refs.chPlay.firstChild.textContent = st.done ? T('comp.new') : T('comp.play');
+    refs.chAbandon.textContent = T('comp.abandon');
+    refs.chAbandon.classList.toggle('hidden', !!st.done);
   }
 
   /* ------------------------------ SIDES ------------------------------ */
@@ -285,9 +566,9 @@
 
     var foot = el('div', 'foot');
     foot.appendChild(btn('', T('nav.back'), 'back', back));
-    refs.sidesNext = btn('primary', T('nav.next_teams'), 'next', function () {
+    refs.sidesNext = plusKey(btn('primary', T('nav.next_teams'), 'next', function () {
       if (matchRunning()) { NS.Match.applySides(); show('PAUSE'); } else show('TEAMS');
-    });
+    }));
     foot.appendChild(refs.sidesNext);
     wrap.appendChild(foot);
   }
@@ -365,12 +646,12 @@
 
     var foot = el('div', 'foot');
     foot.appendChild(btn('', T('nav.back_sides'), 'back', back));
-    foot.appendChild(btn('primary', T('nav.next_plan'), 'next', function () {
+    foot.appendChild(plusKey(btn('primary', T('nav.next_plan'), 'next', function () {
       NS.Match.syncRosters();
       World.session.editingSquadIdx = 0;
       World.session.selectedStarterIdx = null;
       show('GAMEPLAN');
-    }));
+    })));
     wrap.appendChild(foot);
   }
 
@@ -477,9 +758,9 @@
     var foot = el('div', 'foot');
     foot.appendChild(btn('', T('nav.back'), 'back', back));
     var right = el('div', 'row');
-    refs.btnResume = btn('good', T('nav.resume'), 'resume', resumeMatch);
+    refs.btnResume = plusKey(btn('good', T('nav.resume'), 'resume', resumeMatch));
     refs.btnResume.setAttribute('data-default', '1');
-    refs.btnKickoff = btn('primary kick', T('nav.kickoff'), 'kick', startMatch);
+    refs.btnKickoff = plusKey(btn('primary kick', T('nav.kickoff'), 'kick', startMatch));
     refs.btnKickoff.setAttribute('data-default', '1');
     right.appendChild(refs.btnResume);
     right.appendChild(refs.btnKickoff);
@@ -833,6 +1114,8 @@
       buildSides();
       buildTeams();
       buildGamePlan();
+      buildCompPick();
+      buildCompHub();
       buildPause();
       buildSettings();
       buildHelp();
@@ -847,7 +1130,7 @@
     screen: function () { return current; },
     openPause: function () {
       World.match.paused = true;
-      NS.Audio.whistle();
+      NS.Audio.whistle(0);
       show('PAUSE');
     },
     // Opens one of our screens from a My PC pause-menu item (onMenu).
@@ -876,7 +1159,13 @@
         case 'down': move(3); break;
         case 'confirm': if (!repeat && focused) focused.click(); break;
         case 'cancel': if (!repeat) back(); break;
-        case 'menu': if (!repeat && matchRunning()) { if (current === 'PAUSE') resumeMatch(); else back(); } break;
+        case 'menu':
+          if (repeat) break;
+          // + / Start: the screen's main button (next, kick off, play...); in the pause menu: resume
+          var plus = plusButton();
+          if (plus) plus.click();
+          else if (matchRunning()) { if (current === 'PAUSE') resumeMatch(); else back(); }
+          break;
       }
     }
   };

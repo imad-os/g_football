@@ -80,6 +80,7 @@
     applySettings: function () {
       var s = World.settings;
       NS.Audio.setEnabled(s.soundEnabled);
+      NS.Audio.setChants(s.crowdChants);
       if (NS.Quality.mode() !== s.quality) NS.Quality.apply(s.quality);
       NS.HUD.applySettings(s);
       NS.Scene.setBallSkin(s.ballSkin);
@@ -110,7 +111,9 @@
         NS.Gamepad.init(info.standalone);
         var settings = NS.Storage.load();
         World.settings = settings;
+        NS.Comp.load(); // a saved league / cup to continue
         NS.Audio.setEnabled(settings.soundEnabled);
+        NS.Audio.setChants(settings.crowdChants);
         NS.Audio.setVolume(info.volume && info.volume.sfx);
         NS.Match.labels({ p1: NS.I18n.t('hud.p1'), p2: NS.I18n.t('hud.p2'), cpu: NS.I18n.t('hud.cpu') });
 

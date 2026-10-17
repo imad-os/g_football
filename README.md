@@ -3,6 +3,19 @@
 3D 7-a-side football for **My PC** (Samsung Smart TV 2024+, browsers and phones). 1P vs CPU, 1P vs 2P, co-op vs CPU or CPU vs CPU.
 Static site, no build step. Plug it into the My PC App Store with the address `https://imad-os.github.io/g_football/`.
 
+## Game modes
+
+* **Exhibition**: controller sides, both teams, game plan, kick off.
+* **League season**: pick a club; its whole league is the season (everyone once), with the table after every matchday.
+* **Continental cup**: pick any club; 15 opponents are drawn, then round of 16, quarter-finals, semi-finals and the final.
+* **World cup**: pick a nation; 15 more are drawn into four groups of four, the top two go to the knockout rounds.
+
+In the competitions you only pick your team and **1 player or 2 players on the same team (co-op)**. The CPU matches of every
+round are simulated from the team strength, a drawn knockout match is settled by a penalty shoot-out, and the competition is
+saved: **Continue** on the main menu takes you back to it. Winning one adds a cup.
+
+The **+** button (Start) presses the main button of each menu screen: next, kick off, play match, start, resume.
+
 ## Controls
 
 Every move has two bindings: **TV / KB** (remote, keyboard, touch pad, phone) and **PAD** (a gamepad, every physical button: A B X Y by position, L R, ZL ZR, L3 R3; read directly with `navigator.getGamepads()` like the other g_ games, shown with the controller's own names (Nintendo, Xbox, PlayStation); until a real press is seen the gamepad uses My PC's OK / RUN / CANCEL and the TV / KB side). Detection cancels itself after 5 s without a press; no button cancels it. Gamepad defaults (PES style): A pass, Y through, B long, X shoot, ZR + X curve, L + X chip, L + A one-two, R sprint; without the ball A press, B tackle, X slide, Y team press, L switch.
@@ -42,10 +55,13 @@ distance that suits the pass (short, through, long), preferring receivers who ar
 The receiver runs to meet the ball; for a long ball he reads the flight and goes to where it comes down. The stick is ignored
 during that run, until somebody has the ball.
 
-**Headers and first-time touches**: while a pass is coming to you, or a high ball is right next to you, press pass / through /
-long for a headed pass, or shoot for a headed shot. Only the player closest to the ball can head it (nobody in between). Pressed
-early, the header waits for the ball (briefly). A first-time pass or shot on a ground ball only happens for a pass played to you,
-never after defending. CPU players head clearances and chances; your team-mates never head for you.
+**Your player never acts on his own**: he only passes, shoots, heads or tackles at the moment you press. The one exception is
+the pass assist: when a pass is played, the receiver **and the opponent nearest to that pass** run to the ball by themselves; that
+player's arrow blinks yellow until somebody has the ball.
+
+**Headers**: with a ball at head height next to your player, press pass / through / long for a headed pass or shoot for a headed
+shot (the button must be down when the ball arrives). Only the player closest to the ball can head it. CPU players head
+clearances and chances; your team-mates never head for you.
 
 **Shots** are driven, not lobbed: the stick picks the side (without it: the far side from the keeper), the power (hold)
 picks the height, from low and placed to rising into the top corner (full power can fly over), with speed 24 to 46. Aimed
@@ -79,6 +95,17 @@ Player 2: second keyboard (W A S D + F G) or a second gamepad.
 Measured with a headless simulator (NORMAL vs NORMAL, 3-minute matches, v1.5): pass completion about 90 to 95%, about 9 shots
 and 3 goals per match.
 
+**Match flow**: nothing freezes. After a goal a big animated **GOOOAL** appears (with the scorer and the minute), the ball
+shakes the net, the scorer runs to the corner flag and slides, his team-mates chase him, the other team walks back heads down
+and their keeper kneels. At half time the players walk off; at full time the winners celebrate and the losers drop to their
+knees.
+
+**Sound** (js/core/audio.js): all synthesized, no audio files. Ball strikes, tackles, the post and the net are generated with
+[ZzFX](https://github.com/KilledByAPixel/ZzFX) (MIT, vendor/zzfx.js); the referee has a real "pea" whistle (one blow,
+two at half time, three at full time). The crowd murmurs, roars louder as the ball gets near a goal, gasps at saves and erupts at
+goals, and sings: every chant is composed on the spot (melody, key, tempo, vowels, claps or drum, end of the ground), so it never
+repeats the same loop. **Settings > Crowd chants** turns the songs off.
+
 **Ball**: Settings > Ball has 5 designs (CLASSIC, PRO, NIGHT, RETRO, GOLD).
 
 **Kits**: every team has a change kit (white with the club colour, or dark navy for teams in a light colour). When the shirts of
@@ -105,10 +132,11 @@ index.html            entry page (SDK first, then our files, all with ?v=<versio
 mypc-app.json         My PC manifest (id, scores, owner config, touch pad buttons)
 css/style.css         plain CSS, no framework, no CDN
 vendor/three.min.js   three.js r128 (MIT), self-hosted
+vendor/zzfx.js        ZzFX sound generator (MIT), self-hosted
 js/core/              config (constants + settings schema), i18n (en fr es ar), bindings (button map), gamepad (real controller buttons), audio, storage (MyPC.save/load), input (MyPC onInput), quality
 js/data/              teams (110 clubs and nations), formations
 js/render/            assets (procedural kits and players), scene (three.js scene, camera, stadium)
-js/game/              world (state + ball physics), actions (kicks, tackle), ai (CPU), controls (human), match (flow + fixed step)
+js/game/              world (state + ball physics), actions (kicks, tackle), ai (CPU), controls (human), match (flow + fixed step), comp (league / cup / world cup)
 js/ui/                hud (cached DOM writes, radar), menu (remote-friendly spatial focus navigation), mapper (real button detection)
 js/main.js            My PC lifecycle (init / ready / start / pause / resume / destroy) and the single rAF loop
 ```
@@ -117,7 +145,7 @@ js/main.js            My PC lifecycle (init / ready / start / pause / resume / d
 
 * Input only comes from `MyPC.init({ onInput })`; there are no `keydown` listeners. Menus are navigated with arrows + OK, Back/cancel goes back.
 * Saves: `MyPC.save/load` (`stats`, `settings`, `bindings`). Score: `MyPC.submitScore` at full time of a match with a human player.
-* Owner config (`MyPC.app_config`, defaults in `mypc-app.json` `config`): `difficulty`, `durationMins`, `gameSpeed`, `switchMode`, `cameraMode`, `ballSkin`, `quality`, `soundEnabled`, `showRadar`, `showFPS`.
+* Owner config (`MyPC.app_config`, defaults in `mypc-app.json` `config`): `difficulty`, `durationMins`, `gameSpeed`, `switchMode`, `cameraMode`, `ballSkin`, `crowdChants`, `quality`, `soundEnabled`, `showRadar`, `showFPS`.
 * Touch: My PC draws the pad (`OK`, `RUN`, `SW`); no own pad.
 * Fixed 60 Hz step, no allocation in the update loop, DOM written only when a value changes, one `AudioContext` closed in `onDestroy`.
 

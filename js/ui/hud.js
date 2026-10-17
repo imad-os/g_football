@@ -12,6 +12,7 @@
   var awayCss = '#38bdf8';
   var radarSkip = 0;
   var bannerTimer = 0;
+  var goalTimer = 0;
   var plates = [null, null];
   var boxes = [{ l: 0, r: 0, t: 2, b: 2 }, { l: 0, r: 0, t: 2, b: 2 }, { l: 0, r: 0, t: 2, b: 2 }];
   var covered = [false, false, false];
@@ -42,7 +43,7 @@
     init: function () {
       var ids = ['hud', 'hud-comp', 'hud-home-badge', 'hud-home-name', 'hud-score-home', 'hud-score-away', 'hud-away-name',
         'hud-away-badge', 'hud-clock', 'hud-telemetry', 'hud-fps', 'hud-quality', 'hud-radar-box', 'radar-canvas',
-        'event-banner', 'event-title', 'event-sub', 'hud-hint'];
+        'event-banner', 'event-title', 'event-sub', 'hud-hint', 'goal-fx', 'goal-word', 'goal-sub'];
       var i;
       for (i = 0; i < ids.length; i++) el[ids[i]] = $(ids[i]);
       for (i = 1; i <= 2; i++) {
@@ -144,6 +145,31 @@
       }
     },
 
+    // GOOOAL: big animated letters (one span per letter so they pop and wave one after the other; Arabic stays one
+    // word so its letters keep joining) and a strip with the scorer, in the scoring team's colour. No score here: it is
+    // on the board at the top.
+    goalFx: function (word, sub, team) {
+      var box = el['goal-fx'];
+      var w = el['goal-word'];
+      while (w.firstChild) w.removeChild(w.firstChild);
+      var parts = NS.I18n.lang() === 'ar' ? [word] : word.split('');
+      for (var i = 0; i < parts.length; i++) {
+        var s = document.createElement('span');
+        s.textContent = parts[i] === ' ' ? '\u00a0' : parts[i];
+        var d = (i * 0.06).toFixed(2);
+        s.style.animationDelay = d + 's, ' + (0.65 + i * 0.06).toFixed(2) + 's';
+        w.appendChild(s);
+      }
+      el['goal-sub'].textContent = sub;
+      box.style.setProperty('--team', team === 0 ? homeCss : awayCss);
+      box.classList.remove('hidden');
+      box.classList.remove('play');
+      void box.offsetWidth; // restart the animations
+      box.classList.add('play');
+      goalTimer = 3.6;
+    },
+    hideGoalFx: function () { el['goal-fx'].classList.add('hidden'); goalTimer = 0; },
+
     banner: function (title, sub, seconds) {
       el['event-title'].textContent = title;
       el['event-sub'].textContent = sub;
@@ -159,6 +185,7 @@
     },
     hideHint: function () { el['hud-hint'].classList.add('hidden'); hintTimer = 0; },
     tick: function (dt) {
+      if (goalTimer > 0) { goalTimer -= dt; if (goalTimer <= 0) el['goal-fx'].classList.add('hidden'); }
       if (hintTimer > 0) { hintTimer -= dt; if (hintTimer <= 0) el['hud-hint'].classList.add('hidden'); }
     },
 

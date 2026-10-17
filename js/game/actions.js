@@ -97,6 +97,7 @@
       ball.hard = type === ACT.SHOOT || type === ACT.CURVE;
       ball.chip = type === ACT.CHIP;
       ball.receiver = null;
+      ball.contester = null;
       p.dribbling = false;
       p.gkHands = false;
       p.kickT = type >= ACT.SHOOT ? 0.36 : 0.28; // kick animation
@@ -251,6 +252,20 @@
       }
       ball.vel.set(Math.sin(angle) * speed, vy, Math.cos(angle) * speed);
       ball.receiver = mate || null;
+      this.pickContester(p.team);
+    },
+
+    // The opponent who can reach the pass first goes for it too (he is marked like a receiver).
+    pickContester: function (team) {
+      var players = World.players;
+      var best = null, bestT = 1e9;
+      for (var i = 0; i < players.length; i++) {
+        var o = players[i];
+        if (o.team === team || o.role === 'GK' || o.stun > 0) continue;
+        var t = World.intercept(o, 11, 1.9);
+        if (t < bestT) { bestT = t; best = o; }
+      }
+      World.ball.contester = best;
     },
 
     // A header is allowed when the ball is at head height, within reach of p, and nobody is closer to it
@@ -310,6 +325,7 @@
       ball.vel.set(Math.sin(angle) * speed, (ty - y0) / T + 0.5 * G * T, Math.cos(angle) * speed);
       ball.spinY = 0;
       if (mate) { ball.receiver = mate; mate.runToT = 0; }
+      this.pickContester(p.team);
       this.lastTarget = mate;
     },
 
@@ -373,6 +389,7 @@
           if (Math.random() < chance) {
             ball.owner = p;
             ball.receiver = null;
+            ball.contester = null;
             ball.lastTouchTeam = p.team;
             ball.lastToucher = p.name;
             ball.pickupCooldown = 0.12;

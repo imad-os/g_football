@@ -16,6 +16,11 @@
   var labels = { p1: 'P1', p2: 'P2', cpu: 'CPU' };
   var lastSecond = -1;
   var lastOwner = null;
+  // breaks without freezing: 1 = goal celebration, 2 = half time, 3 = full time
+  var breakKind = 0;
+  var scorer = null;
+  var breakClock = 0;
+  var dangerT = 0;
   var R = NS.BALL_R;
   var PI = Math.PI;
 
@@ -113,6 +118,24 @@
       armL = 0.4; armR = -0.3;
       outL = 0.95; outR = 0.45;
       hipY = 0.9;
+    } else if (p.mood === 1 || (p.mood === 4 && sp < 2.5)) {
+      // celebrating: jumping, both arms up, waving
+      b = Math.abs(Math.sin(breakClock * 7 + p.index));
+      hipY = 0.9 + 0.38 * b;
+      armL = -2.75 + Math.sin(breakClock * 9 + p.index) * 0.3;
+      armR = -2.75 - Math.sin(breakClock * 9 + p.index) * 0.3;
+      outL = outR = 0.35;
+      lean = -0.1;
+      legL = 0.25 * b; legR = -0.25 * b;
+    } else if (p.mood === 4) {
+      // the scorer's run to the corner: arms spread like wings
+      outL = outR = 1.45; armL = armR = 0; lean = 0.25;
+    } else if (p.mood === 2) {
+      // dejected: head down, arms hanging, slow walk
+      lean = 0.38; outL = outR = 0.02; armL *= 0.3; armR *= 0.3; hipY -= 0.04;
+    } else if (p.mood === 3) {
+      // on the knees
+      hipY = 0.5; lean = 0.25; legL = -1.45; legR = -1.45; armL = armR = 0.15; outL = outR = 0.12;
     } else if (p.stun > 0) {
       lean = 0.3; outL = outR = 0.4;
     } else if (p.gkHands && World.ball.owner === p) {
@@ -195,6 +218,7 @@
     ball.chip = false;
     ball.gkTried = 0;
     ball.receiver = null;
+    ball.contester = null;
     p.gkHands = false;
     p.gkHold = 0;
     if (p.returnTo) p.returnT = 0.28; // one-two: play it back
@@ -212,32 +236,110 @@
     return humanTeam(team) ? 0.74 : AI.profile(levelOf(team)).gkSave;
   }
 
+  // Moods for the breaks: 1 celebrate, 2 dejected walk, 3 on the knees, 4 the scorer's run, 5 walk off.
+  function setMoods(kind, team) {
+    var players = World.players;
+    for (var i = 0; i < players.length; i++) {
+      var p = players[i];
+      p.stun = 0; p.tackleT = 0; p.slid = false;
+      if (kind === 2) p.mood = 5;
+      else if (kind === 1) p.mood = p.team === team ? 1 : (p.role === 'GK' ? 3 : 2);
+      else if (team < 0) p.mood = 5; // a draw: everybody walks off
+      else p.mood = p.team === team ? 1 : (Math.random() < 0.4 ? 3 : 2);
+    }
+  }
+
   function triggerGoal(team) {
     var m = World.match;
     var ball = World.ball;
     m.score[team]++;
     World.kickoffTeam = 1 - team; // the team that conceded restarts
-    m.celebrationTimer = 2.6;
+    m.celebrationTimer = 4.6;
+    breakKind = 1;
+    breakClock = 0;
+    setMoods(1, team);
+    // the scorer (an own goal: the attacker nearest the ball celebrates it)
+    var k = ball.kicker;
+    var own = !!(k && k.team !== team);
+    scorer = k && !own ? k : Actions.nearestToBall(team, null, null);
+    if (scorer) {
+      var a = team === 0 ? 1 : -1;
+      scorer.mood = 4;
+      scorer.celX = a * (HALF_W - 2.5);
+      scorer.celZ = (scorer.pos.z >= 0 ? 1 : -1) * (HALF_H - 2.5);
+    }
     NS.Audio.goal();
     NS.HUD.setScore(m.score[0], m.score[1]);
-    NS.HUD.banner(NS.I18n.t('hud.goal'), ball.lastToucher + ' (' + m.score[0] + ' - ' + m.score[1] + ')', 0);
+    var who = k ? k.name : ball.lastToucher;
+    var mins = Math.min(90, Math.floor(m.timeSeconds / 60) + 1);
+    NS.HUD.goalFx(NS.I18n.t('hud.goalword'), (own ? NS.I18n.t('hud.owngoal') + ' ' : '') + who + '  ' + mins + "'", team);
     if (team === 0 && World.slots[0].active) NS.Storage.addResult(0, 1, 0);
     ball.owner = null;
-    ball.vel.set(0, 0, 0);
+    ball.receiver = null;
+    ball.contester = null;
+    ball.vel.multiplyScalar(0.7); // it carries on into the net
   }
 
   function finish() {
     var m = World.match;
-    m.fullTimeTimer = 3.6;
-    NS.Audio.whistle();
+    m.fullTimeTimer = 5.0;
+    breakKind = 3;
+    breakClock = 0;
+    scorer = null;
+    setMoods(3, m.score[0] > m.score[1] ? 0 : (m.score[1] > m.score[0] ? 1 : -1));
+    NS.Audio.whistle(2);
     NS.HUD.banner(NS.I18n.t('hud.fulltime'), m.score[0] + ' - ' + m.score[1], 0);
     if (World.slots[0].active) {
       var won = m.score[0] > m.score[1] ? 1 : 0;
-      var cup = (won && World.session.compType === 'CONTINENTAL_CUP') ? 1 : 0;
+      var cup = 0; // cups are counted when a competition is won (NS.Comp)
       NS.Storage.addResult(won, 0, cup);
       NS.Storage.submitMatchScore(m.score[0], m.score[1], cup);
       MyPC.announce(NS.I18n.t('hud.fulltime') + ' ' + m.score[0] + ' - ' + m.score[1]);
     }
+  }
+
+  // One step of a break (goal, half time, full time): nothing freezes. The ball rolls on into the net, the scorer
+  // runs to the corner flag and slides, his team-mates chase him, the other team walks back heads down, the keeper
+  // kneels; at half / full time the players walk off (winners celebrate, losers drop to their knees).
+  function breakStep(dt, camMode) {
+    var ball = World.ball;
+    var players = World.players;
+    breakClock += dt;
+    World.stepBall(dt);
+    ballRotX += ball.vel.z * dt / R;
+    ballRotZ -= ball.vel.x * dt / R;
+    NS.Scene.setBall(ball.pos, ballRotX, ballRotZ);
+    NS.Scene.trail(false, ball.pos);
+    if (World.netHit) { NS.Scene.netHit(World.netHit); World.netHit = 0; }
+    for (var i = 0; i < players.length; i++) {
+      var p = players[i];
+      var tx = p.pos.x, tz = p.pos.z, sp = 0, stop = 0.6;
+      if (p.mood === 4) { tx = p.celX; tz = p.celZ; sp = 11.5; stop = 1.2; }
+      else if (p.mood === 1 && breakKind === 1 && scorer) { tx = scorer.pos.x; tz = scorer.pos.z; sp = 10.5; stop = 2.2; }
+      else if (p.mood === 2) { tx = p.homeX * 0.6; tz = p.homeZ; sp = 3.2; }
+      else if (p.mood === 5) { tx = p.pos.x * 0.6; tz = -HALF_H - 3; sp = 3.4; }
+      if (p.mood === 3 && breakClock > 2.6 && breakKind === 1) p.mood = 2; // the keeper gets up
+      var dx = tx - p.pos.x, dz = tz - p.pos.z;
+      var d = Math.sqrt(dx * dx + dz * dz);
+      var k = Math.min(1, 6 * dt);
+      if (sp > 0 && d > stop) {
+        var s = d < 3 ? sp * (0.4 + d * 0.2) : sp;
+        p.vel.x += (dx / d * s - p.vel.x) * k;
+        p.vel.z += (dz / d * s - p.vel.z) * k;
+        p.facing = Math.atan2(p.vel.x, p.vel.z);
+      } else {
+        p.vel.x *= 0.85; p.vel.z *= 0.85;
+        if (p.mood === 4 && !p.slid) { p.slid = true; p.slideT = 0.85; } // knee slide at the flag
+        if (p.mood === 1 && scorer) p.facing = Math.atan2(scorer.pos.x - p.pos.x, scorer.pos.z - p.pos.z);
+      }
+      p.pos.x = clamp(p.pos.x + p.vel.x * dt, -HALF_W - 2, HALF_W + 2);
+      p.pos.z = clamp(p.pos.z + p.vel.z * dt, -HALF_H - 4, HALF_H + 2);
+      p.mesh.root.rotation.y = p.facing;
+      animate(p, dt);
+    }
+    for (var j = 0; j < 2; j++) NS.Scene.setRing(j, false, 0, 0);
+    if (breakKind === 1 && scorer) NS.Scene.followBall(dt, scorer.pos.x, scorer.pos.z, camMode);
+    else NS.Scene.followBall(dt, ball.pos.x * 0.5, 0, camMode);
   }
 
   var Match = {
@@ -288,7 +390,7 @@
             tackleSlide: false, returnTo: null, returnT: 0, returnExp: 0,
             // animation timers
             kickT: 0, kickHard: false, lungeT: 0, slideT: 0, fallT: 0, diveT: 0, diveRoll: 0, headT: 0, catchT: 0,
-            gkHands: false, diveCd: 0, diveHigh: false,
+            gkHands: false, diveCd: 0, diveHigh: false, mood: 0, celX: 0, celZ: 0, slid: false,
             // AI brain state
             mark: null, icX: 0, icZ: 0, drX: 0, drZ: 0, runT: 0, runCd: 0, runX: 0, runZ: 0,
             aiT: 0, tgtX: 0, tgtZ: 0, tgtS: 8, gkRT: 0
@@ -325,6 +427,7 @@
         p.facing = p.team === 0 ? Math.PI / 2 : -Math.PI / 2;
         p.stun = 0; p.tackleT = 0; p.tackleCd = 0; p.runToT = 0; p.returnTo = null; p.dribbling = false;
         p.kickT = 0; p.lungeT = 0; p.slideT = 0; p.fallT = 0; p.diveT = 0; p.headT = 0; p.catchT = 0; p.gkHands = false;
+        p.mood = 0; p.slid = false;
         animate(p, 0);
         p.mark = null; p.drX = 0; p.drZ = 0; p.runT = 0; p.runCd = 0; p.aiT = 0; p.gkRT = 0; p.stamina = 100; p.gkHold = 0;
       }
@@ -346,7 +449,7 @@
       lastOwner = World.ball.owner;
       NS.Input.clearEdges();
       m.kickoffTimer = 1.0;
-      NS.Audio.whistle();
+      NS.Audio.whistle(0);
     },
 
     start: function () {
@@ -372,19 +475,29 @@
       NS.HUD.show(true);
       NS.HUD.hint(NS.I18n.t('hud.hint'), 7);
       NS.HUD.applySettings(World.settings);
+      NS.Audio.crowd(true);
     },
 
     // Back to the main menu (abandon or after full time).
-    exitToMenu: function () {
+    // finished = the match went the distance (a competition records it); otherwise it was abandoned.
+    exitToMenu: function (finished) {
       var m = World.match;
       m.running = false;
       m.paused = true;
       m.fullTimeTimer = 0;
       m.celebrationTimer = 0;
+      breakKind = 0;
+      NS.Audio.crowd(false);
       NS.HUD.show(false);
+      NS.HUD.hideGoalFx();
       NS.Scene.setRing(0, false, 0, 0);
       NS.Scene.setRing(1, false, 0, 0);
-      NS.UI.show('MAIN');
+      if (NS.Comp && NS.Comp.active()) {
+        if (finished === true) NS.Comp.recordUserMatch(m.score[0], m.score[1]);
+        NS.UI.show('COMPHUB');
+      } else {
+        NS.UI.show('MAIN');
+      }
     },
 
     // Controller sides changed from the pause menu: apply to the running match.
@@ -410,13 +523,14 @@
 
       if (m.celebrationTimer > 0) {
         m.celebrationTimer -= dt;
-        if (m.celebrationTimer <= 0) { NS.HUD.hideBanner(); this.resetKickoff(); }
-        NS.Scene.followBall(dt, ball.pos.x, ball.pos.z, settings.cameraMode);
+        breakStep(dt, settings.cameraMode);
+        if (m.celebrationTimer <= 0) { NS.HUD.hideBanner(); NS.HUD.hideGoalFx(); breakKind = 0; this.resetKickoff(); }
         return;
       }
       if (m.fullTimeTimer > 0) {
         m.fullTimeTimer -= dt;
-        if (m.fullTimeTimer <= 0) this.exitToMenu();
+        breakStep(dt, settings.cameraMode);
+        if (m.fullTimeTimer <= 0) this.exitToMenu(true);
         return;
       }
       if (m.kickoffTimer > 0) {
@@ -435,8 +549,12 @@
       if (mins >= 45 && m.half === 1) {
         m.half = 2;
         World.kickoffTeam = 1 - m.firstKick;
-        m.celebrationTimer = 2.2; // same pause as after a goal, then the second-half kickoff
-        NS.Audio.whistle();
+        m.celebrationTimer = 3.4; // the players walk off, then the second-half kickoff
+        breakKind = 2;
+        breakClock = 0;
+        scorer = null;
+        setMoods(2, -1);
+        NS.Audio.whistle(1);
         NS.HUD.banner(NS.I18n.t('hud.halftime'), m.score[0] + ' - ' + m.score[1], 0);
         return;
       }
@@ -569,7 +687,9 @@
                   takeBall(p);
                   p.gkHands = true; // caught: held in the hands
                   p.catchT = 0.4;
+                  if (speed > 22) NS.Audio.ooh();
                 } else {
+                  NS.Audio.ooh();
                   ball.vel.x = -ball.vel.x * 0.4;
                   ball.vel.z += (Math.random() - 0.5) * 9;
                   ball.vel.y = 3;
@@ -631,12 +751,24 @@
       ballRotZ -= ball.vel.x * dt / R;
       NS.Scene.setBall(ball.pos, ballRotX, ballRotZ);
       NS.Scene.trail(ball.hard && !ball.owner, ball.pos); // streak behind a shot
+      if (World.netHit) { NS.Scene.netHit(World.netHit); World.netHit = 0; }
       if (scored >= 0) { triggerGoal(scored); }
+
+      // crowd: louder and brighter the closer the ball is to a goal, flat out on a shot
+      dangerT -= dt;
+      if (dangerT <= 0) {
+        dangerT = 0.2;
+        var toGoal = HALF_W - Math.abs(ball.pos.x);
+        var danger = clamp(1 - toGoal / 32, 0, 1) * clamp(1.25 - Math.abs(ball.pos.z) / HALF_H, 0.35, 1);
+        if (ball.hard && !ball.owner) danger = 1;
+        NS.Audio.tick(0.2, danger);
+      }
 
       for (i = 0; i < 2; i++) {
         var sl = World.slots[i];
         // the arrow blinks while the player is receiving a pass (the receive assist is on)
-        if (sl.active && sl.player) NS.Scene.setRing(i, true, sl.player.pos.x, sl.player.pos.z, !ball.owner && ball.receiver === sl.player);
+        if (sl.active && sl.player) NS.Scene.setRing(i, true, sl.player.pos.x, sl.player.pos.z,
+          !ball.owner && (ball.receiver === sl.player || ball.contester === sl.player));
         else NS.Scene.setRing(i, false, 0, 0);
       }
       NS.Scene.followBall(dt, ball.pos.x, ball.pos.z, settings.cameraMode);

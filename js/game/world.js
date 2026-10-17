@@ -125,9 +125,20 @@
       }
     }
     az = st.z < 0 ? -st.z : st.z;
-    if (scoring && az < GOAL_HALF_W - POST_R && st.y < GOAL_HEIGHT) {
-      if (st.x > HALF_W + R) return 0;
-      if (st.x < -HALF_W - R) return 1;
+    // inside the goal: the net catches the ball (back, sides, roof)
+    if ((st.x > HALF_W || st.x < -HALF_W) && az < GOAL_HALF_W && st.y < GOAL_HEIGHT) {
+      var gs = st.x > 0 ? 1 : -1;
+      var back = HALF_W + NS.GOAL_DEPTH - R;
+      if (st.x * gs > back) {
+        st.x = gs * back;
+        if (scoring && st.vx * gs > 3) World.netHit = gs;
+        st.vx *= -0.12; st.vz *= 0.5; st.vy *= 0.5;
+      }
+      if (az > GOAL_HALF_W - R) { st.z = (st.z > 0 ? 1 : -1) * (GOAL_HALF_W - R); st.vz *= -0.2; }
+      if (st.y > GOAL_HEIGHT - R) { st.y = GOAL_HEIGHT - R; st.vy *= -0.2; }
+      // all of the ball over the line, between the posts and under the bar: goal
+      if (scoring && st.x * gs > HALF_W + R && az < GOAL_HALF_W - POST_R) return gs > 0 ? 0 : 1;
+      return -1;
     }
     if (st.z > HALF_H) { st.z = HALF_H; st.vz = -st.vz * 0.6; }
     else if (st.z < -HALF_H) { st.z = -HALF_H; st.vz = -st.vz * 0.6; }
@@ -149,7 +160,8 @@
     gkTried: 0,   // bit per team: that keeper already had his one save attempt on this kick
     chip: false, // lofted shot: the keeper is much less likely to save it
     pickupCooldown: 0,
-    receiver: null // team-mate the last pass was played to (he runs onto it)
+    receiver: null,  // team-mate the last pass was played to (he runs onto it)
+    contester: null  // the opponent nearest to that pass (he runs to it too)
   };
 
   function makeSlot(idx) {
@@ -157,8 +169,7 @@
       idx: idx, active: false, team: 0, player: null,
             chargeMove: -1, chargeFrac: -1, pressing: false, teamPress: false, evPlayer: null, burstT: 0, lockT: 0,
       evActive: false, evMask: 0, evT: 0, evSettle: 0, evCtx: 0, evMove: -1, evPrev: 0,
-      evRecv: false,
-      headReq: -1, headT: 0, headD: 0, headRecv: false // move pressed before the ball arrived: header or first-time pass
+      gkLeft: 0 // keeper countdown shown (seconds left)
     };
   }
 
@@ -192,6 +203,7 @@
       ball.spinY = 0;
       ball.owner = null;
       ball.receiver = null;
+      ball.contester = null;
       ball.pickupCooldown = 0.25;
     },
 
@@ -213,7 +225,7 @@
       loadState(S);
       if (integrate(S, dt)) { ball.hard = false; ball.chip = false; }
       var res = collide(S, true);
-      if (res === -2) { NS.Audio.kick(false); ball.hard = false; res = -1; }
+      if (res === -2) { NS.Audio.post(); ball.hard = false; res = -1; }
       ball.pos.set(S.x, S.y, S.z);
       ball.vel.set(S.vx, S.vy, S.vz);
       ball.spinY = S.spin;
@@ -249,7 +261,8 @@
       this.icX = P.x; this.icZ = P.z;
       return 99;
     },
-    icX: 0, icZ: 0
+    icX: 0, icZ: 0,
+    netHit: 0 // goal whose net the ball just hit (+1 / -1), read and cleared by the match
   };
 
   NS.World = World;

@@ -699,8 +699,8 @@
       }
       var T = TEAMS[p.team];
 
-      // a pass was played to this player: meet it where it can be played (a lofted ball: where it comes down)
-      if (!ball.owner && ball.receiver === p) {
+      // a pass was played to this player (or he is the opponent nearest to it): meet it where it can be played
+      if (!ball.owner && (ball.receiver === p || ball.contester === p)) {
         interceptTime(p, 11.5 * prof.speedMul, 1.9);
         moveToward(p, ICX, ICZ, 11.5 * prof.speedMul, dt);
         p.runToT = 0;

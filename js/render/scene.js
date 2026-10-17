@@ -8,6 +8,8 @@
   var TRAIL_N = 9;
   var trailCount = 0;
   var projV = null;
+  var nets = [null, null];  // goal nets (-x, +x)
+  var netT = [0, 0];        // net bulge, 1 when the ball hits it
   var rings = [null, null]; // controlled-player arrows (P1, P2)
   var arrowMats = [null, null];
   var ARROW_COLORS = [0x93c5fd, 0xfca5a5]; // light blue (P1), light red (P2)
@@ -42,6 +44,7 @@
     var net = new THREE.Mesh(new THREE.BoxGeometry(NS.GOAL_DEPTH, NS.GOAL_HEIGHT, NS.GOAL_HALF_W * 2), netMat);
     net.position.set(xPos + sign * (NS.GOAL_DEPTH / 2), NS.GOAL_HEIGHT / 2, 0);
     scene.add(p1, p2, bar, net);
+    nets[sign > 0 ? 1 : 0] = net;
   }
 
   function buildStadium(tier) {
@@ -192,8 +195,18 @@
         r.rotation.y = arrowT * 2;
       }
     },
-    // Smooth follow camera; called once per simulation step.
+    // The ball hit the net of goal side (+1 / -1): it bulges and settles.
+    netHit: function (side) { netT[side > 0 ? 1 : 0] = 1; },
+    // Smooth follow camera; called once per simulation step (also settles the nets).
     followBall: function (dt, bx, bz, mode) {
+      for (var n = 0; n < 2; n++) {
+        if (netT[n] <= 0 || !nets[n]) continue;
+        netT[n] -= dt * 1.6;
+        var sgn = n === 1 ? 1 : -1;
+        var bulge = netT[n] > 0 ? Math.sin(netT[n] * 9) * 0.22 * netT[n] : 0;
+        nets[n].scale.set(1 + bulge, 1, 1);
+        nets[n].position.x = sgn * (NS.PITCH_HALF_W + NS.GOAL_DEPTH * (1 + bulge) / 2);
+      }
       var cfg = CAM[mode] || CAM.WIDE;
       var tx = bx * cfg.trackX;
       var lim = 24 * NS.PITCH_SCALE;
