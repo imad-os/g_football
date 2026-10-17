@@ -291,12 +291,13 @@
     var spread = (1.3 + dist * 0.09) * prof.acc * (pressure < 2.5 ? 1.35 : 1);
     var aimZ = side * (2.2 + Math.random() * 2.4) + gauss() * spread;
     var az = clamp(aimZ / (GOAL_HALF_W * 0.85), -1.6, 1.6);
-    var power = clamp(0.5 + dist / 45, 0.55, 1);
+    // placed when close, driven from distance (not every shot at full power)
+    var power = clamp(0.3 + dist / 55 + (Math.random() - 0.5) * 0.25, 0.35, 0.92);
     var type = ACT.SHOOT;
     if (gk && Math.abs(gk.pos.x - goalX) > 5 && dist < 30 && Math.random() < 0.7) type = ACT.CHIP;
     else if (Math.abs(p.pos.z) > 8 && dist < 28 && Math.random() < 0.45) { type = ACT.CURVE; az = p.pos.z > 0 ? 1 : -1; }
     Actions.kick(p, type, power, 0, az, 0.4);
-    if (type === ACT.SHOOT) World.ball.vel.y += gauss() * spread * 0.9; // and some go over the bar
+    if (type === ACT.SHOOT) World.ball.vel.y += gauss() * spread * 0.25; // a few still fly over
   }
 
   function gauss() { return (Math.random() + Math.random() + Math.random() - 1.5) * 2; } // ~N(0, 1)
@@ -607,10 +608,19 @@
     var T = TEAMS[p.team];
     var O = TEAMS[1 - p.team];
     var limit = GOAL_HALF_W - 0.4;
+    if (p.diveCd > 0) p.diveCd -= dt;
+
+    // in the air during a dive: no steering, he glides and lands
+    if (p.diveT > 0 && ball.owner !== p) {
+      var glide = Math.exp(-2.2 * dt);
+      p.vel.x *= glide; p.vel.z *= glide;
+      return;
+    }
 
     if (ball.owner === p) {
       // gkHold is counted by the match (5 s rule: after that he must kick it long)
       p.vel.x *= 0.8; p.vel.z *= 0.8;
+      if (p.diveT > 0) return; // still on the grass after a diving catch
       p.aiCd -= dt;
       if (p.gkHold > 0.9 && p.aiCd <= 0) {
         p.aiCd = 0.25;
@@ -627,7 +637,24 @@
       var t = (lineX - ball.pos.x) / ball.vel.x;
       if (t > 0 && t < 2.4) {
         if (p.gkRT < prof.gkReact) { p.vel.x *= 0.85; p.vel.z *= 0.85; return; }
-        moveToward(p, lineX, clamp(ball.pos.z + ball.vel.z * t, -limit - 0.8, limit + 0.8), 14, dt);
+        // where the shot really crosses our line (same physics: curl, drag, dip)
+        World.predict(t);
+        var cz = World.prZ, cy = World.prY;
+        var need = Math.abs(cz - p.pos.z);
+        if (p.diveT <= 0 && p.diveCd <= 0 && need > 1.3 && t < 0.6 && cy < NS.GOAL_HEIGHT + 0.8 &&
+            Math.abs(cz) < GOAL_HALF_W + 1.5) {
+          // too far to step across in time: dive at it
+          var dir = cz > p.pos.z ? 1 : -1;
+          p.facing = Math.atan2(ball.pos.x - p.pos.x, ball.pos.z - p.pos.z);
+          p.vel.z = dir * clamp(need / Math.max(t, 0.22), 7, 15);
+          p.vel.x = (lineX - p.pos.x) * 2;
+          p.diveT = 0.8;
+          p.diveCd = 1.2;
+          p.diveHigh = cy > 1.9;
+          p.diveRoll = -dir * Math.sin(p.facing) > 0 ? -1.25 : 1.25;
+          return;
+        }
+        moveToward(p, lineX, clamp(cz, -limit - 0.8, limit + 0.8), 14, dt);
         return;
       }
     } else {

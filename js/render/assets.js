@@ -5,6 +5,7 @@
   var geo = {};
   var jerseyCache = {};
   var pitchTexture = null;
+  var ballTextures = {};
 
   function hexToCss(hex) {
     var s = hex.toString(16);
@@ -23,7 +24,8 @@
     // controlled-player marker: an arrow above the head, pointing down at the player
     geo.arrow = new THREE.ConeGeometry(0.85, 1.5, 4);
     geo.arrow.rotateX(Math.PI);
-    geo.ball = new THREE.IcosahedronGeometry(NS.BALL_R, 1);
+    geo.ball = new THREE.SphereGeometry(NS.BALL_R, 18, 12); // UV-mapped for the ball skins
+    geo.trail = new THREE.SphereGeometry(NS.BALL_R * 0.8, 6, 4);
   }
 
   function jerseyTexture(pattern, c1, c2) {
@@ -79,6 +81,107 @@
     if (pitchTexture) pitchTexture.dispose();
     pitchTexture = new THREE.CanvasTexture(canvas);
     return pitchTexture;
+  }
+
+  // ---- ball skins: equirectangular 256 x 128 canvas textures (drawn once, cached) ----
+  // The 12 panels of a classic ball: both poles + two rings of five at +-26.6 degrees of latitude.
+  function panelCentres(fn) {
+    for (var k = 0; k < 5; k++) {
+      fn((k / 5) * 256, 45);
+      fn(((k + 0.5) / 5) * 256, 83);
+    }
+  }
+
+  function poly(ctx, cx, cy, r, n, rot, sx) {
+    ctx.beginPath();
+    for (var i = 0; i < n; i++) {
+      var a = rot + i * Math.PI * 2 / n;
+      var x = cx + Math.cos(a) * r * sx, y = cy + Math.sin(a) * r;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function star(ctx, cx, cy, r, sx) {
+    ctx.beginPath();
+    for (var i = 0; i < 10; i++) {
+      var a = -Math.PI / 2 + i * Math.PI / 5;
+      var rr = i % 2 ? r * 0.45 : r;
+      var x = cx + Math.cos(a) * rr * sx, y = cy + Math.sin(a) * rr;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function panels(ctx, color, wrap) {
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, 256, 9);
+    ctx.fillRect(0, 119, 256, 9);
+    panelCentres(function (x, y) {
+      poly(ctx, x, y, 9.5, 5, -Math.PI / 2, 1.15);
+      if (wrap && x < 12) poly(ctx, x + 256, y, 9.5, 5, -Math.PI / 2, 1.15);
+    });
+  }
+
+  function seams(ctx, color) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    for (var x = 0; x < 256; x += 25.6) { ctx.beginPath(); ctx.moveTo(x, 9); ctx.lineTo(x + 12.8, 45); ctx.lineTo(x, 83); ctx.lineTo(x + 12.8, 119); ctx.stroke(); }
+  }
+
+  function ballTexture(skin) {
+    if (ballTextures[skin]) return ballTextures[skin];
+    var canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 128;
+    var ctx = canvas.getContext('2d');
+    var x;
+    if (skin === 'PRO') {
+      // modern white ball with two flowing colour bands
+      ctx.fillStyle = '#f8fafc'; ctx.fillRect(0, 0, 256, 128);
+      ctx.lineWidth = 11;
+      ctx.strokeStyle = '#2563eb';
+      ctx.beginPath();
+      for (x = 0; x <= 256; x += 8) { var y1 = 42 + Math.sin(x / 256 * Math.PI * 4) * 12; if (x) ctx.lineTo(x, y1); else ctx.moveTo(x, y1); }
+      ctx.stroke();
+      ctx.strokeStyle = '#ef4444';
+      ctx.beginPath();
+      for (x = 0; x <= 256; x += 8) { var y2 = 86 + Math.sin(x / 256 * Math.PI * 4 + Math.PI) * 12; if (x) ctx.lineTo(x, y2); else ctx.moveTo(x, y2); }
+      ctx.stroke();
+      ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, 256, 6); ctx.fillRect(0, 122, 256, 6);
+    } else if (skin === 'NIGHT') {
+      // hi-vis yellow with dark panels (easy to follow on a dark pitch)
+      ctx.fillStyle = '#fde047'; ctx.fillRect(0, 0, 256, 128);
+      seams(ctx, 'rgba(120, 53, 15, 0.5)');
+      panels(ctx, '#312e81', true);
+    } else if (skin === 'RETRO') {
+      // brown leather, panel stitching and the lace
+      ctx.fillStyle = '#9a4b16'; ctx.fillRect(0, 0, 256, 128);
+      ctx.strokeStyle = '#5b2a06'; ctx.lineWidth = 2;
+      for (x = 0; x < 256; x += 32) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 128); ctx.stroke(); }
+      ctx.beginPath(); ctx.moveTo(0, 64); ctx.lineTo(256, 64); ctx.stroke();
+      ctx.strokeStyle = '#f5f5f4'; ctx.lineWidth = 2;
+      for (var k = 0; k < 6; k++) { ctx.beginPath(); ctx.moveTo(120, 52 + k * 4); ctx.lineTo(136, 52 + k * 4); ctx.stroke(); }
+      ctx.beginPath(); ctx.moveTo(128, 50); ctx.lineTo(128, 76); ctx.stroke();
+    } else if (skin === 'GOLD') {
+      // gold ball with white stars
+      ctx.fillStyle = '#f59e0b'; ctx.fillRect(0, 0, 256, 128);
+      ctx.fillStyle = '#fcd34d';
+      for (x = 0; x < 256; x += 16) ctx.fillRect(x, 0, 8, 128);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 256, 7); ctx.fillRect(0, 121, 256, 7);
+      panelCentres(function (cx, cy) { star(ctx, cx, cy, 10, 1.15); });
+    } else {
+      // CLASSIC: white hexagons, black pentagons
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 256, 128);
+      seams(ctx, 'rgba(100, 116, 139, 0.55)');
+      panels(ctx, '#111827', true);
+    }
+    var tex = new THREE.CanvasTexture(canvas);
+    ballTextures[skin] = tex;
+    return tex;
   }
 
   // Returns { root, body, leftLeg, rightLeg, leftArm, rightArm, mats } (mats are owned by the player and disposed
@@ -141,6 +244,8 @@
     jerseyCache = {};
     if (pitchTexture) pitchTexture.dispose();
     pitchTexture = null;
+    for (k in ballTextures) ballTextures[k].dispose();
+    ballTextures = {};
   }
 
   NS.Assets = {
@@ -148,6 +253,7 @@
     hexToCss: hexToCss,
     initGeometries: initGeometries,
     pitchTexture: buildPitchTexture,
+    ballTexture: ballTexture,
     createPlayer: createPlayer,
     disposePlayer: disposePlayer,
     disposeAll: disposeAll

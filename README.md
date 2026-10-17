@@ -46,7 +46,12 @@ during that run, until somebody has the ball.
 headed pass, or shoot for a headed shot. The header happens as soon as the ball is at head height; pressed early, it waits for
 the ball. If the ball arrives on the ground instead, the move is played first time. CPU players head clearances and chances too.
 
-**Goalkeepers**: the keeper catches (hands) shots and balls played by the opponents inside his penalty area; a pass from a
+**Shots** are driven, not lobbed: the stick picks the side (without it: the far side from the keeper), the power (hold)
+picks the height, from low and placed to rising into the top corner (full power can fly over), with speed 24 to 46. Aimed
+shots bend a little, full-power shots wobble, and a streak follows the ball.
+
+**Goalkeepers** read the shot with the ball physics and **dive** to where it crosses the line, catching it at full stretch or
+pushing it away when it is too hard; shots straight at them are nearly always kept out, the corners are hard. The keeper catches (hands) shots and balls played by the opponents inside his penalty area; a pass from a
 team-mate must be played with the feet. A keeper may hold the ball 5 seconds at most: after that it is kicked long anyway.
 Player 2: second keyboard (W A S D + F G) or a second gamepad.
 
@@ -72,6 +77,14 @@ Player 2: second keyboard (W A S D + F G) or a second gamepad.
 
 Measured with a headless simulator (NORMAL vs NORMAL, 3-minute matches, v1.5): pass completion about 90 to 95%, about 9 shots
 and 3 goals per match.
+
+**Ball**: Settings > Ball has 5 designs (CLASSIC, PRO, NIGHT, RETRO, GOLD).
+
+**Kits**: every team has a change kit (white with the club colour, or dark navy for teams in a light colour). When the shirts of
+both teams look alike, the away team wears its change kit (or a third colour when that still clashes); the keepers get colours
+that differ from both teams.
+
+**HUD**: the player boxes are small and see-through, and a box (or the radar) fades out when the ball is behind it.
 
 ## Physics and animation
 
@@ -103,7 +116,7 @@ js/main.js            My PC lifecycle (init / ready / start / pause / resume / d
 
 * Input only comes from `MyPC.init({ onInput })`; there are no `keydown` listeners. Menus are navigated with arrows + OK, Back/cancel goes back.
 * Saves: `MyPC.save/load` (`stats`, `settings`, `bindings`). Score: `MyPC.submitScore` at full time of a match with a human player.
-* Owner config (`MyPC.app_config`, defaults in `mypc-app.json` `config`): `difficulty`, `durationMins`, `gameSpeed`, `switchMode`, `cameraMode`, `quality`, `soundEnabled`, `showRadar`, `showFPS`.
+* Owner config (`MyPC.app_config`, defaults in `mypc-app.json` `config`): `difficulty`, `durationMins`, `gameSpeed`, `switchMode`, `cameraMode`, `ballSkin`, `quality`, `soundEnabled`, `showRadar`, `showFPS`.
 * Touch: My PC draws the pad (`OK`, `RUN`, `SW`); no own pad.
 * Fixed 60 Hz step, no allocation in the update loop, DOM written only when a value changes, one `AudioContext` closed in `onDestroy`.
 

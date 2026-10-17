@@ -4,6 +4,10 @@
 
   var renderer, scene, camera, dirLight, ambLight;
   var pitchMesh, crowdMesh, ballMesh;
+  var trail = [];           // pooled spheres behind a shot
+  var TRAIL_N = 9;
+  var trailCount = 0;
+  var projV = null;
   var rings = [null, null]; // controlled-player arrows (P1, P2)
   var arrowMats = [null, null];
   var ARROW_COLORS = [0x93c5fd, 0xfca5a5]; // light blue (P1), light red (P2)
@@ -98,8 +102,18 @@
       NS.Assets.initGeometries();
       buildStadium(tier);
 
-      ballMesh = new THREE.Mesh(NS.Assets.geo.ball, new THREE.MeshLambertMaterial({ color: 0xffffff }));
+      ballMesh = new THREE.Mesh(NS.Assets.geo.ball, new THREE.MeshLambertMaterial({ color: 0xffffff, map: NS.Assets.ballTexture('CLASSIC') }));
       scene.add(ballMesh);
+      var trailMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.32, depthWrite: false });
+      for (var t = 0; t < TRAIL_N; t++) {
+        var tm = new THREE.Mesh(NS.Assets.geo.trail, trailMat);
+        var sc = 1 - t / TRAIL_N;
+        tm.scale.set(sc, sc, sc);
+        tm.visible = false;
+        scene.add(tm);
+        trail.push(tm);
+      }
+      projV = new THREE.Vector3();
       for (var i = 0; i < 2; i++) {
         // light fill + dark border (a slightly bigger back-face copy drawn behind it)
         rings[i] = new THREE.Group();
@@ -144,6 +158,30 @@
       ballMesh.rotation.x = rotX;
       ballMesh.rotation.z = rotZ;
     },
+    setBallSkin: function (skin) {
+      if (!ballMesh) return;
+      ballMesh.material.map = NS.Assets.ballTexture(skin || 'CLASSIC');
+      ballMesh.material.needsUpdate = true;
+    },
+    // Streak of fading balls behind a shot: on = add the current position, off = shrink away.
+    trail: function (on, pos) {
+      var i;
+      if (on) {
+        for (i = TRAIL_N - 1; i > 0; i--) trail[i].position.copy(trail[i - 1].position);
+        trail[0].position.copy(pos);
+        if (trailCount < TRAIL_N) trailCount++;
+      } else if (trailCount > 0) {
+        trailCount--;
+      }
+      for (i = 0; i < TRAIL_N; i++) trail[i].visible = i > 0 && i < trailCount;
+    },
+    // Screen position of a world point: Scene.px / Scene.py in 0..1 (from the top-left corner).
+    project: function (pos) {
+      projV.copy(pos).project(camera);
+      this.px = (projV.x + 1) * 0.5;
+      this.py = (1 - projV.y) * 0.5;
+    },
+    px: 0.5, py: 0.5,
     setRing: function (i, visible, x, z, blink) {
       var r = rings[i];
       r.visible = visible;

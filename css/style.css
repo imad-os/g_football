@@ -81,29 +81,32 @@ h1, h2, p { margin: 0; }
   display: flex; align-items: flex-end; justify-content: space-between;
 }
 
-.plate { width: 17rem; padding: 0.55rem 0.8rem; }
+/* player plates: compact and see-through (the ball near the bottom corners must stay visible) */
+.plate { width: 13rem; padding: 0.25rem 0.55rem; background: rgba(9, 14, 28, 0.5); transition: opacity 0.2s; }
+.plate.behind, #hud-radar-box.behind { opacity: 0.18; }
 .plate.p1 { border-left: 5px solid #3b82f6; }
 .plate.p2 { border-right: 5px solid var(--red); text-align: right; }
-.plate-head { display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; font-weight: 800; margin-bottom: 0.15rem; }
+.plate-head { display: flex; justify-content: space-between; align-items: center; font-size: 0.7rem; font-weight: 800; margin-bottom: 0; }
+.plate .chip { font-size: 0.65rem; padding: 0 0.35rem; }
 .plate.p1 .plate-head { color: #60a5fa; }
 .plate.p2 .plate-head { color: #f87171; flex-direction: row-reverse; }
-.pname { font-size: 1.15rem; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 0.3rem; }
-.bar { height: 0.4rem; background: #1e293b; border-radius: 0.2rem; overflow: hidden; margin-bottom: 0.3rem; }
+.pname { font-size: 0.92rem; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 0.15rem; line-height: 1.15; }
+.bar { height: 0.28rem; background: rgba(30, 41, 59, 0.7); border-radius: 0.2rem; overflow: hidden; margin-bottom: 0.18rem; }
 .bar .fill { height: 100%; width: 100%; background: #34d399; }
-.power { position: relative; display: flex; height: 0.7rem; border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 0.2rem; background: rgba(0, 0, 0, 0.7); }
+.power { position: relative; display: flex; height: 0.45rem; border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 0.2rem; background: rgba(0, 0, 0, 0.7); }
 .power .seg { display: block; height: 100%; opacity: 0.6; }
 .power .pass { width: 12.5%; background: #22c55e; }
 .power .thr { width: 15.6%; background: #eab308; }
 .power .lng { width: 17.2%; background: #f97316; }
 .power .sht { width: 54.7%; background: #dc2626; }
 .power .mark { position: absolute; top: -0.2rem; bottom: -0.2rem; left: 0; width: 0.28rem; margin-left: -0.14rem; background: #fff; border-radius: 0.1rem; visibility: hidden; }
-.act { height: 1.1rem; margin-top: 0.15rem; font-size: 0.8rem; font-weight: 900; letter-spacing: 0.06em; visibility: hidden; }
+.act { height: 0.85rem; margin-top: 0.05rem; font-size: 0.68rem; font-weight: 900; letter-spacing: 0.06em; visibility: hidden; }
 .act[data-act="1"] { color: #4ade80; }
 .act[data-act="2"] { color: #facc15; }
 .act[data-act="3"] { color: #fb923c; }
 .act[data-act="4"] { color: #f87171; }
 
-#hud-radar-box { padding: 0.3rem; background: rgba(2, 6, 15, 0.85); }
+#hud-radar-box { padding: 0.25rem; background: rgba(2, 6, 15, 0.5); transition: opacity 0.2s; }
 #radar-canvas { display: block; width: 11rem; height: auto; border-radius: 0.4rem; }
 
 #hud-hint {
@@ -267,7 +270,7 @@ h1, h2, p { margin: 0; }
   html { font-size: min(1.6vh, 2.6vw); }
   .cards, .cards.two, .sides-row, .two-cols, .gp-mid, .help-cols, .settings-list { grid-template-columns: 1fr; }
   .cards { overflow-y: auto; }
-  .plate { width: 11rem; }
+  .plate { width: 9.5rem; }
   #hud-hint { bottom: 24%; max-width: 92%; }
 }
 

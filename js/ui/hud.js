@@ -12,6 +12,9 @@
   var awayCss = '#38bdf8';
   var radarSkip = 0;
   var bannerTimer = 0;
+  var plates = [null, null];
+  var boxes = [{ l: 0, r: 0, t: 2, b: 2 }, { l: 0, r: 0, t: 2, b: 2 }, { l: 0, r: 0, t: 2, b: 2 }];
+  var covered = [false, false, false];
   var hintTimer = 0;
 
   function text(key, node, value) {
@@ -50,6 +53,8 @@
         el['p' + i + '-mark'] = $('p' + i + '-mark');
         el['p' + i + '-act'] = $('p' + i + '-act');
       }
+      plates[0] = document.querySelector('.plate.p1');
+      plates[1] = document.querySelector('.plate.p2');
       var c = el['radar-canvas'];
       radarCtx = c.getContext('2d');
       radarW = c.width;
@@ -59,11 +64,35 @@
     show: function (v) {
       el.hud.classList.toggle('hidden', !v);
       if (!v) this.hideBanner();
+      else this.measure();
     },
 
-    setTeams: function (home, away) {
-      homeCss = NS.Assets.hexToCss(home.c1);
-      awayCss = NS.Assets.hexToCss(away.c1);
+    // Screen boxes (0..1) of the two player plates and the radar, read once (on show / resize), not per frame.
+    measure: function () {
+      var W = window.innerWidth || 1, H = window.innerHeight || 1;
+      var nodes = [plates[0], plates[1], el['hud-radar-box']];
+      for (var i = 0; i < 3; i++) {
+        var n = nodes[i];
+        if (!n) continue;
+        var r = n.getBoundingClientRect();
+        var b = boxes[i];
+        b.l = r.left / W - 0.03; b.r = r.right / W + 0.03; b.t = r.top / H - 0.05; b.b = r.bottom / H + 0.02;
+      }
+    },
+
+    // Fades a box when the ball (screen point nx, ny) is behind it.
+    cover: function (nx, ny) {
+      var nodes = [plates[0], plates[1], el['hud-radar-box']];
+      for (var i = 0; i < 3; i++) {
+        var b = boxes[i];
+        var hit = nx > b.l && nx < b.r && ny > b.t && ny < b.b;
+        if (hit !== covered[i]) { covered[i] = hit; if (nodes[i]) nodes[i].classList.toggle('behind', hit); }
+      }
+    },
+
+    setTeams: function (home, away, homeColor, awayColor) {
+      homeCss = NS.Assets.hexToCss(homeColor !== undefined ? homeColor : home.c1);
+      awayCss = NS.Assets.hexToCss(awayColor !== undefined ? awayColor : away.c1);
       el['hud-home-name'].textContent = home.code;
       el['hud-away-name'].textContent = away.code;
       el['hud-home-badge'].style.background = homeCss;

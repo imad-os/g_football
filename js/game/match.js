@@ -47,11 +47,11 @@
     var u, b;
 
     if (p.diveT > 0) {
-      // keeper dive: whole body falls to the side, arms stretched over the head
-      u = 1 - p.diveT / 0.75;
+      // keeper dive: whole body falls to the side, arms stretched over the head (higher for a high shot)
+      u = 1 - p.diveT / 0.8;
       b = ease(u / 0.25) * (1 - ease((u - 0.75) / 0.25));
       roll = p.diveRoll * b;
-      hipY = 0.9 - 0.35 * b;
+      hipY = 0.9 - 0.35 * b + (p.diveHigh ? 0.75 * Math.sin(clamp(u, 0, 1) * PI) : 0);
       armL = armR = -2.9 * b;
       outL = outR = 0.25 * b;
       legL = 0.2 * b; legR = -0.2 * b; lean = 0;
@@ -261,15 +261,16 @@
       var homeT = NS.Teams.byId(s.homeTeamId);
       var awayT = NS.Teams.byId(s.awayTeamId);
       var lit = NS.Scene.lit();
+      var kits = NS.Teams.matchKits(homeT, awayT); // away kit when the colours clash
       for (var t = 0; t < 2; t++) {
         var dir = t === 0 ? 1 : -1;
-        var td = t === 0 ? homeT : awayT;
+        var td = t === 0 ? kits.home : kits.away;
         var layout = layoutOf(t);
         var names = s.rosters[t];
         for (i = 0; i < layout.length; i++) {
           var slot = layout[i];
           var gk = slot.role === 'GK';
-          var mesh = NS.Assets.createPlayer(gk ? 'SOLID' : td.pattern, gk ? (t === 0 ? 0x10b981 : 0xf59e0b) : td.c1, td.c2,
+          var mesh = NS.Assets.createPlayer(gk ? 'SOLID' : td.pattern, gk ? kits.gk[t] : td.c1, td.c2,
             td.shorts, SKIN[(i + t) % SKIN.length], lit);
           NS.Scene.add(mesh.root);
           var pos = mesh.root.position;
@@ -287,14 +288,14 @@
             tackleSlide: false, returnTo: null, returnT: 0, returnExp: 0,
             // animation timers
             kickT: 0, kickHard: false, lungeT: 0, slideT: 0, fallT: 0, diveT: 0, diveRoll: 0, headT: 0, catchT: 0,
-            gkHands: false,
+            gkHands: false, diveCd: 0, diveHigh: false,
             // AI brain state
             mark: null, icX: 0, icZ: 0, drX: 0, drZ: 0, runT: 0, runCd: 0, runX: 0, runZ: 0,
             aiT: 0, tgtX: 0, tgtZ: 0, tgtS: 8, gkRT: 0
           });
         }
       }
-      NS.HUD.setTeams(homeT, awayT);
+      NS.HUD.setTeams(homeT, awayT, kits.home.c1, kits.away.c1);
     },
 
     // Roster / formation edits during a match: update data in place, players keep their position.
@@ -540,25 +541,31 @@
           var ddz = ball.pos.z - p.pos.z;
           var d2 = ddx * ddx + ddz * ddz;
           if (p.role === 'GK' && ball.lastTouchTeam !== p.team && inOwnBox(p.team)) {
-            if (d2 < 7.5 && ball.pos.y < 3.4 && !(ball.gkTried & (1 << p.team))) {
+            // a diving keeper reaches much further (full stretch, hands up to the top corner)
+            var gkReach = p.diveT > 0 ? 13 : 7.5;
+            // the save is decided when the ball passes him (its closest point), or at once when it is on top of him
+            var rv = -(ddx * ball.vel.x + ddz * ball.vel.z);
+            var passing = d2 < 2.2 || rv <= bs2 * dt * 1.5; // rv > 0 while it still comes closer
+            if (d2 < gkReach && passing && ball.pos.y < (p.diveT > 0 ? 3.9 : 3.4) && !(ball.gkTried & (1 << p.team))) {
               ball.gkTried |= 1 << p.team;
               gkActed = true;
               var speed = Math.sqrt(bs2);
               // a shot wide of the keeper: he dives to that side
               var sdx = ball.pos.x - p.pos.x, sdz = ball.pos.z - p.pos.z;
               var sideX = sdx * Math.cos(p.facing) - sdz * Math.sin(p.facing); // + = his local +x side
-              if (speed >= 12 && (sideX > 0.7 || sideX < -0.7)) {
+              if (p.diveT <= 0 && speed >= 12 && (sideX > 0.7 || sideX < -0.7)) {
                 p.diveT = 0.75;
                 p.diveRoll = sideX > 0 ? -1.25 : 1.25;
                 p.vel.z += clamp(sdz * 5, -8, 8);
               }
-              var chance = speed < 12 ? 1 : clamp(gkSkill(p.team) - (speed - 20) * 0.01, 0.2, 0.92);
+              // placement matters most: at the keeper = nearly always kept out, the corners are hard
+              // (a dive covers part of the distance); pace above 30 makes every save harder
+              var reach = Math.sqrt(d2) - (p.diveT > 0 ? 1.4 : 0);
+              var place = reach <= 0.9 ? 0.2 : -(reach - 0.9) * 0.2;
+              var chance = speed < 12 ? 1 : clamp(gkSkill(p.team) + 0.04 + place - Math.max(0, speed - 30) * 0.012, 0.15, 0.96);
               if (ball.chip) chance *= 0.4;
-              // placement: a shot away from where the keeper stands is harder to keep out
-              var reach = Math.abs(ball.pos.z - p.pos.z);
-              if (speed >= 12 && reach > 1) chance *= clamp(1.25 - reach * 0.22, 0.35, 1);
               if (Math.random() < chance) {
-                if (speed < 28) {
+                if (speed < (p.diveT > 0 ? 34 : 28)) { // a diving keeper holds on to harder shots
                   takeBall(p);
                   p.gkHands = true; // caught: held in the hands
                   p.catchT = 0.4;
@@ -625,6 +632,7 @@
       ballRotX += ball.vel.z * dt / R;
       ballRotZ -= ball.vel.x * dt / R;
       NS.Scene.setBall(ball.pos, ballRotX, ballRotZ);
+      NS.Scene.trail(ball.hard && !ball.owner, ball.pos); // streak behind a shot
       if (scored >= 0) { triggerGoal(scored); }
 
       for (i = 0; i < 2; i++) {
@@ -645,6 +653,9 @@
       if (s1.active) NS.HUD.plate(1, labels.p2, s1.player, s1);
       else NS.HUD.plate(1, labels.cpu, featured(1), null);
       if (World.settings.showRadar) NS.HUD.radar(World.players, World.ball, World.slots);
+      // the ball behind a player box or the radar: fade that box out
+      NS.Scene.project(World.ball.pos);
+      NS.HUD.cover(NS.Scene.px, NS.Scene.py);
       NS.HUD.tick(dt);
     },
 

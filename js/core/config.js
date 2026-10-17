@@ -2,7 +2,7 @@
 (function (NS) {
   'use strict';
 
-  NS.VERSION = '1.5.2';
+  NS.VERSION = '1.6.0';
 
   // Pitch geometry (world units; x = length, z = width, y = up)
   // The pitch is 20% bigger than the original 92 x 56 (PITCH_SCALE also scales the formations).
@@ -27,6 +27,7 @@
     durationMins: 3,
     gameSpeed: 1.0,
     cameraMode: 'WIDE',
+    ballSkin: 'CLASSIC',
     switchMode: 'AUTO',
     soundEnabled: true,
     showRadar: true,
@@ -45,6 +46,8 @@
       options: [['AUTO', 'opt.auto'], ['MANUAL', 'opt.manual']] },
     { key: 'cameraMode', label: 'set.camera', hint: 'set.camera.h',
       options: [['CLOSE', 'opt.dynamic'], ['WIDE', 'opt.wide'], ['BLIMP', 'opt.blimp']] },
+    { key: 'ballSkin', label: 'set.ball', hint: 'set.ball.h',
+      options: [['CLASSIC', 'opt.ball.classic'], ['PRO', 'opt.ball.pro'], ['NIGHT', 'opt.ball.night'], ['RETRO', 'opt.ball.retro'], ['GOLD', 'opt.ball.gold']] },
     { key: 'quality', label: 'set.quality', hint: 'set.quality.h',
       options: [['AUTO', 'opt.auto'], ['LOW', 'opt.low'], ['MEDIUM', 'opt.med'], ['HIGH', 'opt.high']] },
     { key: 'soundEnabled', label: 'set.sound', hint: 'set.sound.h',

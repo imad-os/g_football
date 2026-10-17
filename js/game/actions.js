@@ -23,6 +23,7 @@
   var LEAD_T = [0, 0.3, 0.55, 0.8];
 
   function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+  function gaussR() { return (Math.random() + Math.random() + Math.random() - 1.5) * 2; } // ~N(0, 1)
 
   var Actions = {
     lastTarget: null, // receiver of the last pass (so the cursor can follow it)
@@ -121,7 +122,9 @@
           angle = Math.atan2(goalX - p.pos.x, curveZ - p.pos.z);
           angle += (Math.random() - 0.5) * (1.05 - power) * 0.1 * (accuracy || 1);
           speed = 30 + power * 12;
-          vy = 4 + power * 4;
+          var cvx = goalX - p.pos.x, cvz = curveZ - p.pos.z;
+          var cT = Math.sqrt(cvx * cvx + cvz * cvz) / speed;
+          vy = (1.3 + power * 0.9 - ball.pos.y) / cT + 0.5 * G * cT;
           ball.vel.set(Math.sin(angle) * speed, vy, Math.cos(angle) * speed);
           ball.spinY = side * attack * 30;
           return;
@@ -141,13 +144,31 @@
           ball.spinY = 0;
           return;
         }
-        var goalZ = aimed ? az * GOAL_HALF_W * 0.85 : clamp(-p.pos.z * 0.25, -3, 3);
-        angle = Math.atan2(goalX - p.pos.x, goalZ - p.pos.z);
-        angle += (Math.random() - 0.5) * (1.05 - power) * 0.16 * (accuracy || 1);
-        speed = 22 + power * 20;
-        vy = 2.2 + power * 7.5;
+        // Driven shot: aimed at a point in the goal and struck on a real trajectory (not lobbed).
+        // Where: the stick picks the side; without it, the far side from the keeper.
+        var gk = null;
+        for (var gi = 0; gi < World.players.length; gi++) {
+          var q = World.players[gi];
+          if (q.role === 'GK' && q.team !== p.team) { gk = q; break; }
+        }
+        var goalZ;
+        if (aimed) goalZ = clamp(az, -1, 1) * (GOAL_HALF_W - 0.9);
+        else goalZ = (gk && gk.pos.z > p.pos.z * 0.15 ? -1 : 1) * (GOAL_HALF_W - 1.3);
+        // How high: power decides (soft = low and placed, full power = rising towards the top corner)
+        var ty = 0.45 + power * power * 2.5;
+        var sdx = goalX - p.pos.x, sdz = goalZ - p.pos.z;
+        var sd = Math.sqrt(sdx * sdx + sdz * sdz);
+        // error grows with distance, power and the shooter's accuracy
+        var err = (0.018 + sd * 0.0016) * (accuracy || 1) * (0.55 + power * 0.8);
+        angle = Math.atan2(sdx, sdz) + gaussR() * err;
+        ty += gaussR() * err * sd * 0.5 + (power > 0.9 ? Math.random() * 0.9 : 0);
+        speed = 24 + power * 22;
+        var kd = sd * AIR_K / speed;
+        var Ts = kd < 0.9 ? -Math.log(1 - kd) / AIR_K : sd / speed * 1.6; // time to the goal line, air drag included
+        vy = (ty - ball.pos.y) / Ts + 0.5 * G * Ts;
         ball.vel.set(Math.sin(angle) * speed, vy, Math.cos(angle) * speed);
-        ball.spinY = -az * 4.5;
+        // aimed shots bend a little towards the corner; full-power shots wobble (knuckle)
+        ball.spinY = (aimed ? -clamp(az, -1, 1) * attack * 1.6 : 0) + (power > 0.8 ? (Math.random() - 0.5) * 3 : 0);
         return;
       }
 

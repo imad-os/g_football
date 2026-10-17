@@ -6,14 +6,15 @@
   "type": "game",
   "entry": "index.html",
   "icon": "icon.svg",
-  "version": "1.5.2",
+  "version": "1.6.0",
   "scores": true,
   "config": {
     "difficulty": "NORMAL",
     "durationMins": 3,
     "gameSpeed": 1,
     "switchMode": "AUTO",
-    "cameraMode": "WIDE"
+    "cameraMode": "WIDE",
+    "ballSkin": "CLASSIC"
   },
   "touch": {
     "buttons": [

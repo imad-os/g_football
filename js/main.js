@@ -67,6 +67,7 @@
 
   function onResize() {
     NS.Scene.resize();
+    NS.HUD.measure();
   }
 
   NS.App = {
@@ -81,6 +82,7 @@
       NS.Audio.setEnabled(s.soundEnabled);
       if (NS.Quality.mode() !== s.quality) NS.Quality.apply(s.quality);
       NS.HUD.applySettings(s);
+      NS.Scene.setBallSkin(s.ballSkin);
     },
     // Extra entries of My PC's pause menu (only while a match is running).
     syncMenuItems: function () {
@@ -122,6 +124,7 @@
 
         NS.Scene.init(document.getElementById('game-canvas'), NS.Quality.tier());
         sceneReady = true;
+        NS.Scene.setBallSkin(settings.ballSkin);
         MyPC.progress(0.7);
 
         NS.UI.build();

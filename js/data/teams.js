@@ -260,7 +260,62 @@
       ['MALAGON', 'CACERES', 'REYES', 'FIDALGO', 'DOS SANTOS', 'VALDES', 'HENRY MARTIN', 'ZENDEJAS', 'BRIAN RODRIGUEZ', 'AGUIRRE', 'DILROSUN'])
   ];
 
+  // ---- kits: every team gets an away kit, and a third one is built when both still clash ----
+  function rgb(c) { return [(c >> 16) & 255, (c >> 8) & 255, c & 255]; }
+  function colorDist(a, b) {
+    var x = rgb(a), y = rgb(b);
+    var dr = x[0] - y[0], dg = x[1] - y[1], db = x[2] - y[2];
+    return Math.sqrt(dr * dr * 0.3 + dg * dg * 0.59 + db * db * 0.11) * 1.7; // weighted by how the eye sees it
+  }
+  function light(c) { var x = rgb(c); return (x[0] * 0.3 + x[1] * 0.59 + x[2] * 0.11) / 255; }
+
+  for (var ti = 0; ti < TEAMS.length; ti++) {
+    var tm = TEAMS[ti];
+    // away kit: white with the club colour as trim (dark navy for teams that already play in a light colour)
+    tm.alt = light(tm.c1) > 0.62
+      ? { pattern: 'SOLID', c1: 0x1e293b, c2: tm.c1, shorts: 0x0f172a }
+      : { pattern: 'SOLID', c1: 0xf8fafc, c2: tm.c1, shorts: 0xf8fafc };
+  }
+
+  var THIRD = [0xfacc15, 0x0f172a, 0x7c3aed, 0x06b6d4, 0xf97316, 0xec4899, 0x84cc16];
+  var GK_KITS = [0x10b981, 0xf59e0b, 0xa855f7, 0x22d3ee, 0xf472b6, 0x111827, 0xfacc15, 0x84cc16];
+
+  function kitOf(tm) { return { pattern: tm.pattern, c1: tm.c1, c2: tm.c2, shorts: tm.shorts }; }
+  // shirts decide (that is what you see from the camera); shorts only break ties
+  function kitScore(a, b) { return colorDist(a.c1, b.c1) + 0.1 * colorDist(a.shorts, b.shorts); }
+
+  // Kits for a match: home in its first kit, away in the kit that differs most from it, keepers apart from both.
+  function matchKits(home, away) {
+    var h = kitOf(home);
+    var a = kitOf(away);
+    if (kitScore(a, h) < 150) {
+      var alt = away.alt;
+      if (kitScore(alt, h) > kitScore(a, h)) a = { pattern: alt.pattern, c1: alt.c1, c2: alt.c2, shorts: alt.shorts };
+      if (kitScore(a, h) < 150) {
+        var best = THIRD[0], bs = -1;
+        for (var i = 0; i < THIRD.length; i++) {
+          var sc = colorDist(THIRD[i], h.c1) + 0.4 * colorDist(THIRD[i], h.shorts);
+          if (sc > bs) { bs = sc; best = THIRD[i]; }
+        }
+        a = { pattern: 'SOLID', c1: best, c2: light(best) > 0.6 ? 0x0f172a : 0xffffff, shorts: light(best) > 0.6 ? 0x0f172a : best };
+      }
+    }
+    var gk = [0, 0];
+    for (var g = 0; g < 2; g++) {
+      var bestG = GK_KITS[g], bg = -1;
+      for (var j = 0; j < GK_KITS.length; j++) {
+        var c = GK_KITS[j];
+        var s = Math.min(colorDist(c, h.c1), colorDist(c, a.c1));
+        if (g === 1) s = Math.min(s, colorDist(c, gk[0]));
+        if (s > bg) { bg = s; bestG = c; }
+      }
+      gk[g] = bestG;
+    }
+    return { home: h, away: a, gk: gk };
+  }
+
   NS.Teams = {
+    matchKits: matchKits,
     CATEGORIES: CATEGORIES,
     TEAMS: TEAMS,
     byCategory: function (catId) {
