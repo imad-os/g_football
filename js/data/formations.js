@@ -41,4 +41,11 @@
     ]
   };
   NS.FORMATION_KEYS = ['4-4-2', '4-3-3', '4-2-3-1', '3-5-2'];
+
+  // The coordinates above are for the original pitch: stretch them to the current one (once, at load).
+  var k = NS.PITCH_SCALE || 1;
+  for (var f in NS.FORMATIONS) {
+    var list = NS.FORMATIONS[f];
+    for (var i = 0; i < list.length; i++) { list[i].x *= k; list[i].z *= k; }
+  }
 })(window.RS6 = window.RS6 || {});

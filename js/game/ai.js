@@ -24,7 +24,6 @@
   var HALF_W = NS.PITCH_HALF_W;
   var HALF_H = NS.PITCH_HALF_H;
   var GOAL_HALF_W = NS.GOAL_HALF_W;
-  var R = NS.BALL_R;
 
   // Difficulty = speed AND intelligence: reaction time, decision noise, pass accuracy, marking tightness, keeper.
   var PROFILES = {
@@ -172,31 +171,12 @@
     return q;
   }
 
-  // Earliest time `p` can reach the ball (simulated flight with gravity, bounce and ground drag). Sets ICX / ICZ.
+  // Earliest time `p` can reach the ball (the ball's own physics: flight, bounce, curl, roll). Sets ICX / ICZ.
   function interceptTime(p, speed, reachY) {
-    var ball = World.ball;
-    var x = ball.pos.x, y = ball.pos.y, z = ball.pos.z;
-    var vx = ball.vel.x, vy = ball.vel.y, vz = ball.vel.z;
-    var drag = 0.8806; // 0.28 ^ 0.1
-    for (var i = 0; i <= 22; i++) {
-      var t = i * 0.1;
-      if (i > 0) {
-        x += vx * 0.1; z += vz * 0.1;
-        if (y > R + 0.05 || vy > 0) {
-          y += vy * 0.1; vy -= 2.4;
-          if (y <= R) { y = R; vy = vy < -2 ? -vy * 0.52 : 0; vx *= 0.6; vz *= 0.6; }
-        } else { vx *= drag; vz *= drag; }
-        if (z > HALF_H) { z = HALF_H; vz = -vz * 0.7; } else if (z < -HALF_H) { z = -HALF_H; vz = -vz * 0.7; }
-        if (x > HALF_W) { x = HALF_W; vx = -vx * 0.7; } else if (x < -HALF_W) { x = -HALF_W; vx = -vx * 0.7; }
-      }
-      if (y > reachY) continue;
-      var dx = x - p.pos.x;
-      var dz = z - p.pos.z;
-      var d = Math.sqrt(dx * dx + dz * dz) - 1.0;
-      if (d <= speed * t || d <= 0) { ICX = x; ICZ = z; return t; }
-    }
-    ICX = x; ICZ = z;
-    return 99;
+    var t = World.intercept(p, speed, reachY);
+    ICX = World.icX;
+    ICZ = World.icZ;
+    return t;
   }
 
   /* ------------------------------------------------------------------ team brain */
@@ -370,7 +350,7 @@
       var md = Math.sqrt(mdx * mdx + mdz * mdz);
 
       // short pass to feet
-      if (md > 4 && md < 30) {
+      if (md > 4 && md < 34) {
         var sx = mt.pos.x + mt.vel.x * 0.3, sz = mt.pos.z + mt.vel.z * 0.3;
         var spd = clamp(md * 1.273 + 8, 18, 34);
         var risk = laneRisk(px, pz, sx, sz, p.team, spd, false);
@@ -381,7 +361,7 @@
       }
 
       // through ball into the space ahead of a forward-moving team-mate
-      if (mt.role !== 'DEF' && (mt.pos.x - px) * a > -3 && md < 34) {
+      if (mt.role !== 'DEF' && (mt.pos.x - px) * a > -3 && md < 40) {
         var lx = mt.pos.x + a * 8 + mt.vel.x * 0.3;
         var lz = clamp(mt.pos.z + mt.vel.z * 0.3, -HALF_H + 3, HALF_H - 3);
         if (Math.abs(lx) < HALF_W - 4) {
@@ -399,7 +379,7 @@
       }
 
       // long ball: switch play or go over the top
-      if (md > 20 && md < 55) {
+      if (md > 20 && md < 64) {
         var gx = mt.pos.x + a * 3, gz = mt.pos.z;
         var lrisk = laneRisk(px, pz, gx, gz, p.team, 25, true);
         var mT = Math.max(0, Math.sqrt((gx - mt.pos.x) * (gx - mt.pos.x)) - 1) / 11 + 0.2;
@@ -549,7 +529,18 @@
       var tz = c.pos.z + c.vel.z * 0.25 + gz * 1.4;
       var cdx = c.pos.x - p.pos.x, cdz = c.pos.z - p.pos.z;
       var d = Math.sqrt(cdx * cdx + cdz * cdz);
-      if (d < 2.6 && p.tackleCd <= 0) {
+      // where we stand relative to the carrier: +1 in front of him (where the ball is), -1 behind his back
+      var side = -(Math.sin(c.facing) * cdx + Math.cos(c.facing) * cdz) / (d || 1);
+      if (side < -0.3 && d < 4.5) {
+        // behind the carrier: the ball is shielded, run round him (on the side we already are) to get goal-side
+        var px = -Math.cos(c.facing), pz = Math.sin(c.facing); // carrier's right
+        var lat = (-cdx * px - cdz * pz) >= 0 ? 1 : -1;
+        tx = c.pos.x + px * lat * 2.2 + gx * 1.6;
+        tz = c.pos.z + pz * lat * 2.2 + gz * 1.6;
+        moveToward(p, tx, tz, 10.8 * prof.speedMul, dt);
+        return;
+      }
+      if (d < 2.6 && p.tackleCd <= 0 && side > -0.1) {
         // carrier running at us (facing our goal) is easier to time than one shielding the ball
         var facing = Math.sin(c.facing) * gx + Math.cos(c.facing) * gz;
         var rate = prof.tackleRate * (0.8 + 0.5 * Math.max(0, facing)) * (c.dribbling ? 0.8 : 1.15);
@@ -675,7 +666,13 @@
       }
       var T = TEAMS[p.team];
 
-      // a pass was played to this player: run onto it
+      // a pass was played to this player: meet it where it can be played (a lofted ball: where it comes down)
+      if (!ball.owner && ball.receiver === p) {
+        interceptTime(p, 11.5 * prof.speedMul, 1.9);
+        moveToward(p, ICX, ICZ, 11.5 * prof.speedMul, dt);
+        p.runToT = 0;
+        return;
+      }
       if (p.runToT > 0) {
         p.runToT -= dt;
         moveToward(p, p.runToX, p.runToZ, 11.5 * prof.speedMul, dt);

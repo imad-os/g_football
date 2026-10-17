@@ -7,43 +7,74 @@
   var HALF_W = NS.PITCH_HALF_W;
   var HALF_H = NS.PITCH_HALF_H;
   var GOAL_HALF_W = NS.GOAL_HALF_W;
-  var G = 24.0;
-  var DRAG_K = 1.273; // -ln(0.28): ground speed needed per unit of distance
+  var G = NS.PHYS.G;
+  var DRAG_K = NS.PHYS.ROLL_K; // ground speed needed per unit of distance
+  var AIR_K = NS.PHYS.AIR_K;
+
+  // Horizontal launch speed so a ball in the air for T seconds covers d (air drag included).
+  function airSpeed(d, T) { return d * AIR_K / (1 - Math.exp(-AIR_K * T)); }
+
+  // Pass assistance per kick type (index = ACT.PASS / THROUGH / LONG): preferred distance, accepted range,
+  // how far ahead the receiver's run is read.
+  var IDEAL_D = [0, 11, 18, 32];
+  var MIN_D = [0, 3, 6, 14];
+  var MAX_D = [0, 32, 44, 72];
+  var LEAD_T = [0, 0.3, 0.55, 0.8];
 
   function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
   var Actions = {
     lastTarget: null, // receiver of the last pass (so the cursor can follow it)
 
-    // Best team-mate for a pass of the given type. (ax, az) is the aim direction (0,0 = facing).
+    // Assisted pass: the team-mate nearest to where the ball is aimed (stick direction, or facing without input),
+    // at a distance that suits the pass type (short / through / long), not marked tight, with a free lane.
     pickTarget: function (passer, ax, az, type) {
-      var players = World.players;
       var al = Math.sqrt(ax * ax + az * az);
       var fx, fz;
       if (al > 0.1) { fx = ax / al; fz = az / al; } else { fx = Math.sin(passer.facing); fz = Math.cos(passer.facing); }
+      var t = type >= ACT.PASS && type <= ACT.LONG ? type : ACT.PASS;
+      var best = this.scanTargets(passer, fx, fz, t, 0.34); // within ~70 degrees of the aim
+      if (!best) best = this.scanTargets(passer, fx, fz, t, -0.2);
+      return best;
+    },
+
+    scanTargets: function (passer, fx, fz, t, minDot) {
+      var players = World.players;
       var attack = passer.team === 0 ? 1 : -1;
-      var minD = type === ACT.LONG ? 16 : (type === ACT.THROUGH ? 7 : 3);
-      var maxD = type === ACT.LONG ? 64 : (type === ACT.THROUGH ? 38 : 26);
+      var lofted = t === ACT.LONG;
       var best = null;
       var bestScore = -1e9;
       for (var i = 0; i < players.length; i++) {
         var m = players[i];
-        if (m.team !== passer.team || m === passer || m.role === 'GK') continue;
-        var dx = m.pos.x - passer.pos.x;
-        var dz = m.pos.z - passer.pos.z;
+        if (m.team !== passer.team || m === passer || m.role === 'GK' || m.stun > 0) continue;
+        // where the receiver will be when the ball gets there
+        var mx = m.pos.x + m.vel.x * LEAD_T[t];
+        var mz = m.pos.z + m.vel.z * LEAD_T[t];
+        var dx = mx - passer.pos.x;
+        var dz = mz - passer.pos.z;
         var d = Math.sqrt(dx * dx + dz * dz);
-        if (d < minD || d > maxD) continue;
+        if (d < MIN_D[t] || d > MAX_D[t]) continue;
         var dot = (dx * fx + dz * fz) / d;
-        if (dot < -0.15) continue;
-        var score = dot * 3 - d * 0.03;
-        if (type !== ACT.PASS) score += m.pos.x * attack * 0.05;
-        // penalty when an opponent stands next to the receiver
+        if (dot < minDot) continue;
+        var ang = Math.acos(dot > 1 ? 1 : dot);
+        var off = Math.abs(d - IDEAL_D[t]) / IDEAL_D[t];
+        var score = -ang * 2.8 - off * 0.6;
+        if (t !== ACT.PASS) score += (m.pos.x - passer.pos.x) * attack * 0.012; // through / long balls go forward
         for (var j = 0; j < players.length; j++) {
           var o = players[j];
-          if (o.team === passer.team) continue;
-          var ox = o.pos.x - m.pos.x;
-          var oz = o.pos.z - m.pos.z;
-          if (ox * ox + oz * oz < 16) { score -= 1.4; break; }
+          if (o.team === passer.team || o.stun > 0) continue;
+          // receiver marked tight
+          var rx = o.pos.x - mx, rz = o.pos.z - mz;
+          if (rx * rx + rz * rz < 9) score -= 0.45;
+          // opponent standing in the lane (a lofted ball only cares about the landing area)
+          var ox = o.pos.x - passer.pos.x;
+          var oz = o.pos.z - passer.pos.z;
+          var u = (ox * dx + oz * dz) / d;
+          if (u < 1 || u > d - 1) continue;
+          if (lofted && u < d * 0.8) continue;
+          var perp = Math.abs(ox * dz - oz * dx) / d;
+          if (perp < 1.8) score -= 0.7;
+          else if (perp < 3) score -= 0.25;
         }
         if (score > bestScore) { bestScore = score; best = m; }
       }
@@ -63,7 +94,10 @@
       ball.gkTried = 0;
       ball.hard = type === ACT.SHOOT || type === ACT.CURVE;
       ball.chip = type === ACT.CHIP;
+      ball.receiver = null;
       p.dribbling = false;
+      p.kickT = type >= ACT.SHOOT ? 0.36 : 0.28; // kick animation
+      p.kickHard = type >= ACT.SHOOT || type === ACT.LONG;
       this.lastTarget = null;
       NS.Audio.kick(type >= ACT.SHOOT);
       if (this.onKick) this.onKick(p, type);
@@ -98,8 +132,10 @@
           var cz = aimed ? az * GOAL_HALF_W * 0.6 : 0;
           var cdx = goalX - attack - p.pos.x;
           var cdz = cz - p.pos.z;
+          var cd = Math.sqrt(cdx * cdx + cdz * cdz) || 1;
+          var cs = airSpeed(cd, Tc);
           ball.pos.y = NS.BALL_R + 0.15;
-          ball.vel.set(cdx / Tc, 0.5 * G * Tc, cdz / Tc);
+          ball.vel.set(cdx / cd * cs, 0.5 * G * Tc, cdz / cd * cs);
           ball.spinY = 0;
           return;
         }
@@ -124,11 +160,26 @@
         d = type === ACT.LONG ? 36 : (type === ACT.THROUGH ? 24 : 14);
         tx = p.pos.x + kx * d; tz = p.pos.z + kz * d;
       } else if (type === ACT.THROUGH) {
-        tx = clamp(mate.pos.x + mate.vel.x * (forceTarget ? 0.5 : 0.35) + attack * (forceTarget ? 0 : 7), -HALF_W + 2, HALF_W - 2);
-        tz = clamp(mate.pos.z + mate.vel.z * 0.4, -HALF_H + 2, HALF_H - 2);
+        if (forceTarget) {
+          tx = mate.pos.x + mate.vel.x * 0.5;
+          tz = mate.pos.z + mate.vel.z * 0.4;
+        } else {
+          // into the space ahead of the receiver: along the aim, pulled towards the goal he attacks
+          var al2 = Math.sqrt(ax * ax + az * az);
+          var lx = (al2 > 0.1 ? ax / al2 : Math.sin(p.facing)) * 0.6 + attack * 0.4;
+          var lz = (al2 > 0.1 ? az / al2 : Math.cos(p.facing)) * 0.6;
+          var ll = Math.sqrt(lx * lx + lz * lz) || 1;
+          tx = mate.pos.x + mate.vel.x * 0.4 + lx / ll * 6.5;
+          tz = mate.pos.z + mate.vel.z * 0.4 + lz / ll * 6.5;
+        }
+        tx = clamp(tx, -HALF_W + 2, HALF_W - 2);
+        tz = clamp(tz, -HALF_H + 2, HALF_H - 2);
       } else if (type === ACT.LONG) {
-        tx = clamp(mate.pos.x + attack * 3, -HALF_W + 2, HALF_W - 2);
-        tz = mate.pos.z;
+        // lands where the receiver will be (he reads the flight and goes to the landing spot)
+        var ldx = mate.pos.x - p.pos.x, ldz = mate.pos.z - p.pos.z;
+        var lT = clamp(Math.sqrt(ldx * ldx + ldz * ldz) / 30, 0.75, 1.6);
+        tx = clamp(mate.pos.x + mate.vel.x * lT * 0.6 + attack * 2, -HALF_W + 2, HALF_W - 2);
+        tz = clamp(mate.pos.z + mate.vel.z * lT * 0.6, -HALF_H + 2, HALF_H - 2);
       } else {
         tx = mate.pos.x + mate.vel.x * 0.25;
         tz = mate.pos.z + mate.vel.z * 0.25;
@@ -158,7 +209,7 @@
         // lobbed: flight time T, vertical speed from gravity, horizontal speed = distance / T
         var T = clamp(d / 30, 0.75, 1.6);
         vy = 0.5 * G * T;
-        speed = d / T;
+        speed = airSpeed(d, T);
         ball.pos.y = NS.BALL_R + 0.15;
         if (mate) { mate.runToX = tx; mate.runToZ = tz; mate.runToT = T + 0.7; }
       } else if (type === ACT.THROUGH) {
@@ -172,6 +223,7 @@
         if (mate) { mate.runToX = tx - (dx / d) * 1.5; mate.runToZ = tz - (dz / d) * 1.5; mate.runToT = Math.min(1.0, d / speed + 0.2); }
       }
       ball.vel.set(Math.sin(angle) * speed, vy, Math.cos(angle) * speed);
+      ball.receiver = mate || null;
     },
 
     // One-two: short pass, the receiver plays it straight back into the space the passer runs into.
@@ -201,6 +253,7 @@
       p.tackleHit = false;
       p.tackleHuman = human;
       p.tackleSlide = !!slide;
+      if (slide) p.slideT = 0.85; else p.lungeT = 0.36; // animations
       var lunge = slide ? 19 : 16;
       p.vel.x = dx / d * lunge;
       p.vel.z = dz / d * lunge;
@@ -216,27 +269,35 @@
       if (!p.tackleHit && carrier && carrier.team !== p.team) {
         var dx = carrier.pos.x - p.pos.x;
         var dz = carrier.pos.z - p.pos.z;
-        if (dx * dx + dz * dz < (p.tackleSlide ? 6.4 : 3.6)) {
+        var bx = ball.pos.x - p.pos.x;
+        var bz = ball.pos.z - p.pos.z;
+        var reach = p.tackleSlide ? 6.4 : 3.6;
+        if (dx * dx + dz * dz < reach || bx * bx + bz * bz < reach) {
           p.tackleHit = true;
-          var vx = -dx, vz = -dz;
-          var vl = Math.sqrt(vx * vx + vz * vz) || 1;
-          var front = (Math.sin(carrier.facing) * (vx / vl) + Math.cos(carrier.facing) * (vz / vl)); // +1 = tackled from the front
-          var chance = baseChance * (1 - 0.18 * front) + (p.tackleSlide ? 0.08 : 0);
-          if (carrier.dribbling) chance *= 0.6;
-          chance = clamp(chance, 0.05, 0.92);
+          var cl = Math.sqrt(dx * dx + dz * dz) || 1;
+          // +1 = the tackler comes from the front (where the ball is), -1 = from behind
+          var front = -(Math.sin(carrier.facing) * dx + Math.cos(carrier.facing) * dz) / cl;
+          var chance = baseChance + (p.tackleSlide ? 0.08 : 0);
+          if (front < -0.35) chance *= p.tackleSlide ? 0.22 : 0.1; // from behind: the carrier's body shields the ball
+          else if (front < 0.3) chance *= 0.6;                      // from the side
+          else chance *= 1.08;
+          if (carrier.dribbling) chance *= 0.75;
+          chance = clamp(chance, 0.03, 0.92);
           if (Math.random() < chance) {
             ball.owner = p;
+            ball.receiver = null;
             ball.lastTouchTeam = p.team;
             ball.lastToucher = p.name;
             ball.pickupCooldown = 0.12;
             carrier.stun = 0.55;
+            carrier.fallT = 0.55;
             carrier.vel.set(0, 0, 0);
             carrier.dribbling = false;
             p.tackleT = 0;
             p.vel.set(0, 0, 0);
             NS.Audio.kick(false);
           } else {
-            p.stun = p.tackleSlide ? 0.9 : 0.5;
+            p.stun = (p.tackleSlide ? 0.9 : 0.5) + (front < -0.35 ? 0.3 : 0);
             p.tackleT = 0;
           }
         }

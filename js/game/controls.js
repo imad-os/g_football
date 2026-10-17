@@ -87,9 +87,10 @@
     else return;
     Actions.kick(p, type, power, pad.x, pad.y, 1);
     var target = Actions.lastTarget;
-    if (follow && target && World.settings.switchMode === 'AUTO' && target !== otherPlayer(slot)) {
+    // the receiver is the human's player right away (both switch modes): he goes to meet the ball
+    if (follow && target && target !== otherPlayer(slot)) {
       slot.player = target;
-      slot.lockT = 1.2; // stay on the receiver while the ball travels
+      slot.lockT = type === ACT.LONG ? 2.2 : 1.6; // stay on the receiver while the ball travels
     }
   }
 
@@ -102,6 +103,31 @@
   var assignT = 0;
 
   NS.Controls = {
+    // The ball changed hands: a human team always controls its ball carrier (any switch mode), and a team that just
+    // lost the ball may switch to a defender at once.
+    claimBall: function (o) {
+      if (!o) return;
+      var pick = null;
+      for (var i = 0; i < 2; i++) {
+        var s = World.slots[i];
+        if (!s.active) continue;
+        if (s.team !== o.team) { s.lockT = 0; continue; }
+        if (s.player === o) return; // already controlled
+        var other = otherPlayer(s);
+        if (other === o) return;    // co-op: the other human has him
+        if (!pick) { pick = s; continue; }
+        // co-op: the human who passed it keeps the ball, else the one whose player is nearer
+        if (s.player && s.player === World.ball.kicker) pick = s;
+        else if (pick.player !== World.ball.kicker && s.player && pick.player &&
+          s.player.dBall < pick.player.dBall) pick = s;
+      }
+      if (!pick) return;
+      pick.player = o;
+      pick.lockT = 0;
+      endEvent(pick);
+      o.runToT = 0;
+    },
+
     // Cursor selection. AUTO follows the ball; MANUAL only changes on the switch button.
     autoAssign: function (dt, force) {
       assignT -= dt;
@@ -116,10 +142,16 @@
         var other = otherPlayer(s);
         var cur = s.player;
         if (!cur) { s.player = Actions.nearestToBall(s.team, other, null); continue; }
-        if (s.lockT > 0 || s.evActive) continue; // never change player in the middle of a button gesture
         if (o && o.team === s.team) {
-          if (auto && o !== cur && o !== other) s.player = o;
-        } else if (auto) {
+          // our ball: the carrier is always ours (any mode, even mid-gesture)
+          if (o !== cur && o !== other) { s.player = o; s.lockT = 0; }
+          continue;
+        }
+        // a pass on its way to a team-mate: he is the one to control
+        var rcv = !o ? World.ball.receiver : null;
+        if (rcv && rcv.team === s.team && rcv !== cur && rcv !== other) { s.player = rcv; continue; }
+        if (s.lockT > 0 || s.evActive) continue; // never change player in the middle of a button gesture
+        if (auto) {
           var n = Actions.nearestToBall(s.team, other, null);
           if (n && n !== cur) {
             var dn = (n.pos.x - ball.pos.x) * (n.pos.x - ball.pos.x) + (n.pos.z - ball.pos.z) * (n.pos.z - ball.pos.z);
@@ -260,8 +292,26 @@
         if (slot.teamPress) World.pressT[p.team] = 0.3;
       }
 
-      // no stick input but a pass was played into space for this player: run onto it
-      if (len <= 0.1 && !has && p.runToT > 0) {
+      // a pass is on its way to this player: go and meet it (a lofted ball: where it comes down).
+      // Pushing the stick clearly away from the ball cancels the run.
+      if (!has && !ball.owner && ball.receiver === p) {
+        World.intercept(p, sprint ? 12.5 : 11, 1.9);
+        var ix = World.icX - p.pos.x;
+        var iz = World.icZ - p.pos.z;
+        var il = Math.sqrt(ix * ix + iz * iz);
+        if (len > 0.1 && (mx * ix + mz * iz) < -0.3 * len * il) {
+          ball.receiver = null;
+        } else if (il > 0.45) {
+          mx = ix / il; mz = iz / il; len = 1;
+          var arrive = 2 + il * 4; // slow down on arrival instead of overshooting
+          speed = Math.min(sprint ? 13.4 : 11.6, arrive);
+        } else {
+          len = 0;
+          p.facing = Math.atan2(ball.pos.x - p.pos.x, ball.pos.z - p.pos.z);
+        }
+        p.runToT = 0;
+      } else if (len <= 0.1 && !has && p.runToT > 0) {
+        // no stick input and a run was asked for (one-two): run into the space
         p.runToT -= dt;
         var rx = p.runToX - p.pos.x;
         var rz = p.runToZ - p.pos.z;

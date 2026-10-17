@@ -17,6 +17,7 @@
     geo.head = new THREE.BoxGeometry(0.62, 0.65, 0.62);
     geo.hair = new THREE.BoxGeometry(0.66, 0.25, 0.66);
     geo.limb = new THREE.BoxGeometry(0.32, 0.85, 0.32);
+    geo.arm = new THREE.BoxGeometry(0.22, 0.78, 0.22);
     geo.shadow = new THREE.CircleGeometry(0.85, 12);
     geo.shadow.rotateX(-Math.PI / 2);
     geo.ring = new THREE.RingGeometry(0.95, 1.25, 16);
@@ -79,7 +80,19 @@
     return pitchTexture;
   }
 
-  // Returns { root, leftLeg, rightLeg, mats } (mats are owned by the player and disposed with it).
+  // Returns { root, body, leftLeg, rightLeg, leftArm, rightArm, mats } (mats are owned by the player and disposed
+  // with it). root turns with the facing; body pivots at the hips (lean, roll, slide); legs pivot at the hips and
+  // arms at the shoulders, so runs, kicks, tackles and dives can be animated by rotations only.
+  function limb(parent, g, mat, x, y, len) {
+    var pivot = new THREE.Group();
+    pivot.position.set(x, y, 0);
+    var m = new THREE.Mesh(g, mat);
+    m.position.y = -len / 2;
+    pivot.add(m);
+    parent.add(pivot);
+    return pivot;
+  }
+
   function createPlayer(pattern, c1, c2, shortsColor, skinColor, lit) {
     var Mat = lit ? THREE.MeshLambertMaterial : THREE.MeshBasicMaterial;
     var root = new THREE.Group();
@@ -94,24 +107,26 @@
     var headMat = new Mat({ color: skinColor });
     var hairMat = new Mat({ color: 0x1a1816 });
     var shortsMat = new Mat({ color: shortsColor });
-    mats.push(torsoMat, headMat, hairMat, shortsMat);
+    var sleeveMat = new Mat({ color: c1 });
+    mats.push(torsoMat, headMat, hairMat, shortsMat, sleeveMat);
 
+    var body = new THREE.Group();
+    body.position.y = 0.9; // hips
+    root.add(body);
     var torso = new THREE.Mesh(geo.torso, torsoMat);
-    torso.position.y = 1.45;
-    root.add(torso);
+    torso.position.y = 0.55;
+    body.add(torso);
     var head = new THREE.Mesh(geo.head, headMat);
-    head.position.y = 2.45;
-    root.add(head);
+    head.position.y = 1.55;
+    body.add(head);
     var hair = new THREE.Mesh(geo.hair, hairMat);
-    hair.position.y = 2.78;
-    root.add(hair);
-    var leftLeg = new THREE.Mesh(geo.limb, shortsMat);
-    leftLeg.position.set(-0.24, 0.55, 0);
-    root.add(leftLeg);
-    var rightLeg = new THREE.Mesh(geo.limb, shortsMat);
-    rightLeg.position.set(0.24, 0.55, 0);
-    root.add(rightLeg);
-    return { root: root, leftLeg: leftLeg, rightLeg: rightLeg, mats: mats };
+    hair.position.y = 1.88;
+    body.add(hair);
+    var leftArm = limb(body, geo.arm, sleeveMat, -0.6, 1.12, 0.78);
+    var rightArm = limb(body, geo.arm, sleeveMat, 0.6, 1.12, 0.78);
+    var leftLeg = limb(body, geo.limb, shortsMat, -0.24, 0, 0.85);
+    var rightLeg = limb(body, geo.limb, shortsMat, 0.24, 0, 0.85);
+    return { root: root, body: body, leftLeg: leftLeg, rightLeg: rightLeg, leftArm: leftArm, rightArm: rightArm, mats: mats };
   }
 
   function disposePlayer(mesh) {

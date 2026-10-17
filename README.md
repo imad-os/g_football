@@ -29,7 +29,14 @@ on your controller or keyboard: it is detected and saved (per My PC profile). De
 | Sprint burst | double-tap a direction |
 | Game menu | TV remote Back (My PC menu: game plan, settings, restart...), hold CANCEL alone, or Start |
 
-**Settings > Player switch**: `AUTO` follows the ball (and the pass receiver), `MANUAL` only changes with the switch button.
+**Settings > Player switch**: `AUTO` follows the ball, `MANUAL` only changes with the switch button when your team does not have the ball.
+In both modes the pass receiver is selected as soon as the pass is played and a team-mate who gets the ball is selected at once:
+the CPU never plays your ball carrier.
+
+**Pass assist**: the pass goes to the team-mate closest to where you aim (the stick direction, or the way the player faces), at a
+distance that suits the pass (short, through, long), preferring receivers who are not marked and lanes without a defender.
+The receiver runs to meet the ball; for a long ball he reads the flight and goes to where it comes down. Pushing the stick away
+from the ball cancels that run.
 Player 2: second keyboard (W A S D + F G) or a second gamepad.
 
 ## CPU football brain (js/game/ai.js)
@@ -43,6 +50,8 @@ Player 2: second keyboard (W A S D + F G) or a second gamepad.
   keep width, and everybody stays level with the defensive line.
 * **Defence**: the presser goes goal-side, jockeys and times the tackle; a cover player sits behind; markers stand goal-side,
   shaded towards the ball to block the lane; the rest keep a compact block. Players have bodies and cannot be run through.
+* **Ball protection**: the carrier's body shields the ball. A tackle from behind rarely wins it (and the tackler stumbles longer),
+  from the side about half as often as from the front; the CPU runs round the carrier to get goal-side instead of tackling his back.
 * **Goalkeeper**: angle positioning, reaction time to shots, rushes out for through balls it can reach first, one save
   attempt per shot (placement and pace matter), distributes to a free team-mate.
 * **Game state**: a team losing late pushes its line higher and takes more risks; a team leading late keeps the ball.
@@ -50,8 +59,19 @@ Player 2: second keyboard (W A S D + F G) or a second gamepad.
 * **Difficulty** changes intelligence (reaction time, decision noise, pass/shot accuracy, marking tightness, second presser,
   keeper) more than raw speed.
 
-Measured with a headless simulator (NORMAL vs NORMAL, 3-minute matches): possession about 50/50, pass completion about 80%,
-4 to 6 shots per team, about 65% on target, 2 to 3 goals per match; HARD beats NORMAL about 2 matches in 3.
+Measured with a headless simulator (NORMAL vs NORMAL, 3-minute matches, v1.5): pass completion about 90 to 95%, about 9 shots
+and 3 goals per match.
+
+## Physics and animation
+
+* Pitch 110 x 67 (20% bigger than before), ball radius 0.43 (10% smaller). Formations are stretched with the pitch (`PITCH_SCALE`).
+* Ball (js/game/world.js): gravity, light air drag, rolling drag plus rolling resistance (the ball stops instead of creeping),
+  bounces that lose height and some pace, spin that curls the ball sideways in the air, posts and crossbar that the ball bounces
+  off. `World.predict` / `World.intercept` run the same physics ahead so receivers, the CPU and the keeper read the flight.
+  Kicks are aimed with that model (long balls and chips land where they are aimed despite the air drag).
+* Players (js/render/assets.js + `animate` in js/game/match.js): legs and arms swing from hips and shoulders, body leans with speed;
+  kick and shot (back-swing and strike, bigger for shots and long balls), standing tackle lunge, slide tackle on the grass,
+  knocked off balance after losing the ball, keeper dives to the side of the shot and holds the ball in front.
 
 ## Layout
 

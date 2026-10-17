@@ -2,15 +2,17 @@
 (function (NS) {
   'use strict';
 
-  NS.VERSION = '1.4.0';
+  NS.VERSION = '1.5.0';
 
   // Pitch geometry (world units; x = length, z = width, y = up)
-  NS.PITCH_HALF_W = 46;
-  NS.PITCH_HALF_H = 28;
+  // The pitch is 20% bigger than the original 92 x 56 (PITCH_SCALE also scales the formations).
+  NS.PITCH_SCALE = 1.2;
+  NS.PITCH_HALF_W = 46 * NS.PITCH_SCALE;
+  NS.PITCH_HALF_H = 28 * NS.PITCH_SCALE;
   NS.GOAL_HALF_W = 5.6;
   NS.GOAL_DEPTH = 2.6;
   NS.GOAL_HEIGHT = 3.6;
-  NS.BALL_R = 0.48;
+  NS.BALL_R = 0.432; // 10% smaller than the original 0.48
 
   // Fixed simulation step (the loop runs a 60 Hz accumulator)
   NS.STEP = 1 / 60;

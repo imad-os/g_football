@@ -36,7 +36,7 @@
   }
 
   function buildStadium(tier) {
-    var surroundGeo = new THREE.PlaneGeometry(128, 86);
+    var surroundGeo = new THREE.PlaneGeometry(NS.PITCH_HALF_W * 2 + 36, NS.PITCH_HALF_H * 2 + 30);
     surroundGeo.rotateX(-Math.PI / 2);
     var surround = new THREE.Mesh(surroundGeo, new THREE.MeshBasicMaterial({ color: 0x0f172a }));
     surround.position.y = -0.05;
@@ -62,7 +62,7 @@
     for (var i = 0; i < COUNT; i++) {
       var row = Math.floor(i / 28);
       var col = i % 28;
-      dummy.position.set(-46 + col * 3.4, 2.2 + row * 1.6, -NS.PITCH_HALF_H - 5.5 - row * 2.1);
+      dummy.position.set(-NS.PITCH_HALF_W + col * 3.4 * NS.PITCH_SCALE, 2.2 + row * 1.6, -NS.PITCH_HALF_H - 5.5 - row * 2.1);
       dummy.updateMatrix();
       crowdMesh.setMatrixAt(i, dummy.matrix);
       color.setHex(palette[i % palette.length]);
@@ -143,7 +143,8 @@
     followBall: function (dt, bx, bz, mode) {
       var cfg = CAM[mode] || CAM.WIDE;
       var tx = bx * cfg.trackX;
-      if (tx > 24) tx = 24; else if (tx < -24) tx = -24;
+      var lim = 24 * NS.PITCH_SCALE;
+      if (tx > lim) tx = lim; else if (tx < -lim) tx = -lim;
       var tz = cfg.dist + bz * 0.25;
       var k = Math.min(1, 5 * dt);
       camera.position.x += (tx - camera.position.x) * k;

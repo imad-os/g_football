@@ -15,6 +15,101 @@
   var ballRotZ = 0;
   var labels = { p1: 'P1', p2: 'P2', cpu: 'CPU' };
   var lastSecond = -1;
+  var lastOwner = null;
+  var R = NS.BALL_R;
+  var PI = Math.PI;
+
+  function ease(u) { return u < 0 ? 0 : (u > 1 ? 1 : u * u * (3 - 2 * u)); }
+
+  // Pose of one player for this step (rotations only, no allocation). Priority: dive, slide, fall, lunge, kick, run.
+  function animate(p, dt) {
+    var mesh = p.mesh;
+    if (p.kickT > 0) p.kickT -= dt;
+    if (p.lungeT > 0) p.lungeT -= dt;
+    if (p.slideT > 0) p.slideT -= dt;
+    if (p.fallT > 0) p.fallT -= dt;
+    if (p.diveT > 0) p.diveT -= dt;
+
+    var sp = Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z);
+    var run = sp > 0.5 ? clamp(sp / 12, 0, 1) : 0;
+    if (sp > 0.5) p.animPhase += dt * (5 + sp * 0.75);
+    var sw = Math.sin(p.animPhase);
+    var legL = sw * 0.8 * run;
+    var legR = -legL;
+    var armL = -legL * 0.85;
+    var armR = -armL;
+    var outL = 0.08, outR = 0.08;
+    var lean = 0.2 * run;
+    var roll = 0;
+    var hipY = 0.9 + Math.abs(Math.cos(p.animPhase)) * 0.07 * run;
+    var u, b;
+
+    if (p.diveT > 0) {
+      // keeper dive: whole body falls to the side, arms stretched over the head
+      u = 1 - p.diveT / 0.75;
+      b = ease(u / 0.25) * (1 - ease((u - 0.75) / 0.25));
+      roll = p.diveRoll * b;
+      hipY = 0.9 - 0.35 * b;
+      armL = armR = -2.9 * b;
+      outL = outR = 0.25 * b;
+      legL = 0.2 * b; legR = -0.2 * b; lean = 0;
+    } else if (p.slideT > 0) {
+      // slide tackle: lean far back, hips near the grass, front leg out, back leg folded
+      u = 1 - p.slideT / 0.85;
+      b = ease(u / 0.15) * (1 - ease((u - 0.75) / 0.25));
+      lean = -1.15 * b;
+      hipY = 0.9 - 0.5 * b;
+      legR = legR * (1 - b) - 0.35 * b;
+      legL = legL * (1 - b) + 0.75 * b;
+      armL = armL * (1 - b) - 0.5 * b; armR = armR * (1 - b) - 0.2 * b;
+      outL = 0.08 + 0.9 * b; outR = 0.08 + 0.6 * b;
+    } else if (p.fallT > 0) {
+      // lost the ball in a tackle: knocked off balance
+      u = 1 - p.fallT / 0.55;
+      b = Math.sin(u * PI);
+      lean = -0.45 * b;
+      roll = 0.35 * b;
+      hipY = 0.9 - 0.15 * b;
+      outL = outR = 0.08 + 0.9 * b;
+      legL = 0.3 * b; legR = -0.4 * b;
+    } else if (p.lungeT > 0) {
+      // standing tackle: lunge, front leg stretched to the ball
+      u = 1 - p.lungeT / 0.36;
+      b = Math.sin(clamp(u * 1.4, 0, 1) * PI * 0.5) * (1 - ease((u - 0.7) / 0.3));
+      lean = 0.2 + 0.25 * b;
+      legR = legR * (1 - b) - 1.15 * b;
+      legL = legL * (1 - b) + 0.45 * b;
+      hipY = 0.9 - 0.12 * b;
+      outL = outR = 0.08 + 0.55 * b;
+    } else if (p.kickT > 0) {
+      // kick: back-swing then strike through the ball (bigger swing and lean-back for shots and long balls)
+      var dur = p.kickHard ? 0.36 : 0.28;
+      u = 1 - p.kickT / dur;
+      var reach = p.kickHard ? 1.55 : 1.0;
+      var k = u < 0.25 ? 0.5 + u / 0.25 * 0.5 : 1 - (u - 0.25) / 0.5 * (1 + reach);
+      if (u > 0.75) k = -reach * (1 - (u - 0.75) / 0.25);
+      legR = k;
+      legL = 0.15;
+      lean = p.kickHard ? (u < 0.25 ? 0.15 : -0.22) : 0.08;
+      armL = 0.4; armR = -0.3;
+      outL = 0.95; outR = 0.45;
+      hipY = 0.9;
+    } else if (p.stun > 0) {
+      lean = 0.3; outL = outR = 0.4;
+    } else if (p.role === 'GK' && World.ball.owner === p) {
+      armL = armR = -1.3; outL = outR = 0.1; // ball held in front
+    }
+
+    mesh.body.position.y = hipY;
+    mesh.body.rotation.x = lean;
+    mesh.body.rotation.z = roll;
+    mesh.leftLeg.rotation.x = legL;
+    mesh.rightLeg.rotation.x = legR;
+    mesh.leftArm.rotation.x = armL;
+    mesh.rightArm.rotation.x = armR;
+    mesh.leftArm.rotation.z = -outL;
+    mesh.rightArm.rotation.z = outR;
+  }
 
   function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
@@ -80,6 +175,7 @@
     ball.hard = false;
     ball.chip = false;
     ball.gkTried = 0;
+    ball.receiver = null;
     if (p.returnTo) p.returnT = 0.28; // one-two: play it back
     p.dribbling = false;
   }
@@ -161,6 +257,8 @@
             runToX: 0, runToZ: 0, runToT: 0, aiCd: Math.random() * 0.3,
             carry: 0.95, dribbling: false, dBall: 0, rank: 0, gkHold: 0, isCtl: false,
             tackleSlide: false, returnTo: null, returnT: 0, returnExp: 0,
+            // animation timers
+            kickT: 0, kickHard: false, lungeT: 0, slideT: 0, fallT: 0, diveT: 0, diveRoll: 0,
             // AI brain state
             mark: null, icX: 0, icZ: 0, drX: 0, drZ: 0, runT: 0, runCd: 0, runX: 0, runZ: 0,
             aiT: 0, tgtX: 0, tgtZ: 0, tgtS: 8, gkRT: 0
@@ -196,6 +294,8 @@
         p.vel.set(0, 0, 0);
         p.facing = p.team === 0 ? Math.PI / 2 : -Math.PI / 2;
         p.stun = 0; p.tackleT = 0; p.tackleCd = 0; p.runToT = 0; p.returnTo = null; p.dribbling = false;
+        p.kickT = 0; p.lungeT = 0; p.slideT = 0; p.fallT = 0; p.diveT = 0;
+        animate(p, 0);
         p.mark = null; p.drX = 0; p.drZ = 0; p.runT = 0; p.runCd = 0; p.aiT = 0; p.gkRT = 0; p.stamina = 100; p.gkHold = 0;
       }
       World.pressT[0] = 0;
@@ -213,6 +313,7 @@
         World.ball.lastTouchTeam = kicker.team;
       }
       assignKickoffCursors();
+      lastOwner = World.ball.owner;
       NS.Input.clearEdges();
       m.kickoffTimer = 1.0;
       NS.Audio.whistle();
@@ -333,6 +434,11 @@
       if (World.pressT[1] > 0) World.pressT[1] -= dt;
 
       // ----- humans -----
+      // the ball changed hands: a human team takes control of its new carrier straight away
+      if (ball.owner !== lastOwner) {
+        lastOwner = ball.owner;
+        Controls.claimBall(lastOwner);
+      }
       Controls.autoAssign(dt, false);
       for (i = 0; i < 2; i++) {
         var slot = World.slots[i];
@@ -353,7 +459,7 @@
         p = players[i];
         var prof = p.team === 0 ? profs0 : profs1;
         if (p.tackleT > 0) {
-          Actions.updateTackle(p, dt, p.tackleHuman ? 0.88 : prof.tackle);
+          Actions.updateTackle(p, dt, p.tackleHuman ? 0.75 : prof.tackle);
         } else if (p.stun > 0) {
           p.vel.x *= 0.85;
           p.vel.z *= 0.85;
@@ -366,17 +472,7 @@
         p.pos.x = clamp(nx, -HALF_W + 1, HALF_W - 1);
         p.pos.z = clamp(nz, -HALF_H + 1, HALF_H - 1);
         p.mesh.root.rotation.y = p.facing;
-
-        var sp = p.vel.x * p.vel.x + p.vel.z * p.vel.z;
-        if (sp > 0.5) {
-          p.animPhase += dt * 13;
-          var swing = Math.sin(p.animPhase) * 0.55;
-          p.mesh.leftLeg.rotation.x = swing;
-          p.mesh.rightLeg.rotation.x = -swing;
-        } else {
-          p.mesh.leftLeg.rotation.x = 0;
-          p.mesh.rightLeg.rotation.x = 0;
-        }
+        animate(p, dt);
       }
 
       // ----- bodies: players cannot run through each other (defenders really block the carrier) -----
@@ -419,6 +515,14 @@
               ball.gkTried |= 1 << p.team;
               gkActed = true;
               var speed = Math.sqrt(bs2);
+              // a shot wide of the keeper: he dives to that side
+              var sdx = ball.pos.x - p.pos.x, sdz = ball.pos.z - p.pos.z;
+              var sideX = sdx * Math.cos(p.facing) - sdz * Math.sin(p.facing); // + = his local +x side
+              if (speed >= 12 && (sideX > 0.7 || sideX < -0.7)) {
+                p.diveT = 0.75;
+                p.diveRoll = sideX > 0 ? -1.25 : 1.25;
+                p.vel.z += clamp(sdz * 5, -8, 8);
+              }
               var chance = speed < 12 ? 1 : clamp(gkSkill(p.team) - (speed - 20) * 0.01, 0.2, 0.92);
               if (ball.chip) chance *= 0.4;
               // placement: a shot away from where the keeper stands is harder to keep out
@@ -457,8 +561,9 @@
 
       // ----- ball, goal, camera -----
       var scored = World.stepBall(dt);
-      ballRotX += ball.vel.z * dt * 0.5;
-      ballRotZ -= ball.vel.x * dt * 0.5;
+      // rolling without slipping: angle = distance / radius
+      ballRotX += ball.vel.z * dt / R;
+      ballRotZ -= ball.vel.x * dt / R;
       NS.Scene.setBall(ball.pos, ballRotX, ballRotZ);
       if (scored >= 0) { triggerGoal(scored); }
 
