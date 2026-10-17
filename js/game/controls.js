@@ -51,7 +51,7 @@
   function tackleOrSwitch(slot, slide) {
     var p = slot.player;
     var c = World.ball.owner;
-    if (c && c.team !== p.team && p.tackleCd <= 0) {
+    if (c && c.team !== p.team && !c.gkHands && p.tackleCd <= 0) {
       var dx = c.pos.x - p.pos.x;
       var dz = c.pos.z - p.pos.z;
       if (dx * dx + dz * dz < (slide ? 56 : 17.6)) { Actions.startTackle(p, c, true, slide); return; }
@@ -92,6 +92,38 @@
       slot.player = target;
       slot.lockT = type === ACT.LONG ? 2.2 : 1.6; // stay on the receiver while the ball travels
     }
+  }
+
+  // A pass is on its way to this player (until somebody has the ball).
+  function receiving(p) {
+    var ball = World.ball;
+    return !ball.owner && ball.receiver === p;
+  }
+
+  // A loose ball in the air not far from this player.
+  function airNear(p) {
+    var ball = World.ball;
+    if (ball.owner || (ball.pos.y < 1.3 && ball.vel.y < 1.5)) return false;
+    var dx = ball.pos.x - p.pos.x, dz = ball.pos.z - p.pos.z;
+    return dx * dx + dz * dz < 144;
+  }
+
+  // The ball is at head height and within reach (a little jump included).
+  function inHeadZone(p) {
+    var ball = World.ball;
+    if (ball.owner || ball.pos.y < 1.5 || ball.pos.y > 3.3) return false;
+    if (p === ball.kicker && ball.kickerT > 0) return false;
+    var dx = ball.pos.x - p.pos.x, dz = ball.pos.z - p.pos.z;
+    return dx * dx + dz * dz < 2.4;
+  }
+
+  // Pass / through / long = headed pass; shot / curve / chip = headed shot.
+  function header(slot, p, mi, pad) {
+    var shot = mi === I_SHOOT || mi === I_CURVE || mi === I_CHIP;
+    var type = mi === I_THR ? ACT.THROUGH : (mi === I_LONG ? ACT.LONG : ACT.PASS);
+    Actions.header(p, shot, type, pad.x, pad.y);
+    var t = Actions.lastTarget;
+    if (!shot && t && t !== otherPlayer(slot)) { slot.player = t; slot.lockT = 1.6; }
   }
 
   function fireDefense(slot, mi) {
@@ -208,7 +240,8 @@
           slot.evMask = held;
           slot.evT = 0;
           slot.evMove = -1;
-          slot.evCtx = has ? 1 : 2;
+          // 1 = with the ball, 3 = a ball coming to us / in the air (header or first-time touch), 2 = defending
+          slot.evCtx = has ? 1 : ((receiving(p) || airNear(p)) ? 3 : 2);
           slot.evPlayer = p;
           slot.evSettle = B.needsSettle(held) ? 0.06 : 0;
         }
@@ -233,6 +266,26 @@
               has = ball.owner === p;
             }
           }
+        } else if (slot.evCtx === 3) {
+          mv = B.resolve(1, slot.evMask, slot.evT);
+          if (mv < 0) mv = I_LOW;
+          slot.chargeMove = mv;
+          slot.chargeFrac = slot.evT > 0.06 ? Math.min(1, slot.evT / FULL_CHARGE) : -1;
+          if (has) {
+            // the ball arrived while the button is held: play it first time on release
+            if (ended) { fireAttack(slot, p, mv, slot.evT, pad); endEvent(slot); p = slot.player; has = ball.owner === p; }
+          } else if (ball.owner) {
+            endEvent(slot);
+          } else if (inHeadZone(p) && (ended || slot.evT > 0.12)) {
+            header(slot, p, mv, pad);
+            endEvent(slot);
+            p = slot.player;
+            has = false;
+          } else if (ended) {
+            // released before the ball got here: do it as soon as it arrives
+            slot.headReq = mv; slot.headD = slot.evT; slot.headT = 1.4;
+            endEvent(slot);
+          }
         } else if (has) {
           endEvent(slot);
         } else {
@@ -252,6 +305,24 @@
             slot.teamPress = mv === I_TEAM;
           }
           if (ended) endEvent(slot);
+        }
+      }
+
+      // ---- a move asked for before the ball arrived ----
+      if (slot.headT > 0) {
+        slot.headT -= dt;
+        if (has) {
+          slot.headT = 0;
+          fireAttack(slot, p, slot.headReq, slot.headD, pad); // first-time pass / shot
+          p = slot.player;
+          has = ball.owner === p;
+        } else if (ball.owner) {
+          slot.headT = 0;
+        } else if (inHeadZone(p)) {
+          slot.headT = 0;
+          header(slot, p, slot.headReq, pad);
+          p = slot.player;
+          has = false;
         }
       }
 
@@ -292,16 +363,14 @@
         if (slot.teamPress) World.pressT[p.team] = 0.3;
       }
 
-      // a pass is on its way to this player: go and meet it (a lofted ball: where it comes down).
-      // Pushing the stick clearly away from the ball cancels the run.
-      if (!has && !ball.owner && ball.receiver === p) {
-        World.intercept(p, sprint ? 12.5 : 11, 1.9);
+      // a pass is on its way to this player: he goes to meet it (a lofted ball: where it comes down, or at head
+      // height when a header was asked for). The stick is ignored until somebody has the ball.
+      if (!has && receiving(p)) {
+        World.intercept(p, sprint ? 12.5 : 11, slot.headT > 0 ? 3.1 : 1.9);
         var ix = World.icX - p.pos.x;
         var iz = World.icZ - p.pos.z;
         var il = Math.sqrt(ix * ix + iz * iz);
-        if (len > 0.1 && (mx * ix + mz * iz) < -0.3 * len * il) {
-          ball.receiver = null;
-        } else if (il > 0.45) {
+        if (il > 0.45) {
           mx = ix / il; mz = iz / il; len = 1;
           var arrive = 2 + il * 4; // slow down on arrival instead of overshooting
           speed = Math.min(sprint ? 13.4 : 11.6, arrive);

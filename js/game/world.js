@@ -156,7 +156,8 @@
     return {
       idx: idx, active: false, team: 0, player: null,
             chargeMove: -1, chargeFrac: -1, pressing: false, teamPress: false, evPlayer: null, burstT: 0, lockT: 0,
-      evActive: false, evMask: 0, evT: 0, evSettle: 0, evCtx: 0, evMove: -1, evPrev: 0
+      evActive: false, evMask: 0, evT: 0, evSettle: 0, evCtx: 0, evMove: -1, evPrev: 0,
+      headReq: -1, headT: 0, headD: 0 // move pressed before the ball arrived: header or first-time pass
     };
   }
 
@@ -200,9 +201,10 @@
 
       var o = ball.owner;
       if (o) {
-        ball.pos.x = o.pos.x + Math.sin(o.facing) * o.carry;
-        ball.pos.y = R;
-        ball.pos.z = o.pos.z + Math.cos(o.facing) * o.carry;
+        var carry = o.gkHands ? 0.55 : o.carry; // a keeper holds it in his hands, at chest height
+        ball.pos.x = o.pos.x + Math.sin(o.facing) * carry;
+        ball.pos.y = o.gkHands ? 1.45 : R;
+        ball.pos.z = o.pos.z + Math.cos(o.facing) * carry;
         ball.vel.set(o.vel.x, 0, o.vel.z);
         return -1;
       }

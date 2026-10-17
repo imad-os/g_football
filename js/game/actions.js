@@ -10,6 +10,7 @@
   var G = NS.PHYS.G;
   var DRAG_K = NS.PHYS.ROLL_K; // ground speed needed per unit of distance
   var AIR_K = NS.PHYS.AIR_K;
+  var R0 = NS.BALL_R;
 
   // Horizontal launch speed so a ball in the air for T seconds covers d (air drag included).
   function airSpeed(d, T) { return d * AIR_K / (1 - Math.exp(-AIR_K * T)); }
@@ -96,6 +97,7 @@
       ball.chip = type === ACT.CHIP;
       ball.receiver = null;
       p.dribbling = false;
+      p.gkHands = false;
       p.kickT = type >= ACT.SHOOT ? 0.36 : 0.28; // kick animation
       p.kickHard = type >= ACT.SHOOT || type === ACT.LONG;
       this.lastTarget = null;
@@ -226,6 +228,47 @@
       ball.receiver = mate || null;
     },
 
+    // Header from a ball in the air: a shot at goal (downwards, under the bar) or a headed pass to the team-mate
+    // nearest the aim (headers do not carry far, so a long ball becomes a through-ball distance).
+    header: function (p, shot, type, ax, az) {
+      var ball = World.ball;
+      var attack = p.team === 0 ? 1 : -1;
+      var y0 = ball.pos.y;
+      this.release(p, shot ? ACT.SHOOT : type);
+      p.kickT = 0;
+      p.headT = 0.4; // header animation
+      var tx, tz, speed, mate = null, ty = R0;
+      if (shot) {
+        var aimed = az > 0.1 || az < -0.1;
+        tx = attack * (HALF_W + 1);
+        tz = aimed ? az * GOAL_HALF_W * 0.8 : clamp(-p.pos.z * 0.3, -3, 3) + (Math.random() - 0.5) * 4;
+        ty = 1.0;
+      } else {
+        mate = this.pickTarget(p, ax, az, type === ACT.PASS ? ACT.PASS : ACT.THROUGH);
+        if (mate) {
+          tx = mate.pos.x + mate.vel.x * 0.5;
+          tz = mate.pos.z + mate.vel.z * 0.5;
+        } else {
+          var al = Math.sqrt(ax * ax + az * az);
+          tx = p.pos.x + (al > 0.1 ? ax / al : Math.sin(p.facing)) * 10;
+          tz = p.pos.z + (al > 0.1 ? az / al : Math.cos(p.facing)) * 10;
+        }
+        tx = clamp(tx, -HALF_W + 2, HALF_W - 2);
+        tz = clamp(tz, -HALF_H + 2, HALF_H - 2);
+      }
+      var dx = tx - p.pos.x;
+      var dz = tz - p.pos.z;
+      var d = Math.sqrt(dx * dx + dz * dz);
+      if (d < 1) d = 1;
+      speed = shot ? clamp(d * 1.1 + 8, 18, 28) : clamp(d * 0.9 + 5, 9, 20);
+      var angle = Math.atan2(dx, dz) + (Math.random() - 0.5) * 0.1;
+      var T = d / speed;
+      ball.vel.set(Math.sin(angle) * speed, (ty - y0) / T + 0.5 * G * T, Math.cos(angle) * speed);
+      ball.spinY = 0;
+      if (mate) { ball.receiver = mate; mate.runToT = 0; }
+      this.lastTarget = mate;
+    },
+
     // One-two: short pass, the receiver plays it straight back into the space the passer runs into.
     oneTwo: function (p, ax, az) {
       var attack = p.team === 0 ? 1 : -1;
@@ -266,7 +309,7 @@
       p.tackleT -= dt;
       var ball = World.ball;
       var carrier = ball.owner;
-      if (!p.tackleHit && carrier && carrier.team !== p.team) {
+      if (!p.tackleHit && carrier && carrier.team !== p.team && !carrier.gkHands) { // never from a keeper's hands
         var dx = carrier.pos.x - p.pos.x;
         var dz = carrier.pos.z - p.pos.z;
         var bx = ball.pos.x - p.pos.x;

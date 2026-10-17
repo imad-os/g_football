@@ -21,7 +21,7 @@
     geo.shadow = new THREE.CircleGeometry(0.85, 12);
     geo.shadow.rotateX(-Math.PI / 2);
     // controlled-player marker: an arrow above the head, pointing down at the player
-    geo.arrow = new THREE.ConeGeometry(0.5, 0.95, 4);
+    geo.arrow = new THREE.ConeGeometry(0.85, 1.5, 4);
     geo.arrow.rotateX(Math.PI);
     geo.ball = new THREE.IcosahedronGeometry(NS.BALL_R, 1);
   }

@@ -5,7 +5,10 @@
   var renderer, scene, camera, dirLight, ambLight;
   var pitchMesh, crowdMesh, ballMesh;
   var rings = [null, null]; // controlled-player arrows (P1, P2)
-  var ARROW_Y = 3.75;
+  var arrowMats = [null, null];
+  var ARROW_COLORS = [0x93c5fd, 0xfca5a5]; // light blue (P1), light red (P2)
+  var ARROW_BLINK = 0xfde047;              // yellow flash while receiving a pass
+  var ARROW_Y = 4.2;
   var arrowT = 0;
   var lookTarget = null;
   var canvasEl = null;
@@ -97,9 +100,14 @@
 
       ballMesh = new THREE.Mesh(NS.Assets.geo.ball, new THREE.MeshLambertMaterial({ color: 0xffffff }));
       scene.add(ballMesh);
-      var colors = [0x2563eb, 0xef4444]; // P1 blue, P2 red
       for (var i = 0; i < 2; i++) {
-        rings[i] = new THREE.Mesh(NS.Assets.geo.arrow, new THREE.MeshBasicMaterial({ color: colors[i] }));
+        // light fill + dark border (a slightly bigger back-face copy drawn behind it)
+        rings[i] = new THREE.Group();
+        arrowMats[i] = new THREE.MeshBasicMaterial({ color: ARROW_COLORS[i] });
+        var border = new THREE.Mesh(NS.Assets.geo.arrow, new THREE.MeshBasicMaterial({ color: 0x0b1220, side: THREE.BackSide }));
+        border.scale.set(1.28, 1.2, 1.28);
+        rings[i].add(border);
+        rings[i].add(new THREE.Mesh(NS.Assets.geo.arrow, arrowMats[i]));
         rings[i].position.y = ARROW_Y;
         rings[i].visible = false;
         scene.add(rings[i]);
@@ -136,10 +144,11 @@
       ballMesh.rotation.x = rotX;
       ballMesh.rotation.z = rotZ;
     },
-    setRing: function (i, visible, x, z) {
+    setRing: function (i, visible, x, z, blink) {
       var r = rings[i];
       r.visible = visible;
       if (visible) {
+        arrowMats[i].color.setHex(blink && Math.floor(arrowT * 7) % 2 === 0 ? ARROW_BLINK : ARROW_COLORS[i]);
         arrowT += 0.016;
         r.position.set(x, ARROW_Y + Math.sin(arrowT * 5 + i * 1.6) * 0.15, z); // gentle bob
         r.rotation.y = arrowT * 2;

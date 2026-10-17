@@ -29,6 +29,8 @@
     if (p.slideT > 0) p.slideT -= dt;
     if (p.fallT > 0) p.fallT -= dt;
     if (p.diveT > 0) p.diveT -= dt;
+    if (p.headT > 0) p.headT -= dt;
+    if (p.catchT > 0) p.catchT -= dt;
 
     var sp = Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z);
     var run = sp > 0.5 ? clamp(sp / 12, 0, 1) : 0;
@@ -53,6 +55,23 @@
       armL = armR = -2.9 * b;
       outL = outR = 0.25 * b;
       legL = 0.2 * b; legR = -0.2 * b; lean = 0;
+    } else if (p.headT > 0) {
+      // header: jump, arch back, snap the head through the ball
+      u = 1 - p.headT / 0.4;
+      b = Math.sin(u * PI);
+      hipY = 0.9 + 0.45 * b;
+      lean = u < 0.45 ? -0.35 * (u / 0.45) : -0.35 + 0.85 * ((u - 0.45) / 0.55);
+      lean *= b > 0.2 ? 1 : b / 0.2;
+      legL = 0.35 * b; legR = 0.15 * b;
+      armL = armR = -0.5 * b;
+      outL = outR = 0.08 + 0.7 * b;
+    } else if (p.catchT > 0) {
+      // keeper catch: both hands up to the ball
+      u = 1 - p.catchT / 0.4;
+      b = Math.sin(clamp(u * 1.6, 0, 1) * PI * 0.5);
+      armL = armR = -2.1 * b - 1.3 * (1 - b);
+      outL = outR = 0.12;
+      lean = -0.1 * b;
     } else if (p.slideT > 0) {
       // slide tackle: lean far back, hips near the grass, front leg out, back leg folded
       u = 1 - p.slideT / 0.85;
@@ -96,7 +115,7 @@
       hipY = 0.9;
     } else if (p.stun > 0) {
       lean = 0.3; outL = outR = 0.4;
-    } else if (p.role === 'GK' && World.ball.owner === p) {
+    } else if (p.gkHands && World.ball.owner === p) {
       armL = armR = -1.3; outL = outR = 0.1; // ball held in front
     }
 
@@ -176,8 +195,17 @@
     ball.chip = false;
     ball.gkTried = 0;
     ball.receiver = null;
+    p.gkHands = false;
+    p.gkHold = 0;
     if (p.returnTo) p.returnT = 0.28; // one-two: play it back
     p.dribbling = false;
+  }
+
+  // The ball is in `team`'s own penalty area (where its keeper may use his hands).
+  function inOwnBox(team) {
+    var ball = World.ball;
+    var goalX = team === 0 ? -HALF_W : HALF_W;
+    return Math.abs(ball.pos.x - goalX) < 18 && Math.abs(ball.pos.z) < 15.5;
   }
 
   function gkSkill(team) {
@@ -258,7 +286,8 @@
             carry: 0.95, dribbling: false, dBall: 0, rank: 0, gkHold: 0, isCtl: false,
             tackleSlide: false, returnTo: null, returnT: 0, returnExp: 0,
             // animation timers
-            kickT: 0, kickHard: false, lungeT: 0, slideT: 0, fallT: 0, diveT: 0, diveRoll: 0,
+            kickT: 0, kickHard: false, lungeT: 0, slideT: 0, fallT: 0, diveT: 0, diveRoll: 0, headT: 0, catchT: 0,
+            gkHands: false,
             // AI brain state
             mark: null, icX: 0, icZ: 0, drX: 0, drZ: 0, runT: 0, runCd: 0, runX: 0, runZ: 0,
             aiT: 0, tgtX: 0, tgtZ: 0, tgtS: 8, gkRT: 0
@@ -294,7 +323,7 @@
         p.vel.set(0, 0, 0);
         p.facing = p.team === 0 ? Math.PI / 2 : -Math.PI / 2;
         p.stun = 0; p.tackleT = 0; p.tackleCd = 0; p.runToT = 0; p.returnTo = null; p.dribbling = false;
-        p.kickT = 0; p.lungeT = 0; p.slideT = 0; p.fallT = 0; p.diveT = 0;
+        p.kickT = 0; p.lungeT = 0; p.slideT = 0; p.fallT = 0; p.diveT = 0; p.headT = 0; p.catchT = 0; p.gkHands = false;
         animate(p, 0);
         p.mark = null; p.drX = 0; p.drZ = 0; p.runT = 0; p.runCd = 0; p.aiT = 0; p.gkRT = 0; p.stamina = 100; p.gkHold = 0;
       }
@@ -510,7 +539,7 @@
           var ddx = ball.pos.x - p.pos.x;
           var ddz = ball.pos.z - p.pos.z;
           var d2 = ddx * ddx + ddz * ddz;
-          if (p.role === 'GK') {
+          if (p.role === 'GK' && ball.lastTouchTeam !== p.team && inOwnBox(p.team)) {
             if (d2 < 7.5 && ball.pos.y < 3.4 && !(ball.gkTried & (1 << p.team))) {
               ball.gkTried |= 1 << p.team;
               gkActed = true;
@@ -531,7 +560,8 @@
               if (Math.random() < chance) {
                 if (speed < 28) {
                   takeBall(p);
-                  p.gkHold = 0;
+                  p.gkHands = true; // caught: held in the hands
+                  p.catchT = 0.4;
                 } else {
                   ball.vel.x = -ball.vel.x * 0.4;
                   ball.vel.z += (Math.random() - 0.5) * 9;
@@ -548,6 +578,26 @@
             taker = p;
           }
         }
+        // headers: CPU players head balls at head height (clear the opponents' balls, attack near the goal);
+        // a ball from a team-mate is brought down instead
+        if (!gkActed && ball.pos.y > 1.5 && ball.pos.y < 3.3 && ball.vel.y < 0) {
+          for (i = 0; i < n; i++) {
+            p = players[i];
+            if (p.role === 'GK' || p.isCtl || p.stun > 0 || p.tackleT > 0) continue;
+            if (p === ball.kicker && ball.kickerT > 0) continue;
+            if (p !== ball.receiver && p.rank !== 0) continue;
+            var hx = ball.pos.x - p.pos.x, hz = ball.pos.z - p.pos.z;
+            if (hx * hx + hz * hz >= 2.4) continue;
+            var att = p.team === 0 ? 1 : -1;
+            var toGoal = Math.abs(att * HALF_W - p.pos.x) + Math.abs(p.pos.z) * 0.5;
+            var shotOn = toGoal < 18 && p.role !== 'DEF';
+            if (ball.lastTouchTeam === p.team && !shotOn) continue;
+            Actions.header(p, shotOn, ACT.PASS, att, 0);
+            gkActed = true;
+            taker = null;
+            break;
+          }
+        }
         if (!gkActed && taker) {
           if (ball.hard && bs2 > 676 && Math.random() < 0.5) {
             ball.vel.x *= 0.55;
@@ -556,6 +606,16 @@
           } else {
             takeBall(taker);
           }
+        }
+      }
+
+      // ----- keeper holding the ball: 5 seconds at most, then it goes long anyway -----
+      var hold = ball.owner;
+      if (hold && hold.role === 'GK') {
+        hold.gkHold += dt;
+        if (hold.gkHold > 5) {
+          hold.gkHold = 0;
+          Actions.kick(hold, ACT.LONG, 0.8, hold.team === 0 ? 1 : -1, 0, 1);
         }
       }
 
@@ -569,7 +629,8 @@
 
       for (i = 0; i < 2; i++) {
         var sl = World.slots[i];
-        if (sl.active && sl.player) NS.Scene.setRing(i, true, sl.player.pos.x, sl.player.pos.z);
+        // the arrow blinks while the player is receiving a pass (the receive assist is on)
+        if (sl.active && sl.player) NS.Scene.setRing(i, true, sl.player.pos.x, sl.player.pos.z, !ball.owner && ball.receiver === sl.player);
         else NS.Scene.setRing(i, false, 0, 0);
       }
       NS.Scene.followBall(dt, ball.pos.x, ball.pos.z, settings.cameraMode);

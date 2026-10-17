@@ -540,7 +540,7 @@
         moveToward(p, tx, tz, 10.8 * prof.speedMul, dt);
         return;
       }
-      if (d < 2.6 && p.tackleCd <= 0 && side > -0.1) {
+      if (d < 2.6 && p.tackleCd <= 0 && side > -0.1 && !c.gkHands) {
         // carrier running at us (facing our goal) is easier to time than one shielding the ball
         var facing = Math.sin(c.facing) * gx + Math.cos(c.facing) * gz;
         var rate = prof.tackleRate * (0.8 + 0.5 * Math.max(0, facing)) * (c.dribbling ? 0.8 : 1.15);
@@ -578,7 +578,8 @@
 
   /* ------------------------------------------------------------------ goalkeeper */
 
-  function gkDistribute(p, prof) {
+  // Plays it to the best free team-mate. Without `force` it waits (returns false) when nobody is a good option.
+  function gkDistribute(p, prof, force) {
     var a = attackOf(p);
     var players = World.players;
     var best = -1e9, bm = null, bx = 0, bz = 0, bt = ACT.PASS;
@@ -593,8 +594,10 @@
       var sc = (1 - risk) * (0.4 + space * 0.6 + (m.pos.x * a + HALF_W) / 200) - risk * 0.8 + (Math.random() - 0.5) * prof.noise;
       if (sc > best) { best = sc; bm = m; bx = m.pos.x; bz = m.pos.z; bt = short ? ACT.PASS : ACT.LONG; }
     }
+    if (!force && best < 0.3) return false;
     if (bm) Actions.kickTo(p, bt, bx, bz, bm, prof.acc);
     else Actions.kick(p, ACT.LONG, 0.6, a, 0, prof.acc);
+    return true;
   }
 
   function aiGoalkeeper(p, dt, prof) {
@@ -606,12 +609,15 @@
     var limit = GOAL_HALF_W - 0.4;
 
     if (ball.owner === p) {
-      p.gkHold += dt;
+      // gkHold is counted by the match (5 s rule: after that he must kick it long)
       p.vel.x *= 0.8; p.vel.z *= 0.8;
-      if (p.gkHold > 0.8 + Math.random() * 0.3) { gkDistribute(p, prof); p.gkHold = 0; }
+      p.aiCd -= dt;
+      if (p.gkHold > 0.9 && p.aiCd <= 0) {
+        p.aiCd = 0.25;
+        if (gkDistribute(p, prof, p.gkHold > 3.5)) p.gkHold = 0;
+      }
       return;
     }
-    p.gkHold = 0;
 
     // shot coming: react (after the reaction time) and move across to where it crosses our line
     var toward = ball.vel.x * -a;
