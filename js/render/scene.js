@@ -1,10 +1,12 @@
-/* Three.js scene: renderer, camera, stadium, ball, cursor rings. No per-frame allocation. */
+/* Three.js scene: renderer, camera, stadium, ball, controlled-player arrows. No per-frame allocation. */
 (function (NS) {
   'use strict';
 
   var renderer, scene, camera, dirLight, ambLight;
   var pitchMesh, crowdMesh, ballMesh;
-  var rings = [null, null];
+  var rings = [null, null]; // controlled-player arrows (P1, P2)
+  var ARROW_Y = 3.75;
+  var arrowT = 0;
   var lookTarget = null;
   var canvasEl = null;
   var width = 0;
@@ -95,10 +97,10 @@
 
       ballMesh = new THREE.Mesh(NS.Assets.geo.ball, new THREE.MeshLambertMaterial({ color: 0xffffff }));
       scene.add(ballMesh);
-      var colors = [0xef4444, 0x38bdf8];
+      var colors = [0x2563eb, 0xef4444]; // P1 blue, P2 red
       for (var i = 0; i < 2; i++) {
-        rings[i] = new THREE.Mesh(NS.Assets.geo.ring, new THREE.MeshBasicMaterial({ color: colors[i], side: THREE.DoubleSide }));
-        rings[i].position.y = 0.06;
+        rings[i] = new THREE.Mesh(NS.Assets.geo.arrow, new THREE.MeshBasicMaterial({ color: colors[i] }));
+        rings[i].position.y = ARROW_Y;
         rings[i].visible = false;
         scene.add(rings[i]);
       }
@@ -137,7 +139,11 @@
     setRing: function (i, visible, x, z) {
       var r = rings[i];
       r.visible = visible;
-      if (visible) r.position.set(x, 0.06, z);
+      if (visible) {
+        arrowT += 0.016;
+        r.position.set(x, ARROW_Y + Math.sin(arrowT * 5 + i * 1.6) * 0.15, z); // gentle bob
+        r.rotation.y = arrowT * 2;
+      }
     },
     // Smooth follow camera; called once per simulation step.
     followBall: function (dt, bx, bz, mode) {

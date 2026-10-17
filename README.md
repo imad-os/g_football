@@ -29,6 +29,9 @@ on your controller or keyboard: it is detected and saved (per My PC profile). De
 | Sprint burst | double-tap a direction |
 | Game menu | TV remote Back (My PC menu: game plan, settings, restart...), hold CANCEL alone, or Start |
 
+The player you control has an arrow over his head pointing down at him: **blue for P1, red for P2** (same colours on the
+player plates and the radar).
+
 **Settings > Player switch**: `AUTO` follows the ball, `MANUAL` only changes with the switch button when your team does not have the ball.
 In both modes the pass receiver is selected as soon as the pass is played and a team-mate who gets the ball is selected at once:
 the CPU never plays your ball carrier.

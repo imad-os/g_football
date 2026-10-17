@@ -153,12 +153,13 @@
       var sz = (h - 12) / (NS.PITCH_HALF_H * 2);
       for (var i = 0; i < players.length; i++) {
         var p = players[i];
-        var cursor = (slots[0].active && slots[0].player === p) || (slots[1].active && slots[1].player === p);
+        var c0 = slots[0].active && slots[0].player === p;
+        var cursor = c0 || (slots[1].active && slots[1].player === p);
         ctx.fillStyle = p.team === 0 ? homeCss : awayCss;
         ctx.beginPath();
         ctx.arc((p.pos.x + NS.PITCH_HALF_W) * sx + 6, (p.pos.z + NS.PITCH_HALF_H) * sz + 6, cursor ? 5 : 3.2, 0, 6.2832);
         ctx.fill();
-        if (cursor) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke(); }
+        if (cursor) { ctx.strokeStyle = c0 ? '#3b82f6' : '#ef4444'; ctx.lineWidth = 2; ctx.stroke(); } // P1 blue, P2 red
       }
       ctx.fillStyle = '#facc15';
       ctx.beginPath();
