@@ -1,11 +1,11 @@
 /* Human control: movement, dribble sprint, player switching and the button-map gesture engine.
  *
  * A "press event" starts when a button that takes part in a move goes down (a second button within 60 ms joins it as a
- * combination). With the ball the move is chosen by the button(s) and how long they were held and fires on release
- * (shots get their power from the hold time). Without the ball the move starts as soon as its gesture is reached
- * (tackle on press, press / team press while held). All of it comes from NS.Bindings, so the player can remap it.
- * Defaults: OK tap = low pass / tackle, OK hold = through ball / press, longer = long ball, longest = shot / team press,
- * CANCEL + OK = curve shot / slide tackle, CANCEL = one-two / switch player, RUN = sprint (with the ball: dribble sprint).
+ * combination). The buttons alone decide the move (NS.Bindings, remappable); holding never turns it into another move:
+ *   with the ball     the move fires on release; the hold time is its power (passes get firmer, shots harder)
+ *   without the ball  tackle / slide / switch fire on press; press and team press last while the button is held
+ * Gamepad defaults (PES): A pass, Y through, B long, X shoot; without the ball A press, B tackle, X slide, Y team press,
+ * L switch. TV / KB: OK pass / tackle, CANCEL shoot / switch, OK + CANCEL through / slide, RUN + OK long ball / press.
  */
 (function (NS) {
   'use strict';
@@ -15,7 +15,6 @@
   var Actions = NS.Actions;
   var Input = NS.Input;
   var B = NS.Bindings;
-  var TH = B.TH;
 
   var I_LOW = B.index('lowpass');
   var I_THR = B.index('through');
@@ -68,24 +67,27 @@
     slot.teamPress = false;
   }
 
-  function shotPower(mi, d) {
-    var v = 0.35 + (d - TH[B.lastTier]) * 0.9;
-    return v < 0.35 ? 0.35 : (v > 1 ? 1 : v);
+  // power 0..1 from the hold time (a tap is a soft, placed shot; about 0.7 s = full power)
+  function holdPower(d) {
+    var v = 0.35 + d * 0.95;
+    return v > 1 ? 1 : v;
   }
 
   function fireAttack(slot, p, mi, d, pad) {
     var type;
     var follow = true;
-    var power = 0.6;
+    var power = d / FULL_CHARGE > 1 ? 1 : d / FULL_CHARGE; // passes: a longer hold = a firmer pass
     if (mi === I_LOW) type = ACT.PASS;
     else if (mi === I_THR) type = ACT.THROUGH;
     else if (mi === I_LONG) type = ACT.LONG;
-    else if (mi === I_SHOOT) { type = ACT.SHOOT; power = shotPower(mi, d); follow = false; }
-    else if (mi === I_CURVE) { type = ACT.CURVE; power = shotPower(mi, d); follow = false; }
-    else if (mi === I_CHIP) { type = ACT.CHIP; power = shotPower(mi, d); follow = false; }
+    else if (mi === I_SHOOT) { type = ACT.SHOOT; power = holdPower(d); follow = false; }
+    else if (mi === I_CURVE) { type = ACT.CURVE; power = holdPower(d); follow = false; }
+    else if (mi === I_CHIP) { type = ACT.CHIP; power = holdPower(d); follow = false; }
     else if (mi === I_ONETWO) { Actions.oneTwo(p, pad.x, pad.y); slot.lockT = 1.4; return; }
     else return;
+    Actions.passPower = follow ? power : -1;
     Actions.kick(p, type, power, pad.x, pad.y, 1);
+    Actions.passPower = -1;
     var target = Actions.lastTarget;
     // the receiver is the human's player right away (both switch modes): he goes to meet the ball
     if (follow && target && target !== otherPlayer(slot)) {
@@ -200,8 +202,9 @@
       var ball = World.ball;
       if (slot.lockT > 0) slot.lockT -= dt;
 
-      // hold CANCEL alone for a second: game menu (remote / keyboard; a gamepad has Start for that)
-      if (pad.cur === NS.BTN.CANCEL) {
+      // hold CANCEL alone for a second without the ball: game menu (with the ball CANCEL is a shot being charged;
+      // + / Start opens the menu at any time)
+      if (pad.cur === NS.BTN.CANCEL && ball.owner !== p) {
         pad.menuT += dt;
         if (pad.menuT > MENU_HOLD && !pad.menuFired) {
           pad.menuFired = true;
@@ -255,9 +258,9 @@
           if (!has) {
             endEvent(slot);
           } else {
-            mv = B.resolve(1, slot.evMask, slot.evT);
+            mv = B.resolve(1, slot.evMask);
             slot.chargeMove = mv;
-            slot.chargeFrac = slot.evT > 0.06 ? Math.min(1, slot.evT / FULL_CHARGE) : -1;
+            slot.chargeFrac = mv >= 0 && slot.evT > 0.06 ? Math.min(1, slot.evT / FULL_CHARGE) : -1;
             if (ended) {
               if (mv >= 0) fireAttack(slot, p, mv, slot.evT, pad);
               endEvent(slot);
@@ -266,7 +269,7 @@
             }
           }
         } else if (slot.evCtx === 3) {
-          mv = B.resolve(1, slot.evMask, slot.evT);
+          mv = B.resolve(1, slot.evMask);
           if (mv < 0) mv = I_LOW;
           slot.chargeMove = mv;
           slot.chargeFrac = slot.evT > 0.06 ? Math.min(1, slot.evT / FULL_CHARGE) : -1;
@@ -286,7 +289,7 @@
           endEvent(slot);
         } else {
           if (slot.evSettle <= 0 || ended) {
-            mv = B.resolve(2, slot.evMask, slot.evT);
+            mv = B.resolve(2, slot.evMask);
             if (mv !== slot.evMove) {
               slot.evMove = mv;
               if (mv >= 0 && B.MOVES[mv].kind === 0) {
@@ -322,7 +325,7 @@
       var sprint = B.sprintDown(pad.cur) && p.stamina > 8;
       var dribbling = has && sprint;
       var burst = slot.burstT > 0;
-      var charging = slot.evActive && slot.evCtx === 1 && slot.evT > 0.06;
+      var charging = slot.evActive && slot.evCtx === 1 && slot.chargeMove >= 0 && slot.evT > 0.06; // not plain sprint
       var speed;
       var drain = 0;
       if (has) {

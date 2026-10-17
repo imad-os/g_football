@@ -971,7 +971,7 @@
     var gen = el('div', 'panel-card');
     gen.appendChild(el('div', 'tag amber', T('help.general')));
     var gl = el('ul', 'help-list');
-    ['help.a1', 'help.a7', 'help.d4', 'help.g1', 'help.g2', 'help.g3'].forEach(function (k) { gl.appendChild(el('li', null, T(k))); });
+    ['help.hold', 'help.a1', 'help.a7', 'help.d4', 'help.g1', 'help.g2', 'help.g3'].forEach(function (k) { gl.appendChild(el('li', null, T(k))); });
     gen.appendChild(gl);
     refs.helpCols.appendChild(gen);
   }
@@ -1075,7 +1075,7 @@
     refs.capLive.textContent = T('map.waiting');
     refs.capture.classList.remove('hidden');
     refs.mapMsg.textContent = '';
-    NS.Mapper.start(function (mask, tier) {
+    NS.Mapper.start(function (mask) {
       var msg;
       var pad = B.isPadMask(mask);
       if (!mask) {
@@ -1084,7 +1084,7 @@
         B.setSprint(mask);
         msg = T('mv.sprint') + ' (' + T(pad ? 'map.pad' : 'map.kb') + ') = ' + B.maskLabel(mask);
       } else {
-        var cleared = B.set(idx, mask, tier);
+        var cleared = B.set(idx, mask);
         msg = T('mv.' + B.MOVES[idx].id) + ' (' + T(pad ? 'map.pad' : 'map.kb') + ') = ' + B.bindingLabel(idx, pad) +
           (cleared >= 0 ? '   (' + T('mv.' + B.MOVES[cleared].id) + ': ' + T('map.conflict') + ')' : '');
       }

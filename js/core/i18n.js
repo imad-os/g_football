@@ -543,6 +543,33 @@
     'comp.results': 'آخر النتائج'
   });
 
+
+  // v1.7.1: one button per move, holding = power
+  Object.assign(D.en, {
+    'hud.hint': 'OK: pass / tackle • CANCEL: shoot / switch • hold a pass or shot button for more power • your buttons: Settings > Button mapping',
+    'help.hold': 'Every move has its own button. Hold a pass or shot button longer for more power; press and team press last while held.',
+    'map.sub': 'Pick an action, then press the real button. A gamepad button (A B X Y, L R, ZL ZR, L3 R3) sets the PAD side, the remote or keyboard sets the TV / KB side. Two buttons together = a combination. Holding does not matter here: in the game it gives power to passes and shots.',
+    'map.prompt': 'Press the button (or two together) now.'
+  });
+  Object.assign(D.fr, {
+    'hud.hint': 'OK : passe / tacle • CANCEL : tir / changer • maintenez un bouton de passe ou de tir pour plus de puissance • vos boutons : Reglages > Boutons',
+    'help.hold': 'Chaque action a son bouton. Maintenez un bouton de passe ou de tir pour plus de puissance ; le pressing dure tant que le bouton est maintenu.',
+    'map.sub': 'Choisissez une action puis appuyez sur le vrai bouton. Un bouton de manette (A B X Y, L R, ZL ZR, L3 R3) regle le cote MANETTE, la telecommande ou le clavier le cote TV / CLAVIER. Deux boutons ensemble = combinaison. La duree ne compte pas ici : en jeu elle donne la puissance.',
+    'map.prompt': 'Appuyez sur le bouton (ou deux ensemble) maintenant.'
+  });
+  Object.assign(D.es, {
+    'hud.hint': 'OK: pase / entrada • CANCEL: tiro / cambiar • mantén un boton de pase o tiro para mas potencia • tus botones: Ajustes > Botones',
+    'help.hold': 'Cada accion tiene su boton. Mantén un boton de pase o tiro para mas potencia; la presion dura mientras lo mantienes.',
+    'map.sub': 'Elige una accion y pulsa el boton real. Un boton del mando (A B X Y, L R, ZL ZR, L3 R3) ajusta el lado MANDO, el mando de la TV o el teclado el lado TV / TECL. Dos botones juntos = combinacion. Mantener no importa aqui: en el juego da potencia.',
+    'map.prompt': 'Pulsa el boton (o dos juntos) ahora.'
+  });
+  Object.assign(D.ar, {
+    'hud.hint': 'OK: تمريرة / تدخل • CANCEL: تسديدة / تبديل • أبقِ زر التمرير أو التسديد للمزيد من القوة • أزرارك: الإعدادات > الأزرار',
+    'help.hold': 'لكل حركة زرها. أبقِ زر التمرير أو التسديد مدة أطول لقوة أكبر؛ والضغط يستمر ما دام الزر مضغوطًا.',
+    'map.sub': 'اختر حركة ثم اضغط الزر الحقيقي. زر ذراع اللعب يضبط جانب الذراع، والريموت أو لوحة المفاتيح يضبطان جانب التلفاز. زران معًا = تركيبة. مدة الضغط لا تهم هنا: في اللعب تعطي القوة.',
+    'map.prompt': 'اضغط الزر (أو زرين معًا) الآن.'
+  });
+
   var lang = 'en';
 
   NS.I18n = {

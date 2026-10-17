@@ -27,6 +27,7 @@
 
   var Actions = {
     lastTarget: null, // receiver of the last pass (so the cursor can follow it)
+    passPower: -1,    // 0..1 from a human's hold time (-1 = normal pace, the CPU)
 
     // Assisted pass: the team-mate nearest to where the ball is aimed (stick direction, or facing without input),
     // at a distance that suits the pass type (short / through / long), not marked tight, with a free lane.
@@ -249,6 +250,12 @@
         vy = 0.6;
         // the receiver comes towards the ball to meet it
         if (mate) { mate.runToX = tx - (dx / d) * 1.5; mate.runToZ = tz - (dz / d) * 1.5; mate.runToT = Math.min(1.0, d / speed + 0.2); }
+      }
+      // a human held the pass button: a tap is the normal pace, a full hold ~35% firmer (a long ball flies flatter)
+      if (this.passPower > 0) {
+        var pw = 1 + this.passPower * 0.35;
+        speed *= pw;
+        if (type === ACT.LONG) vy /= pw;
       }
       ball.vel.set(Math.sin(angle) * speed, vy, Math.cos(angle) * speed);
       ball.receiver = mate || null;

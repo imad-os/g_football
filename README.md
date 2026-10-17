@@ -18,33 +18,37 @@ The **+** button (Start) presses the main button of each menu screen: next, kick
 
 ## Controls
 
-Every move has two bindings: **TV / KB** (remote, keyboard, touch pad, phone) and **PAD** (a gamepad, every physical button: A B X Y by position, L R, ZL ZR, L3 R3; read directly with `navigator.getGamepads()` like the other g_ games, shown with the controller's own names (Nintendo, Xbox, PlayStation); until a real press is seen the gamepad uses My PC's OK / RUN / CANCEL and the TV / KB side). Detection cancels itself after 5 s without a press; no button cancels it. Gamepad defaults (PES style): A pass, Y through, B long, X shoot, ZR + X curve, L + X chip, L + A one-two, R sprint; without the ball A press, B tackle, X slide, Y team press, L switch.
+Every move has **its own button** (or a two-button combination), on two sides: **TV / KB** (remote, keyboard, touch pad,
+phone: My PC's OK, RUN, CANCEL) and **PAD** (a gamepad, every physical button A B X Y, L R, ZL ZR, L3 R3, read directly and
+shown with the controller's own names). There are no tap / hold gestures: **holding a button never changes the move**, it only
+changes how it is played:
 
-On the remote / keyboard side My PC hands games abstract buttons: **OK** (gamepad A, Enter, Space, Z), **RUN** (X / Y / Shift) and **CANCEL** (Backspace; gamepad B sends RUN + CANCEL together), plus the arrows. So every move is bound to a detected button or a two-button
-combination **plus a gesture**: tap, hold, hold+ or long hold. Open **Settings > Button mapping** (also reachable from Controls), pick a move, then press the real button
-on your controller or keyboard: it is detected and saved (per My PC profile). Defaults work with a TV remote (arrows + OK) for the core moves.
+* passes (low, through, long): the longer the hold, the firmer the pass (up to about 35% more pace; a long ball flies flatter)
+* shots (shoot, curve, chip): a tap is a soft placed shot, about 0.7 s is full power (the power bar shows it)
+* press and team press: active as long as the button is held
+* tackle, slide tackle, switch player: happen the moment the button is pressed
 
-| Move | Default |
-|---|---|
-| **Sprint / dribble** (with the ball: tighter control, harder to tackle) | RUN (hold) |
-| **Low pass** | OK tap |
-| **Through pass** | OK hold |
-| **Long pass** (lob / cross) | OK hold+ |
-| **Shoot** (power grows with the hold) | OK long hold |
-| **Curve shot** | CANCEL + OK tap |
-| **Chip shot** (lob over the keeper) | CANCEL + OK long hold |
-| **One-two** (wall pass, the receiver plays it back) | CANCEL tap |
-| **Tackle** | OK tap (without the ball, near the carrier) |
-| **Slide tackle** | CANCEL + OK tap |
-| **Press** | OK hold |
-| **Team press** (team-mates close in too) | OK long hold |
-| **Switch player** | CANCEL tap (or OK tap when no tackle is possible) |
-| Sprint burst | double-tap a direction |
-| Game menu | TV remote Back (My PC menu: game plan, settings, restart...), hold CANCEL alone, or Start |
+| Move | TV / KB | PAD |
+|---|---|---|
+| **Sprint / dribble** | RUN (hold) | R (hold) |
+| **Low pass** | OK | A |
+| **Through pass** | OK + CANCEL | Y |
+| **Long pass** (lob / cross) | RUN + OK | B |
+| **Shoot** | CANCEL | X |
+| **Curve shot** | (not set) | ZR + X |
+| **Chip shot** | RUN + OK + CANCEL | L + X |
+| **One-two** | (not set) | L + A |
+| **Tackle** | OK | B |
+| **Slide tackle** | OK + CANCEL | X |
+| **Press** | RUN + OK (hold) | A (hold) |
+| **Team press** | RUN + OK + CANCEL (hold) | Y (hold) |
+| **Switch player** | CANCEL | L |
+| Sprint burst | double-tap a direction | double-tap a direction |
+| Game menu | + / Start, or hold CANCEL alone without the ball | Start |
 
-The player you control has an arrow over his head pointing down at him: **light blue for P1, light red for P2**, with a dark
-border (same colours on the player plates and the radar). The arrow **blinks yellow while your player is receiving a pass**:
-the receive assist is running him to the ball.
+With the TV remote alone (arrows + OK) you can pass and tackle. **Settings > Button mapping**: pick a move, press the real
+button (or two together); it is saved per My PC profile. Button maps saved by older versions (with tap / hold gestures) are reset
+to these defaults once.
 
 **Settings > Player switch**: `AUTO` follows the ball, `MANUAL` only changes with the switch button when your team does not have the ball.
 In both modes the pass receiver is selected as soon as the pass is played and a team-mate who gets the ball is selected at once:

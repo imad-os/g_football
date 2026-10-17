@@ -1,7 +1,7 @@
 /* Button capture for the mapping screen. It listens to the real presses My PC delivers: every gamepad button by name
  * (A B X Y L R ZL ZR L3 R3, My PC API level 9) and OK / RUN / CANCEL from the remote, keyboard, touch pad or phone.
- * The player presses the button (or two buttons together) and holds it for as long as the gesture needs; the result is
- * the button combination plus the gesture tier from how long it was held.
+ * The player presses the button (or two buttons together); the result is the button combination (how long it was held
+ * does not matter: holding only changes the power of a pass / shot or keeps a press going).
  * No button cancels a capture (any button may be the one to map): it ends by itself after TIMEOUT seconds without a press. */
 (function (NS) {
   'use strict';
@@ -32,7 +32,7 @@
     cbDone = null;
     cbLive = null;
     cbTick = null;
-    if (cb) cb(mask, mask ? NS.Bindings.tierOf(dur) : 0);
+    if (cb) cb(mask);
   }
 
   // one-second countdown while nothing is pressed; at 0 the capture gives up
@@ -50,7 +50,7 @@
     TIMEOUT: TIMEOUT,
     active: function () { return on; },
 
-    // onDone(mask, tier) (mask 0 = nothing detected in time), onLive(mask) while buttons are down, onTick(secondsLeft).
+    // onDone(mask) (mask 0 = nothing detected in time), onLive(mask) while buttons are down, onTick(secondsLeft).
     start: function (onDone, onLive, onTick) {
       on = true;
       held = 0;
