@@ -28,10 +28,10 @@ Nintendo by position). There are no tap / hold gestures: **holding a button neve
 
 * the power bar fills in about 0.75 s
 * passes (low, through, long): the longer the hold, the firmer the pass (up to about 35% more pace; a long ball flies flatter)
-* **shoot** (FC style): the power bar is the strike power, with a fixed maximum. More power = a faster ball **and** a
-  steeper launch, whatever the distance, so the height at the goal comes from the distance: from the penalty spot about
-  half the bar is chest high, ~80% hits the bar and a full bar flies over; from 25 m about 65% is right; from further
-  out you need more. A tap is a soft ground shot. The stick picks the side (without it: the far side from the keeper).
+* **shoot**: the power bar sets the height where the ball crosses the goal line, from anywhere: 0-10% along the ground,
+  11% just off the grass, 30% waist high, 40% chest high, 50% the crossbar, more = over the bar into the stands. The pace
+  builds up over the first half of the bar (full pace from 50%). A ground shot from far out dies on the grass. The stick
+  picks the side (without it: the far side from the keeper).
 * curve and chip shots: a tap is a soft one, about 0.4 s is full power
 * press and team press: active as long as the button is held
 * tackle, slide tackle, switch player: happen the moment the button is pressed
@@ -74,12 +74,12 @@ player's arrow blinks yellow until somebody has the ball.
 shot (the button must be down when the ball arrives). Only the player closest to the ball can head it. CPU players head
 clearances and chances; your team-mates never head for you.
 
-**Shots** follow the gauge above (speed 18 to 48). Aimed shots bend a little, hard-struck shots wobble, a streak follows the
+**Shots** follow the gauge above (speed 22 to 48). Aimed shots bend a little, hard-struck shots wobble, a streak follows the
 ball. A hard shot that hits an outfield player is blocked and deflects; nobody but the keeper can simply collect it.
 
 **The CPU shoots like a player**: it weighs 12 targets (4 across the goal, low / chest high / top corner) by how far the keeper
-has to go, defenders in the line of the shot and the distance (low only close in, struck higher from range), then works out the power that
-puts it at that height from where it stands (like a good player would). About 1.5 to 2.5 goals per CPU vs CPU match, keepers dive about 7 times a match.
+has to go, defenders in the line of the shot and the distance (low only close in, struck higher from range), then presses the gauge for that
+height. About 3 goals per CPU vs CPU match, keepers dive about 7 times a match.
 
 **Fouls**: a tackle (standing or sliding) that goes through the carrier from behind is a foul; from the side or the front it
 is fair. Play stops, the referee whistles: a **free kick** where it happened (opponents 8 m away, no tackling until it is
