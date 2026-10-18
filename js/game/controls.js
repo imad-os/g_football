@@ -28,7 +28,7 @@
   var I_TEAM = B.index('teampress');
   var I_SWITCH = B.index('switch');
 
-  var FULL_CHARGE = 1.28;
+  var FULL_CHARGE = 0.75; // seconds to fill the power bar (shot gauge, pass power)
 
   function otherPlayer(slot) {
     var o = World.slots[1 - slot.idx];
@@ -66,9 +66,9 @@
     slot.teamPress = false;
   }
 
-  // power 0..1 from the hold time (a tap is a soft, placed shot; about 0.7 s = full power)
+  // power 0..1 from the hold time for curve / chip shots (a tap is a soft one; about 0.4 s = full power)
   function holdPower(d) {
-    var v = 0.35 + d * 0.95;
+    var v = 0.35 + d * 1.6;
     return v > 1 ? 1 : v;
   }
 

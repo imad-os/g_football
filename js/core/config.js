@@ -2,7 +2,7 @@
 (function (NS) {
   'use strict';
 
-  NS.VERSION = '1.9.1';
+  NS.VERSION = '1.9.2';
 
   // Pitch geometry (world units; x = length, z = width, y = up)
   // The pitch is 20% bigger than the original 92 x 56 (PITCH_SCALE also scales the formations).

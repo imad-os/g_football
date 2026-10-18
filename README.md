@@ -26,12 +26,13 @@ Every move has **its own button** (or a two-button combination). **One map is sh
 controller**, since they all use the same standard button positions (shown with your controller's own names: Xbox, PlayStation,
 Nintendo by position). There are no tap / hold gestures: **holding a button never changes the move**, only how it is played:
 
+* the power bar fills in about 0.75 s
 * passes (low, through, long): the longer the hold, the firmer the pass (up to about 35% more pace; a long ball flies flatter)
 * **shoot** (FC style): the power bar is the strike power, with a fixed maximum. More power = a faster ball **and** a
   steeper launch, whatever the distance, so the height at the goal comes from the distance: from the penalty spot about
   half the bar is chest high, ~80% hits the bar and a full bar flies over; from 25 m about 65% is right; from further
   out you need more. A tap is a soft ground shot. The stick picks the side (without it: the far side from the keeper).
-* curve and chip shots: a tap is a soft one, about 0.7 s is full power
+* curve and chip shots: a tap is a soft one, about 0.4 s is full power
 * press and team press: active as long as the button is held
 * tackle, slide tackle, switch player: happen the moment the button is pressed
 
