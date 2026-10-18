@@ -1,6 +1,6 @@
 # Real Soccer 6 (My PC game)
 
-3D 7-a-side football for **My PC** (Samsung Smart TV 2024+, browsers and phones). 1P vs CPU, 1P vs 2P, co-op vs CPU or CPU vs CPU.
+3D 7-a-side football for **My PC** (Samsung Smart TV 2024+ and browsers), played with game controllers and phone controllers. 1P vs CPU, 1P vs 2P, co-op vs CPU or CPU vs CPU.
 Static site, no build step. Plug it into the My PC App Store with the address `https://imad-os.github.io/g_football/`.
 
 ## Game modes
@@ -18,37 +18,39 @@ The **+** button (Start) presses the main button of each menu screen: next, kick
 
 ## Controls
 
-Every move has **its own button** (or a two-button combination), on two sides: **TV / KB** (remote, keyboard, touch pad,
-phone: My PC's OK, RUN, CANCEL) and **PAD** (a gamepad, every physical button A B X Y, L R, ZL ZR, L3 R3, read directly and
-shown with the controller's own names). There are no tap / hold gestures: **holding a button never changes the move**, it only
-changes how it is played:
+Matches are played with **game controllers and phone controllers only** (a phone in My PC's Buttons mode is a real gamepad).
+Player 1 is the first controller connected, player 2 the second. Movement: the left stick (analog, any direction) or the
+D-pad. The TV remote and the keyboard only drive the menus; there is no on-screen touch pad (`"touch": false`).
+
+Every move has **its own button** (or a two-button combination). **One map is shared by every controller and phone
+controller**, since they all use the same standard button positions (shown with your controller's own names: Xbox, PlayStation,
+Nintendo by position). There are no tap / hold gestures: **holding a button never changes the move**, only how it is played:
 
 * passes (low, through, long): the longer the hold, the firmer the pass (up to about 35% more pace; a long ball flies flatter)
 * shots (shoot, curve, chip): a tap is a soft placed shot, about 0.7 s is full power (the power bar shows it)
 * press and team press: active as long as the button is held
 * tackle, slide tackle, switch player: happen the moment the button is pressed
 
-| Move | TV / KB | PAD |
-|---|---|---|
-| **Sprint / dribble** | RUN (hold) | R (hold) |
-| **Low pass** | OK | A |
-| **Through pass** | OK + CANCEL | Y |
-| **Long pass** (lob / cross) | RUN + OK | B |
-| **Shoot** | CANCEL | X |
-| **Curve shot** | (not set) | ZR + X |
-| **Chip shot** | RUN + OK + CANCEL | L + X |
-| **One-two** | (not set) | L + A |
-| **Tackle** | OK | B |
-| **Slide tackle** | OK + CANCEL | X |
-| **Press** | RUN + OK (hold) | A (hold) |
-| **Team press** | RUN + OK + CANCEL (hold) | Y (hold) |
-| **Switch player** | CANCEL | L |
-| Sprint burst | double-tap a direction | double-tap a direction |
-| Game menu | + / Start, or hold CANCEL alone without the ball | Start |
+| Move | Button (Xbox names; standard positions) |
+|---|---|
+| **Sprint / dribble** | RB (hold) |
+| **Low pass** | A |
+| **Through pass** | Y |
+| **Long pass** (lob / cross) | B |
+| **Shoot** | X |
+| **Curve shot** | RT + X |
+| **Chip shot** | LB + X |
+| **One-two** | LB + A |
+| **Tackle** | B |
+| **Slide tackle** | X |
+| **Press** | A (hold) |
+| **Team press** | Y (hold) |
+| **Switch player** | LB |
+| Sprint burst | double-tap a direction |
+| Game menu | Start (+ on a phone controller) |
 
-With the TV remote alone (arrows + OK) you can pass and tackle. **Settings > Button mapping**: pick a move, press the real
-button (or two together); it is saved per My PC profile. Button maps saved by older versions (with tap / hold gestures) are reset
-to these defaults once.
+**Settings > Button mapping**: pick a move and press the button (or two together) on any controller; the map is saved per My PC
+profile and used by all controllers. Maps saved by older versions keep their gamepad buttons.
 
 **Settings > Player switch**: `AUTO` follows the ball, `MANUAL` only changes with the switch button when your team does not have the ball.
 In both modes the pass receiver is selected as soon as the pass is played and a team-mate who gets the ball is selected at once:
@@ -74,7 +76,7 @@ shots bend a little, full-power shots wobble, and a streak follows the ball.
 **Goalkeepers** read the shot with the ball physics and **dive** to where it crosses the line, catching it at full stretch or
 pushing it away when it is too hard; shots straight at them are nearly always kept out, the corners are hard. The keeper catches (hands) shots and balls played by the opponents inside his penalty area; a pass from a
 team-mate must be played with the feet. A keeper may hold the ball 5 seconds at most: after that it is kicked long anyway.
-Player 2: second keyboard (W A S D + F G) or a second gamepad.
+Player 2: the second controller or phone controller connected.
 
 ## CPU football brain (js/game/ai.js)
 
@@ -137,7 +139,7 @@ mypc-app.json         My PC manifest (id, scores, owner config, touch pad button
 css/style.css         plain CSS, no framework, no CDN
 vendor/three.min.js   three.js r128 (MIT), self-hosted
 vendor/zzfx.js        ZzFX sound generator (MIT), self-hosted
-js/core/              config (constants + settings schema), i18n (en fr es ar), bindings (button map), gamepad (real controller buttons), audio, storage (MyPC.save/load), input (MyPC onInput), quality
+js/core/              config (constants + settings schema), i18n (en fr es ar), bindings (button map), gamepad (MyPC.gamepad), audio, storage (MyPC.save/load), input (per-player controller state), quality
 js/data/              teams (110 clubs and nations), formations
 js/render/            assets (procedural kits and players), scene (three.js scene, camera, stadium)
 js/game/              world (state + ball physics), actions (kicks, tackle), ai (CPU), controls (human), match (flow + fixed step), comp (league / cup / world cup)
@@ -147,10 +149,11 @@ js/main.js            My PC lifecycle (init / ready / start / pause / resume / d
 
 ## My PC notes
 
-* Input only comes from `MyPC.init({ onInput })`; there are no `keydown` listeners. Menus are navigated with arrows + OK, Back/cancel goes back.
+* Matches: controllers through `MyPC.gamepad` (buttons, sticks, pad list; never `navigator.getGamepads()` ourselves). Menus: `MyPC.init({ onInput })` actions (arrows + OK, cancel goes back). No `keydown` listeners.
+* The guide asks for play with the TV remote alone; this game is deliberately controller-only in matches (owner's choice), the menus still work with the remote.
 * Saves: `MyPC.save/load` (`stats`, `settings`, `bindings`). Score: `MyPC.submitScore` at full time of a match with a human player.
 * Owner config (`MyPC.app_config`, defaults in `mypc-app.json` `config`): `difficulty`, `durationMins`, `gameSpeed`, `switchMode`, `cameraMode`, `ballSkin`, `crowdChants`, `quality`, `soundEnabled`, `showRadar`, `showFPS`.
-* Touch: My PC draws the pad (`OK`, `RUN`, `SW`); no own pad.
+* Touch: no on-screen pad (`"touch": false`): phones are used as phone controllers (Buttons mode).
 * Fixed 60 Hz step, no allocation in the update loop, DOM written only when a value changes, one `AudioContext` closed in `onDestroy`.
 
 ## Release

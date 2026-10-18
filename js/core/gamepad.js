@@ -1,109 +1,98 @@
-/* Real game controller buttons (navigator.getGamepads), like the other g_ games (g_rpg js/gamepad.js):
- * every physical button reaches the game by itself, so A B X Y, L R, ZL ZR, L3 R3 can each be mapped.
- * `live` turns true only after a real press was seen here; until then (or when the page cannot see the controller)
- * nothing changes and gamepads keep working through My PC's OK / RUN / CANCEL actions.
- * Start / Select / Home stay My PC's (pause menu). Opened directly in a browser (no My PC), this module also gives the
- * controller its directions and menu buttons, since there is nobody else to read it.
- * Polled once per frame from the main loop; no allocation of our own (the browser's pad list is its own). */
+/* Game controllers: the only way to play a match. Physical gamepads and phone controllers (a phone in Buttons mode is a
+ * standard gamepad for My PC, device pad101 / pad102) are read through MyPC.gamepad (API level 9): every button by its
+ * standard index, both sticks, the list of connected pads. The game never calls navigator.getGamepads() itself (the SDK
+ * does, standalone too). Menus keep using My PC's actions (onInput), which every controller also sends.
+ *
+ * Player 1 is the first connected controller, player 2 the second (pads, then phones, in My PC's order).
+ * Event-driven (no polling); the handlers only update numbers, no allocation of our own.
+ */
 (function (NS) {
   'use strict';
 
-  // W3C standard mapping index -> our button name (same bits as NS.Bindings)
-  var RAW = ['a', 'b', 'x', 'y', 'l', 'r', 'zl', 'zr', '', '', 'l3', 'r3'];
+  // standard button index -> our button bit (the same bits as NS.Bindings); 0 = not a move button
+  var BIT = [8, 16, 32, 64, 128, 256, 512, 1024, 0, 0, 2048, 4096];
+  // display names of the standard indices on each family of controller (Switch: by position, B is the bottom button)
   var NAMES = {
     xbox: ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'View', 'Menu', 'L3', 'R3'],
     ps: ['✕', '○', '□', '△', 'L1', 'R1', 'L2', 'R2', 'Create', 'Options', 'L3', 'R3'],
     nintendo: ['B', 'A', 'Y', 'X', 'L', 'R', 'ZL', 'ZR', '−', '+', 'L3', 'R3'],
     generic: ['A', 'B', 'X', 'Y', 'L', 'R', 'ZL', 'ZR', 'Select', 'Start', 'L3', 'R3']
   };
-  var DEV = ['pad0', 'pad1', 'pad2', 'pad3'];
-  var DIRS = ['up', 'down', 'left', 'right'];
+  var DEAD = 0.22; // stick dead zone
 
+  var order = [];        // connected devices in player order ('pad0', 'pad101'...)
   var kind = 'generic';
-  var live = false;
-  var standalone = false;
-  var prev = [[], [], [], []];      // per pad: button index -> pressed
-  var prevDir = [[false, false, false, false], [false, false, false, false], [false, false, false, false], [false, false, false, false]];
+  var dpad = [[0, 0, 0, 0], [0, 0, 0, 0]]; // per player: up down left right held
+  var stick = [[0, 0], [0, 0]];
 
-  function kindOf(id) {
-    id = String(id || '').toLowerCase();
+  function kindOf(name) {
+    var id = String(name || '').toLowerCase();
     if (/xbox|xinput|045e/.test(id)) return 'xbox';
-    if (/playstation|dualshock|dualsense|054c/.test(id)) return 'ps';
+    if (/playstation|dualshock|dualsense|054c|wireless controller/.test(id)) return 'ps';
     if (/nintendo|switch|pro controller|joy-con|057e/.test(id)) return 'nintendo';
-    if (/wireless controller/.test(id)) return 'ps';
     return 'generic';
   }
 
-  function list() {
-    try { return navigator.getGamepads ? navigator.getGamepads() : null; } catch (e) { return null; }
+  // 0 = player 1, 1 = player 2, -1 = a third / fourth controller (not used in a match)
+  function playerOf(dev) {
+    var i = order.indexOf(dev);
+    if (i < 0) { order.push(dev); i = order.length - 1; } // a press can arrive before the pad list
+    return i < 2 ? i : -1;
   }
 
-  function down(g, i) {
-    var b = g.buttons[i];
-    return !!(b && (b.pressed || b.value > 0.5));
+  // stick + D-pad of one player -> his direction
+  function push(n) {
+    var d = dpad[n];
+    var x = stick[n][0], y = stick[n][1];
+    if (d[2] || d[3] || d[0] || d[1]) { x = (d[3] ? 1 : 0) - (d[2] ? 1 : 0); y = (d[1] ? 1 : 0) - (d[0] ? 1 : 0); }
+    NS.Input.direction(n, x, y);
   }
 
-  function dir(pd, k, on, dev) {
-    if (on !== pd[k]) { pd[k] = on; NS.App.input(DIRS[k], on, false, dev); }
+  function onButton(i, pressed, value, dev) {
+    var n = playerOf(dev);
+    if (n < 0) return;
+    if (i >= 12 && i <= 15) { dpad[n][i - 12] = pressed ? 1 : 0; push(n); return; }
+    var bit = i < BIT.length ? BIT[i] : 0;
+    if (!bit) return; // Start / Select / Home: menus (My PC sends 'menu')
+    if (NS.Mapper && NS.Mapper.active()) { NS.Mapper.button(bit, pressed); return; }
+    NS.Input.button(n, bit, pressed);
   }
 
-  // standalone only: directions (D-pad or left stick) and menu buttons, since no My PC reads the controller
-  function standaloneExtras(g, n, dev) {
-    var ax = g.axes[0] || 0, ay = g.axes[1] || 0;
-    var d0 = down(g, 12) || ay < -0.5, d1 = down(g, 13) || ay > 0.5, d2 = down(g, 14) || ax < -0.5, d3 = down(g, 15) || ax > 0.5;
-    var pd = prevDir[n];
-    dir(pd, 0, d0, dev);
-    dir(pd, 1, d1, dev);
-    dir(pd, 2, d2, dev);
-    dir(pd, 3, d3, dev);
-    var p = prev[n];
-    if (down(g, 9) && !p[9]) MyPC.pause();
-    p[9] = down(g, 9);
+  function onAxes(axes, dev) {
+    var n = playerOf(dev);
+    if (n < 0) return;
+    var x = axes[0] || 0, y = axes[1] || 0;
+    var m = Math.sqrt(x * x + y * y);
+    if (m < DEAD) { x = 0; y = 0; }
+    stick[n][0] = x; stick[n][1] = y;
+    push(n);
+  }
+
+  function onPads(list) {
+    order.length = 0;
+    for (var i = 0; i < list.length; i++) order.push(list[i].dev);
+    kind = list.length ? (list[0].standard ? kindOf(list[0].name) : 'generic') : 'generic';
+    if (NS.UI && NS.UI.padsChanged) NS.UI.padsChanged();
   }
 
   NS.Gamepad = {
-    init: function (isStandalone) { standalone = !!isStandalone; },
-    live: function () { return live; },
+    init: function () {
+      var g = MyPC.gamepad;
+      if (!g || !g.on) return;
+      g.on('button', onButton);
+      g.on('axes', onAxes);
+      g.on('pads', onPads);
+      onPads(g.pads());
+    },
+    // a controller (or phone controller) is connected
+    live: function () { return order.length > 0; },
+    count: function () { return order.length; },
     kind: function () { return kind; },
     // display name of a standard button index on this controller (L / ZL on Nintendo, LB / LT on Xbox...)
     label: function (index) { return NAMES[kind][index] || ('#' + (index + 1)); },
-
-    poll: function () {
-      var pads = list();
-      if (!pads) return;
-      for (var n = 0; n < pads.length && n < 4; n++) {
-        var g = pads[n];
-        if (!g || !g.connected) continue;
-        var p = prev[n];
-        var dev = DEV[n];
-        var mapped = g.mapping === 'standard';
-        for (var i = 0; i < RAW.length && i < g.buttons.length; i++) {
-          if (!RAW[i]) continue;
-          var d = down(g, i);
-          if (d === !!p[i]) continue;
-          p[i] = d;
-          if (d && !live) {
-            live = true;
-            kind = mapped ? kindOf(g.id) : 'generic';
-            NS.Input.setRaw(true);
-          }
-          NS.Input.button(RAW[i], d, dev);
-          // standalone: A / B also drive the menus (hosted, My PC sends confirm / cancel itself)
-          if (standalone && (i === 0 || i === 1)) NS.App.input(i === 0 ? 'confirm' : 'cancel', d, false, dev);
-        }
-        if (standalone) standaloneExtras(g, n, dev);
-      }
-    },
-
-    // after a pause: buttons still held must be released and pressed again to count
-    resync: function () {
-      var pads = list();
-      if (!pads) return;
-      for (var n = 0; n < pads.length && n < 4; n++) {
-        var g = pads[n];
-        if (!g || !g.connected) continue;
-        for (var i = 0; i < RAW.length && i < g.buttons.length; i++) prev[n][i] = down(g, i);
-      }
+    // after a pause: every held direction is let go (My PC releases the buttons itself)
+    reset: function () {
+      for (var n = 0; n < 2; n++) { dpad[n][0] = dpad[n][1] = dpad[n][2] = dpad[n][3] = 0; stick[n][0] = stick[n][1] = 0; push(n); }
     }
   };
 })(window.RS6 = window.RS6 || {});

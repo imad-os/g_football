@@ -1,5 +1,5 @@
-/* Button capture for the mapping screen. It listens to the real presses My PC delivers: every gamepad button by name
- * (A B X Y L R ZL ZR L3 R3, My PC API level 9) and OK / RUN / CANCEL from the remote, keyboard, touch pad or phone.
+/* Button capture for the mapping screen. It listens to the controller buttons (js/core/gamepad.js: every button of a
+ * game controller or a phone controller, by its standard position), so one map works for all of them.
  * The player presses the button (or two buttons together); the result is the button combination (how long it was held
  * does not matter: holding only changes the power of a pass / shot or keeps a press going).
  * No button cancels a capture (any button may be the one to map): it ends by itself after TIMEOUT seconds without a press. */

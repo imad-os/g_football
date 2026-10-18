@@ -29,7 +29,6 @@
     var elapsed = ts - last;
     last = ts;
     if (elapsed > 250) elapsed = 250;
-    NS.Gamepad.poll(); // real controller buttons (A B X Y, L R, ZL ZR...)
     var m = World.match;
 
     if (m.running) {
@@ -71,9 +70,9 @@
   }
 
   NS.App = {
-    // every action (My PC's onInput, or the controller read directly when standalone)
+    // My PC's actions drive the menus only (remote, keyboard and controllers); matches are played with the controllers
+    // themselves (js/core/gamepad.js)
     input: function (action, pressed, repeat, dev) {
-      NS.Input.feed(action, pressed, repeat, dev);
       if (NS.UI.isOpen()) NS.UI.onInput(action, pressed, repeat);
       else if (action === 'menu' && pressed && !repeat) NS.Match.requestMenu();
     },
@@ -108,7 +107,7 @@
         NS.I18n.applyDom();
         MyPC.progress(0.1);
 
-        NS.Gamepad.init(info.standalone);
+        NS.Gamepad.init();
         var settings = NS.Storage.load();
         World.settings = settings;
         NS.Comp.load(); // a saved league / cup to continue
@@ -158,7 +157,7 @@
     },
 
     onResume: function () {
-      NS.Gamepad.resync();
+      NS.Gamepad.reset();
       NS.Audio.resume();
       NS.Quality.resetTimer();
       startLoop();

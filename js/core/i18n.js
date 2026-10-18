@@ -570,6 +570,38 @@
     'map.prompt': 'اضغط الزر (أو زرين معًا) الآن.'
   });
 
+
+  // v1.8: game controllers and phone controllers only, one shared button map
+  Object.assign(D.en, {
+    'hud.hint': 'A pass • Y through • B long • X shoot (hold = power) • R sprint • L switch • Start: menu • your buttons: Settings > Button mapping',
+    'map.sub': 'Pick an action, then press the button (or two together) on your game controller or phone controller. One map for all controllers. Holding does not matter here: in the game it gives power to passes and shots.',
+    'map.noraw': 'No controller connected: connect a game controller, or a phone controller (Buttons mode), to play and to map the buttons.',
+    'help.g4': 'Matches are played with a game controller or a phone controller (Buttons mode); the TV remote and the keyboard work in the menus.'
+  });
+  Object.assign(D.fr, {
+    'hud.hint': 'A passe • Y profondeur • B longue • X tir (maintenir = puissance) • R sprint • L changer • Start : menu • vos boutons : Reglages > Boutons',
+    'map.sub': 'Choisissez une action puis appuyez sur le bouton (ou deux ensemble) de votre manette ou manette telephone. Une seule configuration pour toutes les manettes. La duree ne compte pas ici : en jeu elle donne la puissance.',
+    'map.noraw': 'Aucune manette : branchez une manette ou une manette telephone (mode Boutons) pour jouer et configurer les boutons.',
+    'help.g4': 'Les matchs se jouent a la manette ou a la manette telephone (mode Boutons) ; la telecommande et le clavier servent aux menus.'
+  });
+  Object.assign(D.es, {
+    'hud.hint': 'A pase • Y al hueco • B largo • X tiro (mantener = potencia) • R sprint • L cambiar • Start: menu • tus botones: Ajustes > Botones',
+    'map.sub': 'Elige una accion y pulsa el boton (o dos juntos) de tu mando o mando de telefono. Una sola asignacion para todos los mandos. Mantener no importa aqui: en el juego da potencia.',
+    'map.noraw': 'Ningun mando conectado: conecta un mando o un mando de telefono (modo Botones) para jugar y asignar botones.',
+    'help.g4': 'Los partidos se juegan con mando o mando de telefono (modo Botones); el mando de la TV y el teclado sirven en los menus.'
+  });
+  Object.assign(D.ar, {
+    'hud.hint': 'A تمريرة • Y بينية • B طويلة • X تسديدة (الإبقاء = قوة) • R ركض • L تبديل • Start: القائمة • أزرارك: الإعدادات > الأزرار',
+    'map.sub': 'اختر حركة ثم اضغط الزر (أو زرين معًا) في ذراع اللعب أو ذراع الهاتف. تخصيص واحد لكل الأذرع. مدة الضغط لا تهم هنا: في اللعب تعطي القوة.',
+    'map.noraw': 'لا يوجد ذراع متصل: صل ذراع لعب أو ذراع الهاتف (وضع الأزرار) للعب وتخصيص الأزرار.',
+    'help.g4': 'تُلعب المباريات بذراع اللعب أو ذراع الهاتف (وضع الأزرار)؛ الريموت ولوحة المفاتيح للقوائم فقط.'
+  });
+
+  Object.assign(D.en, { 'help.g2': 'Player 2: a second game controller or phone controller (the second one connected).' });
+  Object.assign(D.fr, { 'help.g2': 'Joueur 2 : une seconde manette ou manette telephone (la deuxieme connectee).' });
+  Object.assign(D.es, { 'help.g2': 'Jugador 2: un segundo mando o mando de telefono (el segundo conectado).' });
+  Object.assign(D.ar, { 'help.g2': 'اللاعب 2: ذراع لعب ثانية أو ذراع هاتف (الثانية المتصلة).' });
+
   var lang = 'en';
 
   NS.I18n = {

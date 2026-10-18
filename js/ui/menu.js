@@ -945,7 +945,7 @@
     var B = NS.Bindings;
     var li = el('li');
     li.appendChild(el('b', null, T('mv.' + B.MOVES[idx].id) + ': '));
-    li.appendChild(document.createTextNode(B.bindingLabel(idx, false) + '   |   ' + T('map.pad') + ': ' + B.bindingLabel(idx, true)));
+    li.appendChild(document.createTextNode(B.bindingLabel(idx)));
     ul.appendChild(li);
   }
 
@@ -961,7 +961,7 @@
       if (g[1] === 1) {
         var li = el('li');
         li.appendChild(el('b', null, T('mv.sprint') + ': '));
-        li.appendChild(document.createTextNode(B.maskLabel(B.sprintMask(false)) + '   |   ' + T('map.pad') + ': ' + B.maskLabel(B.sprintMask(true))));
+        li.appendChild(document.createTextNode(B.maskLabel(B.sprintMask())));
         ul.appendChild(li);
       }
       for (var i = 0; i < B.MOVES.length; i++) if (B.MOVES[i].ctx === g[1]) helpRow(ul, i);
@@ -971,7 +971,7 @@
     var gen = el('div', 'panel-card');
     gen.appendChild(el('div', 'tag amber', T('help.general')));
     var gl = el('ul', 'help-list');
-    ['help.hold', 'help.a1', 'help.a7', 'help.d4', 'help.g1', 'help.g2', 'help.g3'].forEach(function (k) { gl.appendChild(el('li', null, T(k))); });
+    ['help.g4', 'help.hold', 'help.a1', 'help.a7', 'help.d4', 'help.g1', 'help.g2', 'help.g3'].forEach(function (k) { gl.appendChild(el('li', null, T(k))); });
     gen.appendChild(gl);
     refs.helpCols.appendChild(gen);
   }
@@ -1032,18 +1032,10 @@
     var b = btn('map-row', '', 'mv:' + idx, function () { startCapture(idx); });
     b.setAttribute('data-mv', String(idx));
     b.appendChild(el('span', 'map-name', T(sprint ? 'mv.sprint' : 'mv.' + B.MOVES[idx].id)));
-    var vals = el('span', 'map-vals');
-    var kb = sprint ? B.maskLabel(B.sprintMask(false)) : B.bindingLabel(idx, false);
-    var pad = sprint ? B.maskLabel(B.sprintMask(true)) : B.bindingLabel(idx, true);
-    var v1 = el('span', 'map-val' + (!sprint && !B.MOVES[idx].mask ? ' off' : ''));
-    v1.appendChild(el('i', 'map-dev', T('map.kb')));
-    v1.appendChild(document.createTextNode(kb));
-    var v2 = el('span', 'map-val pad' + (!sprint && !B.MOVES[idx].pmask ? ' off' : ''));
-    v2.appendChild(el('i', 'map-dev', T('map.pad')));
-    v2.appendChild(document.createTextNode(pad));
-    vals.appendChild(v1);
-    vals.appendChild(v2);
-    b.appendChild(vals);
+    // one map for every controller and phone controller
+    var v = el('span', 'map-val pad' + (!sprint && !B.MOVES[idx].mask ? ' off' : ''),
+      sprint ? B.maskLabel(B.sprintMask()) : B.bindingLabel(idx));
+    b.appendChild(v);
     return b;
   }
 
@@ -1077,15 +1069,14 @@
     refs.mapMsg.textContent = '';
     NS.Mapper.start(function (mask) {
       var msg;
-      var pad = B.isPadMask(mask);
       if (!mask) {
         msg = T('map.timeout');
       } else if (sprint) {
         B.setSprint(mask);
-        msg = T('mv.sprint') + ' (' + T(pad ? 'map.pad' : 'map.kb') + ') = ' + B.maskLabel(mask);
+        msg = T('mv.sprint') + ' = ' + B.maskLabel(mask);
       } else {
         var cleared = B.set(idx, mask);
-        msg = T('mv.' + B.MOVES[idx].id) + ' (' + T(pad ? 'map.pad' : 'map.kb') + ') = ' + B.bindingLabel(idx, pad) +
+        msg = T('mv.' + B.MOVES[idx].id) + ' = ' + B.bindingLabel(idx) +
           (cleared >= 0 ? '   (' + T('mv.' + B.MOVES[cleared].id) + ': ' + T('map.conflict') + ')' : '');
       }
       if (mask) NS.Storage.saveBindings();
@@ -1128,6 +1119,8 @@
     hide: hide,
     isOpen: function () { return open; },
     screen: function () { return current; },
+    // controllers connected / gone: the mapping screen shows the right names and the "connect a controller" note
+    padsChanged: function () { if (open && current === 'BUTTONS' && !NS.Mapper.active()) renderButtons(focused && focused.getAttribute('data-k')); },
     openPause: function () {
       World.match.paused = true;
       NS.Audio.whistle(0);

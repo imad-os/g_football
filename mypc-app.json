@@ -2,11 +2,11 @@
   "mypc": 1,
   "id": "real-soccer-6",
   "name": "Real Soccer 6",
-  "description": "3D 7-a-side football: pass, through ball, long ball, shot, dribble, tackle and press. 1P, 2P or co-op.",
+  "description": "3D 7-a-side football for game controllers and phone controllers: leagues, cups, world cup, 1P, 2P or co-op.",
   "type": "game",
   "entry": "index.html",
   "icon": "icon.svg",
-  "version": "1.7.1",
+  "version": "1.8.0",
   "scores": true,
   "config": {
     "difficulty": "NORMAL",
@@ -17,18 +17,5 @@
     "ballSkin": "CLASSIC",
     "crowdChants": true
   },
-  "touch": {
-    "buttons": [
-      { "label": "OK", "action": "ok" },
-      { "label": "RUN", "action": "run" },
-      { "label": "SW", "action": "cancel" }
-    ],
-    "catalog": [
-      { "label": "OK", "action": "ok" },
-      { "label": "RUN", "action": "run" },
-      { "label": "SW", "action": "cancel" },
-      { "label": "☰", "action": "menu" }
-    ],
-    "scale": { "stick": 1.2, "btn": 1.2 }
-  }
+  "touch": false
 }

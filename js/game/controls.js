@@ -4,8 +4,8 @@
  * combination). The buttons alone decide the move (NS.Bindings, remappable); holding never turns it into another move:
  *   with the ball     the move fires on release; the hold time is its power (passes get firmer, shots harder)
  *   without the ball  tackle / slide / switch fire on press; press and team press last while the button is held
- * Gamepad defaults (PES): A pass, Y through, B long, X shoot; without the ball A press, B tackle, X slide, Y team press,
- * L switch. TV / KB: OK pass / tackle, CANCEL shoot / switch, OK + CANCEL through / slide, RUN + OK long ball / press.
+ * Played with game controllers and phone controllers only (one shared map). Defaults (PES): A pass, Y through, B long,
+ * X shoot, R sprint; without the ball A press, B tackle, X slide, Y team press, L switch. Start = game menu.
  */
 (function (NS) {
   'use strict';
@@ -28,7 +28,6 @@
   var I_TEAM = B.index('teampress');
   var I_SWITCH = B.index('switch');
 
-  var MENU_HOLD = 1.0;
   var FULL_CHARGE = 1.28;
 
   function otherPlayer(slot) {
@@ -201,21 +200,6 @@
       if (!p) return;
       var ball = World.ball;
       if (slot.lockT > 0) slot.lockT -= dt;
-
-      // hold CANCEL alone for a second without the ball: game menu (with the ball CANCEL is a shot being charged;
-      // + / Start opens the menu at any time)
-      if (pad.cur === NS.BTN.CANCEL && ball.owner !== p) {
-        pad.menuT += dt;
-        if (pad.menuT > MENU_HOLD && !pad.menuFired) {
-          pad.menuFired = true;
-          endEvent(slot);
-          NS.Match.requestMenu();
-          return;
-        }
-      } else {
-        pad.menuT = 0;
-        pad.menuFired = false;
-      }
 
       var rel = B.relevant();
       var cur = pad.cur & rel;
