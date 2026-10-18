@@ -78,7 +78,7 @@ ball. A hard shot that hits an outfield player is blocked and deflects; nobody b
 
 **The CPU shoots like a player**: it weighs 12 targets (4 across the goal, low / chest high / top corner) by how far the keeper
 has to go, defenders in the line of the shot and the distance (low only close in, struck higher from range), then works out the power that
-puts it at that height from where it stands (like a good player would). About 2 to 3 goals per CPU vs CPU match, keepers dive about 7 times a match.
+puts it at that height from where it stands (like a good player would). About 1.5 to 2.5 goals per CPU vs CPU match, keepers dive about 7 times a match.
 
 **Fouls**: a tackle (standing or sliding) that goes through the carrier from behind is a foul; from the side or the front it
 is fair. Play stops, the referee whistles: a **free kick** where it happened (opponents 8 m away, no tackling until it is
