@@ -609,6 +609,17 @@
   Object.assign(D.es, { 'hud.foul': '¡FALTA!', 'hud.freekick': 'Tiro libre', 'hud.penalty': '¡PENALTI!', 'hud.penalty.sub': 'Falta en el area' });
   Object.assign(D.ar, { 'hud.foul': 'خطأ!', 'hud.freekick': 'ركلة حرة', 'hud.penalty': 'ضربة جزاء!', 'hud.penalty.sub': 'خطأ داخل منطقة الجزاء' });
 
+
+  // v1.10: settings tabs, power bar speed
+  Object.assign(D.en, { 'set.g.game': 'GAMEPLAY', 'set.g.video': 'GRAPHICS', 'set.g.audio': 'AUDIO',
+    'set.gauge': 'Power bar speed', 'set.gauge.h': 'How fast the shot / pass power bar fills', 'opt.vfast': 'VERY FAST' });
+  Object.assign(D.fr, { 'set.g.game': 'JEU', 'set.g.video': 'GRAPHISMES', 'set.g.audio': 'SON',
+    'set.gauge': 'Vitesse de la jauge', 'set.gauge.h': 'Vitesse de remplissage de la jauge de tir / passe', 'opt.vfast': 'TRES RAPIDE' });
+  Object.assign(D.es, { 'set.g.game': 'JUEGO', 'set.g.video': 'GRAFICOS', 'set.g.audio': 'SONIDO',
+    'set.gauge': 'Velocidad de la barra', 'set.gauge.h': 'Rapidez con la que se llena la barra de tiro / pase', 'opt.vfast': 'MUY RAPIDO' });
+  Object.assign(D.ar, { 'set.g.game': 'اللعب', 'set.g.video': 'الرسومات', 'set.g.audio': 'الصوت',
+    'set.gauge': 'سرعة شريط القوة', 'set.gauge.h': 'سرعة امتلاء شريط قوة التسديد / التمرير', 'opt.vfast': 'سريع جدًا' });
+
   var lang = 'en';
 
   NS.I18n = {

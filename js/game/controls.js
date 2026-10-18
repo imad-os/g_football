@@ -28,7 +28,8 @@
   var I_TEAM = B.index('teampress');
   var I_SWITCH = B.index('switch');
 
-  var FULL_CHARGE = 0.75; // seconds to fill the power bar (shot gauge, pass power)
+  // seconds to fill the power bar (shot gauge, pass power): Settings > Gameplay > Power bar speed
+  function fullCharge() { var t = World.settings && World.settings.gaugeTime; return t > 0 ? t : 0.5; }
 
   function otherPlayer(slot) {
     var o = World.slots[1 - slot.idx];
@@ -66,20 +67,21 @@
     slot.teamPress = false;
   }
 
-  // power 0..1 from the hold time for curve / chip shots (a tap is a soft one; about 0.4 s = full power)
+  // power 0..1 from the hold time for curve / chip shots (a tap is a soft one; full power with a full bar)
   function holdPower(d) {
-    var v = 0.35 + d * 1.6;
+    var v = 0.35 + 0.65 * d / fullCharge();
     return v > 1 ? 1 : v;
   }
 
   function fireAttack(slot, p, mi, d, pad) {
     var type;
     var follow = true;
-    var power = d / FULL_CHARGE > 1 ? 1 : d / FULL_CHARGE; // passes: a longer hold = a firmer pass
+    var full = fullCharge();
+    var power = d / full > 1 ? 1 : d / full; // passes: a longer hold = a firmer pass
     if (mi === I_LOW) type = ACT.PASS;
     else if (mi === I_THR) type = ACT.THROUGH;
     else if (mi === I_LONG) type = ACT.LONG;
-    else if (mi === I_SHOOT) { type = ACT.SHOOT; power = d / FULL_CHARGE > 1 ? 1 : d / FULL_CHARGE; follow = false; } // the gauge
+    else if (mi === I_SHOOT) { type = ACT.SHOOT; follow = false; } // the gauge (same power as the bar)
     else if (mi === I_CURVE) { type = ACT.CURVE; power = holdPower(d); follow = false; }
     else if (mi === I_CHIP) { type = ACT.CHIP; power = holdPower(d); follow = false; }
     else if (mi === I_ONETWO) { Actions.oneTwo(p, pad.x, pad.y); slot.lockT = 1.4; return; }
@@ -244,7 +246,7 @@
           } else {
             mv = B.resolve(1, slot.evMask);
             slot.chargeMove = mv;
-            slot.chargeFrac = mv >= 0 && slot.evT > 0.06 ? Math.min(1, slot.evT / FULL_CHARGE) : -1;
+            slot.chargeFrac = mv >= 0 && slot.evT > 0.06 ? Math.min(1, slot.evT / fullCharge()) : -1;
             if (ended) {
               if (mv >= 0) fireAttack(slot, p, mv, slot.evT, pad);
               endEvent(slot);
@@ -256,7 +258,7 @@
           mv = B.resolve(1, slot.evMask);
           if (mv < 0) mv = I_LOW;
           slot.chargeMove = mv;
-          slot.chargeFrac = slot.evT > 0.06 ? Math.min(1, slot.evT / FULL_CHARGE) : -1;
+          slot.chargeFrac = slot.evT > 0.06 ? Math.min(1, slot.evT / fullCharge()) : -1;
           // A header happens only while the button is down and the ball is at head height next to him. Nothing is
           // ever stored for later: released early, or the ball came to his feet = no action (press again to play).
           if (has || ball.owner) {

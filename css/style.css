@@ -302,6 +302,7 @@ h1, h2, p { margin: 0; }
 /* ------------------------------------------------------------------ v1.7 */
 /* + (Start) badge on each screen's main button */
 .map-val.pad { min-width: 5rem; text-align: right; }
+.set-tabs { margin-bottom: 0.6rem; }
 .plus-key {
   display: inline-flex; align-items: center; justify-content: center; margin-left: 0.55rem; width: 1.35rem; height: 1.35rem;
   border-radius: 50%; background: rgba(255, 255, 255, 0.92); color: #0f172a; font-weight: 900; font-size: 1rem; line-height: 1;

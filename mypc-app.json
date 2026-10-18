@@ -6,7 +6,7 @@
   "type": "game",
   "entry": "index.html",
   "icon": "icon.svg",
-  "version": "1.9.3",
+  "version": "1.10.0",
   "scores": true,
   "config": {
     "difficulty": "NORMAL",
@@ -15,7 +15,8 @@
     "switchMode": "AUTO",
     "cameraMode": "WIDE",
     "ballSkin": "CLASSIC",
-    "crowdChants": true
+    "crowdChants": true,
+    "gaugeTime": 0.5
   },
   "touch": false
 }

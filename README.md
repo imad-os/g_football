@@ -26,13 +26,13 @@ Every move has **its own button** (or a two-button combination). **One map is sh
 controller**, since they all use the same standard button positions (shown with your controller's own names: Xbox, PlayStation,
 Nintendo by position). There are no tap / hold gestures: **holding a button never changes the move**, only how it is played:
 
-* the power bar fills in about 0.75 s
+* the power bar fills in 0.5 s by default (**Settings > Gameplay > Power bar speed**: slow 1 s, normal 0.75 s, fast 0.5 s, very fast 0.35 s)
 * passes (low, through, long): the longer the hold, the firmer the pass (up to about 35% more pace; a long ball flies flatter)
 * **shoot**: the power bar sets the height where the ball crosses the goal line, from anywhere: 0-10% along the ground,
   11% just off the grass, 30% waist high, 40% chest high, 50% the crossbar, more = over the bar into the stands. The pace
   builds up over the first half of the bar (full pace from 50%). A ground shot from far out dies on the grass. The stick
   picks the side (without it: the far side from the keeper).
-* curve and chip shots: a tap is a soft one, about 0.4 s is full power
+* curve and chip shots: a tap is a soft one, a full bar is full power
 * press and team press: active as long as the button is held
 * tackle, slide tackle, switch player: happen the moment the button is pressed
 
@@ -135,6 +135,9 @@ that differ from both teams.
 
 **HUD**: the player boxes are small and see-through, and a box (or the radar) fades out when the ball is behind it.
 
+**Settings** has three tabs: **Gameplay** (difficulty, match length, pace, power bar speed, player switch), **Graphics**
+(camera, ball, quality, radar, FPS) and **Audio** (sound effects, crowd chants); **Button mapping** is at the bottom.
+
 ## Physics and animation
 
 * Pitch 110 x 67 (20% bigger than before), ball radius 0.43 (10% smaller). Formations are stretched with the pitch (`PITCH_SCALE`).
@@ -167,7 +170,7 @@ js/main.js            My PC lifecycle (init / ready / start / pause / resume / d
 * Matches: controllers through `MyPC.gamepad` (buttons, sticks, pad list; never `navigator.getGamepads()` ourselves). Menus: `MyPC.init({ onInput })` actions (arrows + OK, cancel goes back). No `keydown` listeners.
 * The guide asks for play with the TV remote alone; this game is deliberately controller-only in matches (owner's choice), the menus still work with the remote.
 * Saves: `MyPC.save/load` (`stats`, `settings`, `bindings`). Score: `MyPC.submitScore` at full time of a match with a human player.
-* Owner config (`MyPC.app_config`, defaults in `mypc-app.json` `config`): `difficulty`, `durationMins`, `gameSpeed`, `switchMode`, `cameraMode`, `ballSkin`, `crowdChants`, `quality`, `soundEnabled`, `showRadar`, `showFPS`.
+* Owner config (`MyPC.app_config`, defaults in `mypc-app.json` `config`): `difficulty`, `durationMins`, `gameSpeed`, `switchMode`, `cameraMode`, `ballSkin`, `crowdChants`, `gaugeTime`, `quality`, `soundEnabled`, `showRadar`, `showFPS`.
 * Touch: no on-screen pad (`"touch": false`): phones are used as phone controllers (Buttons mode).
 * Fixed 60 Hz step, no allocation in the update loop, DOM written only when a value changes, one `AudioContext` closed in `onDestroy`.
 

@@ -162,7 +162,7 @@
     if (key === 'SIDES') updateSideSlots();
     if (key === 'TEAMS') renderTeams();
     if (key === 'GAMEPLAN') renderGamePlan();
-    if (key === 'SETTINGS') syncSettings();
+    if (key === 'SETTINGS') renderSettings();
     if (key === 'HELP') renderHelp();
     if (key === 'BUTTONS') renderButtons();
     if (key === 'PAUSE') updatePauseSummary();
@@ -881,31 +881,24 @@
 
   /* ------------------------------ SETTINGS ------------------------------ */
 
+  var settingsGroup = 'game';
+
+  // Settings: one tab per group (Gameplay, Graphics, Audio), only that group's rows below it.
   function buildSettings() {
     var wrap = screens.SETTINGS;
-    var list = el('div', 'settings-list');
-    NS.SETTING_DEFS.forEach(function (def, i) {
-      var row = el('div', 'set-row');
-      var lab = el('div', 'set-label');
-      lab.appendChild(el('div', 'set-name', T(def.label)));
-      lab.appendChild(el('div', 'set-hint', T(def.hint)));
-      row.appendChild(lab);
-      var opts = el('div', 'row');
-      def.options.forEach(function (o, j) {
-        var b = btn('opt', T(o[1]), 'set:' + def.key + ':' + o[0], function () {
-          NS.Storage.setSetting(def.key, o[0]);
-          NS.App.applySettings();
-          syncSettings();
-        });
-        b.setAttribute('data-set', def.key);
-        b.setAttribute('data-val', String(o[0]));
-        if (i === 0 && j === 0) b.setAttribute('data-default', '1');
-        opts.appendChild(b);
+    refs.setTabs = el('div', 'tabs set-tabs');
+    NS.SETTING_GROUPS.forEach(function (g, i) {
+      var b = btn('tab', T(g[1]), 'sg:' + g[0], function () {
+        settingsGroup = g[0];
+        renderSettings('sg:' + g[0]);
       });
-      row.appendChild(opts);
-      list.appendChild(row);
+      b.setAttribute('data-group', g[0]);
+      if (i === 0) b.setAttribute('data-default', '1');
+      refs.setTabs.appendChild(b);
     });
-    wrap.appendChild(list);
+    wrap.appendChild(refs.setTabs);
+    refs.setList = el('div', 'settings-list');
+    wrap.appendChild(refs.setList);
     var foot = el('div', 'foot');
     foot.appendChild(btn('danger', T('set.reset'), 'reset', function () {
       NS.Storage.resetSettings();
@@ -917,6 +910,35 @@
       if (matchRunning()) show('PAUSE'); else show('MAIN');
     }));
     wrap.appendChild(foot);
+  }
+
+  function renderSettings(keepKey) {
+    clear(refs.setList);
+    NS.SETTING_DEFS.forEach(function (def) {
+      if (def.group !== settingsGroup) return;
+      var row = el('div', 'set-row');
+      var lab = el('div', 'set-label');
+      lab.appendChild(el('div', 'set-name', T(def.label)));
+      lab.appendChild(el('div', 'set-hint', T(def.hint)));
+      row.appendChild(lab);
+      var opts = el('div', 'row');
+      def.options.forEach(function (o) {
+        var b = btn('opt', T(o[1]), 'set:' + def.key + ':' + o[0], function () {
+          NS.Storage.setSetting(def.key, o[0]);
+          NS.App.applySettings();
+          syncSettings();
+        });
+        b.setAttribute('data-set', def.key);
+        b.setAttribute('data-val', String(o[0]));
+        opts.appendChild(b);
+      });
+      row.appendChild(opts);
+      refs.setList.appendChild(row);
+    });
+    var tabs = refs.setTabs.querySelectorAll('[data-group]');
+    for (var i = 0; i < tabs.length; i++) tabs[i].classList.toggle('sel', tabs[i].getAttribute('data-group') === settingsGroup);
+    syncSettings();
+    if (keepKey) { focused = null; if (!focusByKey(keepKey)) focusDefault(); }
   }
 
   function syncSettings() {

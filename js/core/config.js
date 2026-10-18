@@ -2,7 +2,7 @@
 (function (NS) {
   'use strict';
 
-  NS.VERSION = '1.9.3';
+  NS.VERSION = '1.10.0';
 
   // Pitch geometry (world units; x = length, z = width, y = up)
   // The pitch is 20% bigger than the original 92 x 56 (PITCH_SCALE also scales the formations).
@@ -26,6 +26,7 @@
     difficulty: 'NORMAL',
     durationMins: 3,
     gameSpeed: 1.0,
+    gaugeTime: 0.5,
     cameraMode: 'WIDE',
     ballSkin: 'CLASSIC',
     switchMode: 'AUTO',
@@ -35,29 +36,35 @@
     showFPS: false
   };
 
+  // Settings groups (the tabs of the Settings screen)
+  NS.SETTING_GROUPS = [['game', 'set.g.game'], ['video', 'set.g.video'], ['audio', 'set.g.audio']];
+
   // Settings schema: drives the Settings screen, validation and the app_config merge.
   NS.SETTING_DEFS = [
-    { key: 'difficulty', label: 'set.difficulty', hint: 'set.difficulty.h',
+    { key: 'difficulty', group: 'game', label: 'set.difficulty', hint: 'set.difficulty.h',
       options: [['EASY', 'opt.easy'], ['NORMAL', 'opt.normal'], ['HARD', 'opt.hard'], ['LEGEND', 'opt.legend']] },
-    { key: 'durationMins', label: 'set.duration', hint: 'set.duration.h',
+    { key: 'durationMins', group: 'game', label: 'set.duration', hint: 'set.duration.h',
       options: [[3, 'opt.min3'], [5, 'opt.min5'], [10, 'opt.min10']] },
-    { key: 'gameSpeed', label: 'set.pace', hint: 'set.pace.h',
+    { key: 'gameSpeed', group: 'game', label: 'set.pace', hint: 'set.pace.h',
       options: [[0.88, 'opt.slow'], [1.0, 'opt.normal'], [1.18, 'opt.fast']] },
-    { key: 'switchMode', label: 'set.switch', hint: 'set.switch.h',
+    // seconds the power bar takes to fill (shots, passes)
+    { key: 'gaugeTime', group: 'game', label: 'set.gauge', hint: 'set.gauge.h',
+      options: [[1.0, 'opt.slow'], [0.75, 'opt.normal'], [0.5, 'opt.fast'], [0.35, 'opt.vfast']] },
+    { key: 'switchMode', group: 'game', label: 'set.switch', hint: 'set.switch.h',
       options: [['AUTO', 'opt.auto'], ['MANUAL', 'opt.manual']] },
-    { key: 'cameraMode', label: 'set.camera', hint: 'set.camera.h',
+    { key: 'cameraMode', group: 'video', label: 'set.camera', hint: 'set.camera.h',
       options: [['CLOSE', 'opt.dynamic'], ['WIDE', 'opt.wide'], ['BLIMP', 'opt.blimp']] },
-    { key: 'ballSkin', label: 'set.ball', hint: 'set.ball.h',
+    { key: 'ballSkin', group: 'video', label: 'set.ball', hint: 'set.ball.h',
       options: [['CLASSIC', 'opt.ball.classic'], ['PRO', 'opt.ball.pro'], ['NIGHT', 'opt.ball.night'], ['RETRO', 'opt.ball.retro'], ['GOLD', 'opt.ball.gold']] },
-    { key: 'quality', label: 'set.quality', hint: 'set.quality.h',
+    { key: 'quality', group: 'video', label: 'set.quality', hint: 'set.quality.h',
       options: [['AUTO', 'opt.auto'], ['LOW', 'opt.low'], ['MEDIUM', 'opt.med'], ['HIGH', 'opt.high']] },
-    { key: 'soundEnabled', label: 'set.sound', hint: 'set.sound.h',
+    { key: 'soundEnabled', group: 'audio', label: 'set.sound', hint: 'set.sound.h',
       options: [[true, 'opt.on'], [false, 'opt.off']] },
-    { key: 'crowdChants', label: 'set.chants', hint: 'set.chants.h',
+    { key: 'crowdChants', group: 'audio', label: 'set.chants', hint: 'set.chants.h',
       options: [[true, 'opt.on'], [false, 'opt.off']] },
-    { key: 'showRadar', label: 'set.radar', hint: 'set.radar.h',
+    { key: 'showRadar', group: 'video', label: 'set.radar', hint: 'set.radar.h',
       options: [[true, 'opt.show'], [false, 'opt.hide']] },
-    { key: 'showFPS', label: 'set.fps', hint: 'set.fps.h',
+    { key: 'showFPS', group: 'video', label: 'set.fps', hint: 'set.fps.h',
       options: [[true, 'opt.show'], [false, 'opt.hide']] }
   ];
 
