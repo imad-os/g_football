@@ -170,7 +170,8 @@
       idx: idx, active: false, team: 0, player: null,
             chargeMove: -1, chargeFrac: -1, pressing: false, teamPress: false, evPlayer: null, burstT: 0, lockT: 0,
       evActive: false, evMask: 0, evT: 0, evSettle: 0, evCtx: 0, evMove: -1, evPrev: 0,
-      gkLeft: 0 // keeper countdown shown (seconds left)
+      gkLeft: 0, // keeper countdown shown (seconds left)
+      manual: false, manualOwner: null // switched by button: auto-switch waits until the ball changes hands
     };
   }
 

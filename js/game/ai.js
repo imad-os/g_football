@@ -27,10 +27,11 @@
 
   // Difficulty = speed AND intelligence: reaction time, decision noise, pass accuracy, marking tightness, keeper.
   var PROFILES = {
-    EASY: { speedMul: 0.95, react: 0.42, noise: 0.24, tackle: 0.38, tackleRate: 1.6, gkSave: 0.64, gkReact: 0.24, acc: 2.0, tight: 0.7, press2: false, shootBias: -0.04, chasers: 1 },
-    NORMAL: { speedMul: 1.0, react: 0.32, noise: 0.12, tackle: 0.5, tackleRate: 2.0, gkSave: 0.72, gkReact: 0.17, acc: 1.4, tight: 0.85, press2: false, shootBias: 0, chasers: 1 },
-    HARD: { speedMul: 1.02, react: 0.25, noise: 0.08, tackle: 0.55, tackleRate: 2.3, gkSave: 0.76, gkReact: 0.13, acc: 1.15, tight: 0.92, press2: true, shootBias: 0.02, chasers: 2 },
-    LEGEND: { speedMul: 1.04, react: 0.19, noise: 0.05, tackle: 0.6, tackleRate: 2.6, gkSave: 0.8, gkReact: 0.1, acc: 0.95, tight: 1.0, press2: true, shootBias: 0.03, chasers: 2 }
+    // (spread wide enough to feel: EASY is slow, late and loose; LEGEND is quick, sharp and has a great keeper)
+    EASY: { speedMul: 0.86, react: 0.6, noise: 0.34, tackle: 0.28, tackleRate: 1.1, gkSave: 0.58, gkReact: 0.32, acc: 2.6, tight: 0.55, press2: false, shootBias: -0.06, chasers: 1 },
+    NORMAL: { speedMul: 1.0, react: 0.32, noise: 0.12, tackle: 0.5, tackleRate: 2.0, gkSave: 0.74, gkReact: 0.17, acc: 1.4, tight: 0.85, press2: false, shootBias: 0, chasers: 1 },
+    HARD: { speedMul: 1.06, react: 0.22, noise: 0.07, tackle: 0.6, tackleRate: 2.6, gkSave: 0.82, gkReact: 0.11, acc: 1.05, tight: 0.95, press2: true, shootBias: 0.02, chasers: 2 },
+    LEGEND: { speedMul: 1.12, react: 0.14, noise: 0.03, tackle: 0.7, tackleRate: 3.2, gkSave: 0.9, gkReact: 0.07, acc: 0.8, tight: 1.05, press2: true, shootBias: 0.04, chasers: 2 }
   };
 
   var RUN_SPEED = 10.4;    // what the AI assumes a player covers per second when judging races to the ball

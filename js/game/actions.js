@@ -242,8 +242,9 @@
       var ty = this.gaugeHeight(g);
       var vy;
       if (ty < 0) {
-        vy = 0; // along the ground
+        vy = 0; // along the ground: struck twice as hard (the grass takes a lot of it)
         ball.pos.y = NS.BALL_R;
+        speed = Math.min(SHOT_MAX, speed * 2);
       } else {
         ty += gaussR() * err * sd * 0.3;
         var kd = sd * AIR_K / speed;

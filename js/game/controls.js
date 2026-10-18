@@ -43,7 +43,12 @@
     var o = ball.owner;
     if (o && o.team === slot.team && o !== p && o !== other) { slot.player = o; return; }
     var n = Actions.nearestToBall(slot.team, p, other);
-    if (n) slot.player = n;
+    if (n) {
+      slot.player = n;
+      // the player chose: auto-switch keeps his choice while the same opponent keeps the ball
+      slot.manual = true;
+      slot.manualOwner = o;
+    }
   }
 
   // Tackle when an opponent carries the ball close, otherwise switch to the player nearest the ball.
@@ -185,6 +190,11 @@
         }
         if (rcv && rcv !== cur && rcv !== other) { s.player = rcv; continue; }
         if (s.lockT > 0 || s.evActive) continue; // never change player in the middle of a button gesture
+        // after a switch by button: nothing changes until something happens (the ball changes hands, a pass, a shot)
+        if (s.manual) {
+          if (o && o === s.manualOwner) continue;
+          s.manual = false;
+        }
         if (auto) {
           var n = Actions.nearestToBall(s.team, other, null);
           if (n && n !== cur) {

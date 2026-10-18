@@ -30,7 +30,7 @@ Nintendo by position). There are no tap / hold gestures: **holding a button neve
 * passes (low, through, long): the longer the hold, the firmer the pass (up to about 35% more pace; a long ball flies flatter)
 * **shoot**: the power bar sets the height where the ball crosses the goal line, from anywhere: 0-10% along the ground,
   11% just off the grass, 30% waist high, 40% chest high, 50% the crossbar, more = over the bar into the stands. The pace
-  builds up over the first half of the bar (full pace from 50%). A ground shot from far out dies on the grass. The stick
+  builds up over the first half of the bar (full pace from 50%). A ground shot is struck twice as hard (the grass slows it). The stick
   picks the side (without it: the far side from the keeper).
 * curve and chip shots: a tap is a soft one, a full bar is full power
 * press and team press: active as long as the button is held
@@ -57,7 +57,8 @@ Nintendo by position). There are no tap / hold gestures: **holding a button neve
 **Settings > Button mapping**: pick a move and press the button (or two together) on any controller; the map is saved per My PC
 profile and used by all controllers. Maps saved by older versions keep their gamepad buttons.
 
-**Settings > Player switch**: `AUTO` follows the ball, `MANUAL` only changes with the switch button when your team does not have the ball.
+**Settings > Player switch**: `AUTO` follows the ball (after you switch by button while the opponents have the ball, it
+keeps your choice until something happens: the ball changes hands, a pass, a shot), `MANUAL` only changes with the switch button when your team does not have the ball.
 In both modes the pass receiver is selected as soon as the pass is played and a team-mate who gets the ball is selected at once:
 the CPU never plays your ball carrier.
 
@@ -110,8 +111,9 @@ Player 2: the second controller or phone controller connected.
   attempt per shot (placement and pace matter), distributes to a free team-mate.
 * **Game state**: a team losing late pushes its line higher and takes more risks; a team leading late keeps the ball.
   Coin toss for the kickoff, teams swap kickoff at half time.
-* **Difficulty** changes intelligence (reaction time, decision noise, pass/shot accuracy, marking tightness, second presser,
-  keeper) more than raw speed.
+* **Difficulty** changes speed (86% on EASY to 112% on LEGEND), reaction time, decision noise, pass / shot accuracy, tackling,
+  marking tightness, a second presser and the keeper. CPU vs CPU: EASY loses every match to NORMAL, HARD and LEGEND win
+  nearly all of them.
 
 Measured with a headless simulator (NORMAL vs NORMAL, 3-minute matches, v1.5): pass completion about 90 to 95%, about 9 shots
 and 3 goals per match.
