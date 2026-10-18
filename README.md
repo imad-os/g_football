@@ -88,6 +88,11 @@ played), or a **penalty** when it happened in the fouling team's own penalty are
 box; the taker aims with the stick and shoots with the gauge (the CPU picks a corner), and the keeper must guess a side as it
 is struck (about 3 in 4 penalties go in).
 
+**Bookings**: a player's first foul is a warning (shown as a **green card** for now), the second a **yellow card**, the third a
+second yellow = **red card**: he is sent off when play restarts and his team plays one short until the end of the match. The
+card is shown over the player's head (under the arrow when you control him), every booking is a tiny card next to the team
+name on the scoreboard, and the foul banner says who got what.
+
 **Goalkeepers** read the shot with the ball physics and **dive** to where it crosses the line (a human reach and dive speed),
 catching it at full stretch or pushing it away when it is too hard; shots straight at them are nearly always kept out, the
 corners are hard. The keeper catches (hands) shots and balls played by the opponents inside his penalty area; a pass from a

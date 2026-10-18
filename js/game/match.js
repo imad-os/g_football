@@ -346,10 +346,52 @@
   // ---------------------------------------------------------------- fouls, free kicks, penalties
   // A tackle from behind (Actions.onFoul): play stops; a free kick where it happened, or a penalty when it happened in
   // the fouling team's own penalty area.
+  var CARD_COLOR = [0, 0x22c55e, 0xfacc15, 0xef4444];
+  var CARD_KEY = ['', 'card.green', 'card.yellow', 'card.red'];
+
+  // The scoreboard cards of team t (every booking of the match, sent-off players included).
+  function refreshCards(t) {
+    var list = [];
+    var all = World.players.concat(World.sentOff);
+    for (var i = 0; i < all.length; i++) if (all[i].team === t && all[i].card) list.push(all[i].card);
+    list.sort();
+    NS.HUD.setCards(t, list);
+  }
+
+  // A player who fouls is booked: first a warning (shown as a green card for now), then a yellow card, then a second
+  // yellow = a red card and he is sent off when play restarts.
+  function book(p) {
+    p.fouls++;
+    p.card = p.fouls >= 3 ? 3 : p.fouls;
+    p.mesh.card.material.color.setHex(CARD_COLOR[p.card]);
+    p.mesh.card.visible = true;
+    refreshCards(p.team);
+    return p.card;
+  }
+
+  // Off he goes: out of the match (his team plays one short), his mesh hidden, nobody controls him any more.
+  function sendOff(p) {
+    var players = World.players;
+    var i = players.indexOf(p);
+    if (i < 0) return;
+    players.splice(i, 1);
+    World.sentOff.push(p);
+    p.mesh.root.visible = false;
+    var ball = World.ball;
+    if (ball.owner === p) ball.owner = null;
+    if (ball.kicker === p) ball.kicker = null;
+    if (ball.receiver === p) ball.receiver = null;
+    if (ball.contester === p) ball.contester = null;
+    for (var k = 0; k < players.length; k++) if (players[k].mark === p) players[k].mark = null;
+    for (var s = 0; s < 2; s++) if (World.slots[s].player === p) World.slots[s].player = null;
+  }
+
   function onFoul(tackler, victim) {
     var m = World.match;
     var ball = World.ball;
     if (m.setPieceTimer > 0 || m.penalty || breakKind) return;
+    var card = book(tackler);
+    m.sendOff = card === 3 ? tackler : null;
     var ownGoalX = tackler.team === 0 ? -HALF_W : HALF_W;
     var inBox = Math.abs(victim.pos.x - ownGoalX) < 18 && Math.abs(victim.pos.z) < 15.5;
     m.setPiece = inBox ? 2 : 1;
@@ -364,7 +406,10 @@
     ball.vel.set(0, 0, 0);
     ball.hard = false;
     NS.Audio.whistle(0);
-    NS.HUD.banner(NS.I18n.t(inBox ? 'hud.penalty' : 'hud.foul'), NS.I18n.t(inBox ? 'hud.penalty.sub' : 'hud.freekick'), 1.5);
+    // the banner: the free kick / penalty, then the booking and who got it
+    NS.HUD.banner(NS.I18n.t(inBox ? 'hud.penalty' : 'hud.foul'),
+      NS.I18n.t(CARD_KEY[card]) + ' - ' + tackler.name + '  •  ' + NS.I18n.t(inBox ? 'hud.penalty.sub' : 'hud.freekick'), 1.5);
+    if (card === 3) m.setPieceTimer = 2.2; // a little longer: he walks off
   }
 
   // At a penalty the keeper cannot react in time: he picks a side (left, right, or stays in the middle) as it is struck
@@ -390,6 +435,7 @@
   function startSetPiece() {
     var m = World.match;
     var ball = World.ball;
+    if (m.sendOff) { sendOff(m.sendOff); m.sendOff = null; }
     var players = World.players;
     var t = m.setTeam;
     var a = t === 0 ? 1 : -1;
@@ -461,6 +507,13 @@
         NS.Scene.remove(World.players[i].mesh.root);
         NS.Assets.disposePlayer(World.players[i].mesh);
       }
+      for (i = 0; i < World.sentOff.length; i++) {
+        NS.Scene.remove(World.sentOff[i].mesh.root);
+        NS.Assets.disposePlayer(World.sentOff[i].mesh);
+      }
+      World.sentOff.length = 0;
+      NS.HUD.setCards(0, []);
+      NS.HUD.setCards(1, []);
       World.players.length = 0;
       var s = World.session;
       var homeT = NS.Teams.byId(s.homeTeamId);
@@ -494,6 +547,7 @@
             // animation timers
             kickT: 0, kickHard: false, lungeT: 0, slideT: 0, fallT: 0, diveT: 0, diveRoll: 0, headT: 0, catchT: 0,
             gkHands: false, diveCd: 0, diveHigh: false, mood: 0, celX: 0, celZ: 0, slid: false,
+            fouls: 0, card: 0, // bookings: 1 warning (green), 2 yellow, 3 red (sent off)
             // AI brain state
             mark: null, icX: 0, icZ: 0, drX: 0, drZ: 0, runT: 0, runCd: 0, runX: 0, runZ: 0,
             aiT: 0, tgtX: 0, tgtZ: 0, tgtS: 8, gkRT: 0
@@ -542,6 +596,7 @@
       for (var k = 0; k < World.players.length; k++) {
         var cand = World.players[k];
         if (cand.team === World.kickoffTeam && cand.role === 'FWD') { kicker = cand; break; }
+        if (cand.team === World.kickoffTeam && cand.role !== 'GK' && !kicker) kicker = cand;
       }
       if (kicker) {
         kicker.pos.set(kicker.team === 0 ? -0.95 : 0.95, 0, 0);

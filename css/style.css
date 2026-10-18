@@ -63,6 +63,11 @@ h1, h2, p { margin: 0; }
   border-top: 3px solid var(--amber);
 }
 .board .team { display: flex; align-items: center; gap: 0.4rem; }
+.mini-cards { display: inline-flex; gap: 0.15rem; align-items: center; }
+.mini-cards i { display: inline-block; width: 0.45rem; height: 0.65rem; border-radius: 0.1rem; border: 1px solid rgba(0, 0, 0, 0.5); }
+.mini-cards i.c1 { background: #22c55e; }
+.mini-cards i.c2 { background: #facc15; }
+.mini-cards i.c3 { background: #ef4444; }
 .board .badge { display: inline-block; width: 0.9rem; height: 0.9rem; border-radius: 3px; border: 1px solid rgba(255, 255, 255, 0.7); }
 .score { background: rgba(2, 6, 15, 0.9); padding: 0 0.7rem; border-radius: 0.4rem; color: var(--amber); font-family: ui-monospace, Consolas, monospace; font-size: 1.4rem; border: 1px solid #334155; }
 .clock { color: #34d399; font-family: ui-monospace, Consolas, monospace; border-left: 1px solid #475569; padding-left: 0.8rem; }

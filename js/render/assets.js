@@ -19,6 +19,7 @@
     geo.hair = new THREE.BoxGeometry(0.66, 0.25, 0.66);
     geo.limb = new THREE.BoxGeometry(0.32, 0.85, 0.32);
     geo.arm = new THREE.BoxGeometry(0.22, 0.78, 0.22);
+    geo.card = new THREE.BoxGeometry(0.36, 0.5, 0.1); // booking card shown over the head
     geo.shadow = new THREE.CircleGeometry(0.85, 12);
     geo.shadow.rotateX(-Math.PI / 2);
     // controlled-player marker: an arrow above the head, pointing down at the player
@@ -230,7 +231,14 @@
     var rightArm = limb(body, geo.arm, sleeveMat, 0.6, 1.12, 0.78);
     var leftLeg = limb(body, geo.limb, shortsMat, -0.24, 0, 0.85);
     var rightLeg = limb(body, geo.limb, shortsMat, 0.24, 0, 0.85);
-    return { root: root, body: body, leftLeg: leftLeg, rightLeg: rightLeg, leftArm: leftArm, rightArm: rightArm, mats: mats };
+    // his booking (warning / yellow / red), hidden until he gets one; it sits just under the controlled-player arrow
+    var cardMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
+    mats.push(cardMat);
+    var card = new THREE.Mesh(geo.card, cardMat);
+    card.position.y = 3.35;
+    card.visible = false;
+    root.add(card);
+    return { root: root, body: body, leftLeg: leftLeg, rightLeg: rightLeg, leftArm: leftArm, rightArm: rightArm, card: card, mats: mats };
   }
 
   function disposePlayer(mesh) {

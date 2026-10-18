@@ -620,6 +620,13 @@
   Object.assign(D.ar, { 'set.g.game': 'اللعب', 'set.g.video': 'الرسومات', 'set.g.audio': 'الصوت',
     'set.gauge': 'سرعة شريط القوة', 'set.gauge.h': 'سرعة امتلاء شريط قوة التسديد / التمرير', 'opt.vfast': 'سريع جدًا' });
 
+
+  // v1.11: bookings (warning shown as a green card for now, yellow, red)
+  Object.assign(D.en, { 'card.green': 'WARNING (green card)', 'card.yellow': 'YELLOW CARD', 'card.red': 'SECOND YELLOW: RED CARD' });
+  Object.assign(D.fr, { 'card.green': 'AVERTISSEMENT (carton vert)', 'card.yellow': 'CARTON JAUNE', 'card.red': 'DEUXIEME JAUNE : CARTON ROUGE' });
+  Object.assign(D.es, { 'card.green': 'AVISO (tarjeta verde)', 'card.yellow': 'TARJETA AMARILLA', 'card.red': 'SEGUNDA AMARILLA: ROJA' });
+  Object.assign(D.ar, { 'card.green': 'إنذار (بطاقة خضراء)', 'card.yellow': 'بطاقة صفراء', 'card.red': 'إنذار ثانٍ: بطاقة حمراء' });
+
   var lang = 'en';
 
   NS.I18n = {

@@ -178,6 +178,7 @@
   var World = {
     ball: ball,
     players: [],
+    sentOff: [],   // players sent off this match (out of World.players, meshes hidden; disposed with the teams)
     slots: [makeSlot(0), makeSlot(1)],
     pressT: [0, 0],
     kickoffTeam: 0,
@@ -199,7 +200,8 @@
       celebrationTimer: 0, fullTimeTimer: 0, kickoffTimer: 0, half: 1, firstKick: 0,
       setPieceTimer: 0, setPiece: 0, setTeam: 0, setX: 0, setZ: 0, setTaker: null, // 1 free kick, 2 penalty
       penalty: false,  // a penalty is being taken: only the taker and the keeper move until the kick
-      protectT: 0      // a free kick is being taken: nobody may tackle the taker yet
+      protectT: 0,     // a free kick is being taken: nobody may tackle the taker yet
+      sendOff: null    // a player shown a red card: he leaves when play restarts
     },
 
     resetBall: function () {

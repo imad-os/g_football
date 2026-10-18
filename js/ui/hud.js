@@ -43,7 +43,7 @@
     init: function () {
       var ids = ['hud', 'hud-comp', 'hud-home-badge', 'hud-home-name', 'hud-score-home', 'hud-score-away', 'hud-away-name',
         'hud-away-badge', 'hud-clock', 'hud-telemetry', 'hud-fps', 'hud-quality', 'hud-radar-box', 'radar-canvas',
-        'event-banner', 'event-title', 'event-sub', 'hud-hint', 'goal-fx', 'goal-word', 'goal-sub'];
+        'event-banner', 'event-title', 'event-sub', 'hud-hint', 'goal-fx', 'goal-word', 'goal-sub', 'hud-home-cards', 'hud-away-cards'];
       var i;
       for (i = 0; i < ids.length; i++) el[ids[i]] = $(ids[i]);
       for (i = 1; i <= 2; i++) {
@@ -98,6 +98,17 @@
       el['hud-away-name'].textContent = away.code;
       el['hud-home-badge'].style.background = homeCss;
       el['hud-away-badge'].style.background = awayCss;
+    },
+
+    // the bookings of team t on the scoreboard: one tiny card each (green = warning, yellow, red). Event-driven.
+    setCards: function (t, cards) {
+      var box = el[t === 0 ? 'hud-home-cards' : 'hud-away-cards'];
+      while (box.firstChild) box.removeChild(box.firstChild);
+      for (var i = 0; i < cards.length; i++) {
+        var c = document.createElement('i');
+        c.className = 'c' + cards[i];
+        box.appendChild(c);
+      }
     },
 
     setComp: function (label) { text('comp', el['hud-comp'], label); },
