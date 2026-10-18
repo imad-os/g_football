@@ -74,7 +74,7 @@ player's arrow blinks yellow until somebody has the ball.
 shot (the button must be down when the ball arrives). Only the player closest to the ball can head it. CPU players head
 clearances and chances; your team-mates never head for you.
 
-**Shots** follow the gauge above (speed 22 to 48). Aimed shots bend a little, hard-struck shots wobble, a streak follows the
+**Shots** follow the gauge above (speed 26 to 58: a struck shot flies fast and flat, not like a long ball). Aimed shots bend a little, hard-struck shots wobble, a streak follows the
 ball. A hard shot that hits an outfield player is blocked and deflects; nobody but the keeper can simply collect it.
 
 **The CPU shoots like a player**: it weighs 12 targets (4 across the goal, low / chest high / top corner) by how far the keeper
@@ -121,7 +121,8 @@ shakes the net, the scorer runs to the corner flag and slides, his team-mates ch
 and their keeper kneels. At half time the players walk off; at full time the winners celebrate and the losers drop to their
 knees.
 
-**Sound** (js/core/audio.js): all synthesized, no audio files. Ball strikes, tackles, the post and the net are generated with
+**Sound** (js/core/audio.js): all synthesized, no audio files. Passes and shots are a modelled leather "thock" (the ball's
+low thud with a fast pitch drop, the contact click, a rush of air on a shot); tackles, the post and the net are generated with
 [ZzFX](https://github.com/KilledByAPixel/ZzFX) (MIT, vendor/zzfx.js); the referee has a real "pea" whistle (one blow,
 two at half time, three at full time). The crowd murmurs, roars louder as the ball gets near a goal, gasps at saves and erupts at
 goals, and sings: every chant is composed on the spot (melody, key, tempo, vowels, claps or drum, end of the ground), so it never

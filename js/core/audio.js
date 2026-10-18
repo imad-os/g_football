@@ -71,6 +71,29 @@
     return out;
   }
 
+  // A foot striking a ball: the ball's body (a low thud whose pitch drops fast as the ball leaves the boot, gone in a few
+  // hundredths of a second), the contact click (a very short burst of mid / high noise) and, for a shot, a faint rush of
+  // air after it. f0 -> f1 body pitch (Hz), decay (s), click level, whoosh level. Rendered once into samples.
+  function strike(dur, f0, f1, decay, click, whoosh) {
+    var sr = 44100, n = Math.floor(sr * dur);
+    var out = new Float32Array(n);
+    var ph = 0, lp = 0, lp2 = 0, hpPrev = 0, hp = 0;
+    for (var i = 0; i < n; i++) {
+      var t = i / sr;
+      var f = f1 + (f0 - f1) * Math.exp(-t / 0.018);
+      ph += 2 * Math.PI * f / sr;
+      var body = Math.sin(ph) * Math.exp(-t / decay) * (t < 0.002 ? t / 0.002 : 1);
+      var w = Math.random() * 2 - 1;
+      lp += 0.35 * (w - lp);               // band-limit the noise: low-pass ~3 kHz...
+      hp = lp - lp2; lp2 += 0.06 * (lp - lp2); // ...minus a ~400 Hz low-pass = a mid band
+      var clk = hp * Math.exp(-t / 0.005) * click * 2.2;
+      var air = 0;
+      if (whoosh) { hpPrev += 0.5 * (w - hpPrev); air = (w - hpPrev) * whoosh * Math.exp(-Math.pow((t - 0.07) / 0.06, 2)); }
+      out[i] = body + clk + air;
+    }
+    return out;
+  }
+
   // Builds the buses, effect buffers and the crowd beds (once).
   function build() {
     master = ctx.createGain();
@@ -87,12 +110,9 @@
       // ZzFX parameters: volume, randomness, frequency, attack, sustain, release, shape, shapeCurve, slide, deltaSlide,
       // pitchJump, pitchJumpTime, repeatTime, noise, modulation, bitCrush, delay, sustainVolume, decay, tremolo, filter
       // (filter: negative = low-pass, positive = high-pass, in Hz)
-      var thump = Z.buildSamples(1, 0, 95, 0.001, 0.01, 0.11, 0, 1, -1, 0, 0, 0, 0, 0.3, 0, 0, 0, 1, 0.02, 0, -700);
-      var slap = Z.buildSamples(0.55, 0, 1200, 0, 0, 0.035, 4, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1500);
-      buf.kick = toBuffer(mix(thump, slap, 1));
-      var thumpH = Z.buildSamples(1, 0, 80, 0.001, 0.02, 0.16, 0, 1, -0.8, 0, 0, 0, 0, 0.4, 0, 0, 0, 1, 0.03, 0, -600);
-      var slapH = Z.buildSamples(0.8, 0, 1500, 0, 0, 0.05, 4, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1200);
-      buf.shot = toBuffer(mix(thumpH, slapH, 1));
+      // ball strikes: a modelled leather "thock" (see strike()) instead of synth tones
+      buf.kick = toBuffer(strike(0.12, 210, 105, 0.022, 0.35, 0));
+      buf.shot = toBuffer(strike(0.28, 150, 68, 0.038, 0.6, 0.12));
       var scuff = Z.buildSamples(0.6, 0.1, 300, 0.01, 0.06, 0.18, 4, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, -1100);
       buf.tackle = toBuffer(mix(scuff, Z.buildSamples(0.8, 0, 70, 0.001, 0.01, 0.12, 0, 1, -0.8), 0.8));
       // the post: inharmonic metal partials ringing out

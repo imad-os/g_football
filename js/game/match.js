@@ -800,7 +800,7 @@
               // (a dive covers part of the distance); pace above 30 makes every save harder
               var reach = Math.sqrt(d2) - (p.diveT > 0 ? 1.0 : 0);
               var place = reach <= 0.7 ? 0.15 : -(reach - 0.7) * 0.28;
-              var chance = speed < 12 ? 1 : clamp(gkSkill(p.team) + 0.04 + place - Math.max(0, speed - 30) * 0.012, 0.15, 0.96);
+              var chance = speed < 12 ? 1 : clamp(gkSkill(p.team) + 0.04 + place - Math.max(0, speed - 36) * 0.009, 0.15, 0.96);
               if (ball.chip) chance *= 0.4;
               if (ball.pen) chance *= 0.55;
               if (Math.random() < chance) {

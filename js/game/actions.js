@@ -12,7 +12,7 @@
   var AIR_K = NS.PHYS.AIR_K;
   var R0 = NS.BALL_R;
   // shot: speed from SHOT_MIN (a tap) to SHOT_MAX (from half the bar); GH = [gauge, height at the goal line]
-  var SHOT_MIN = 22, SHOT_MAX = 48;
+  var SHOT_MIN = 26, SHOT_MAX = 58; // a struck shot: much faster than a long ball, so its flight stays flat
   var GH = [[0.10, NS.BALL_R], [0.11, 0.6], [0.30, 1.1], [0.40, 1.7], [0.50, 3.6], [1.0, 9.0]];
 
   // Horizontal launch speed so a ball in the air for T seconds covers d (air drag included).
