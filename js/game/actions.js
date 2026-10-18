@@ -11,6 +11,8 @@
   var DRAG_K = NS.PHYS.ROLL_K; // ground speed needed per unit of distance
   var AIR_K = NS.PHYS.AIR_K;
   var R0 = NS.BALL_R;
+  // shot strike: speed from SHOT_MIN (tap) to SHOT_MAX (full gauge, the fixed maximum), launch lift up to SHOT_LIFT
+  var SHOT_MIN = 18, SHOT_MAX = 48, SHOT_LIFT = 22;
 
   // Horizontal launch speed so a ball in the air for T seconds covers d (air drag included).
   function airSpeed(d, T) { return d * AIR_K / (1 - Math.exp(-AIR_K * T)); }
@@ -201,12 +203,31 @@
       this.launch(p, type, tx, tz, mate, accuracy, forceTarget);
     },
 
-    // The shot gauge g (0..1, the power bar): it sets both the pace and how far above the grass the ball crosses the
-    // goal line. 0 = a ground shot that the grass slows down, ~0.5 = waist high, ~0.75 = just under the bar,
-    // ~0.85 = the bar, 1 = into the stands. Aimed at (goal line, goalZ); the error grows with distance, gauge and the
-    // shooter's accuracy.
-    gaugeHeight: function (g) { return NS.BALL_R + 5.2 * Math.pow(g < 0 ? 0 : (g > 1 ? 1 : g), 2.4); },
-    gaugeFor: function (h) { var v = (h - NS.BALL_R) / 5.2; return v <= 0 ? 0 : Math.min(1, Math.pow(v, 1 / 2.4)); },
+    // FC-style strike. The gauge g (0..1, the power bar) is the strike power, with a fixed maximum: more power = a faster
+    // ball AND a steeper launch, whatever the distance. Where it crosses the goal line comes from the flight (gravity,
+    // air drag): from the penalty spot about half the gauge is chest high and a full gauge flies over the bar; from 25 m
+    // you need about 60-70% to reach it at a good height; a tap is a soft ground shot.
+    shotSpeed: function (g) { return SHOT_MIN + (SHOT_MAX - SHOT_MIN) * g; },
+    shotLift: function (g) { return SHOT_LIFT * Math.pow(g, 1.7); },
+    // height (y) of a shot struck with gauge g when it has travelled d (below the ball radius = it has bounced already)
+    shotHeightAt: function (g, d) {
+      var v = this.shotSpeed(g);
+      var kd = d * AIR_K / v;
+      if (kd >= 0.97) return -1; // never gets there in the air
+      var t = -Math.log(1 - kd) / AIR_K;
+      return NS.BALL_R + this.shotLift(g) * t - 0.5 * G * t * t;
+    },
+    // gauge that puts a shot from distance d at height h on the goal line (what a good player would press)
+    gaugeFor: function (d, h) {
+      var best = 0.5, bestE = 1e9;
+      for (var k = 0; k <= 50; k++) {
+        var g = k / 50;
+        var y = this.shotHeightAt(g, d);
+        var e = y < NS.BALL_R ? 3 + (NS.BALL_R - y) : Math.abs(y - h); // a shot that lands short is a poor one
+        if (e < bestE) { bestE = e; best = g; }
+      }
+      return best;
+    },
     driveShot: function (p, goalZ, g, accuracy, bend) {
       var ball = World.ball;
       var attack = p.team === 0 ? 1 : -1;
@@ -216,18 +237,9 @@
       var sd = Math.sqrt(sdx * sdx + sdz * sdz);
       var err = (0.016 + sd * 0.0015) * (accuracy || 1) * (0.6 + g * 0.7);
       var angle = Math.atan2(sdx, sdz) + gaussR() * err;
-      var ty = this.gaugeHeight(g) + gaussR() * err * sd * 0.35 * g;
-      var speed = 21 + g * 25;
-      var vy;
-      if (ty < NS.BALL_R + 0.3) {
-        vy = 0; // along the ground
-        ball.pos.y = NS.BALL_R;
-      } else {
-        var kd = sd * AIR_K / speed;
-        var Ts = kd < 0.9 ? -Math.log(1 - kd) / AIR_K : sd / speed * 1.6; // time to the goal line, air drag included
-        vy = (ty - ball.pos.y) / Ts + 0.5 * G * Ts;
-        if (vy > 18) vy = 18;
-      }
+      var speed = this.shotSpeed(g);
+      var vy = this.shotLift(g) * (1 + gaussR() * err * 2);
+      if (vy < 0.3) { vy = 0; ball.pos.y = NS.BALL_R; } // along the ground
       ball.vel.set(Math.sin(angle) * speed, vy, Math.cos(angle) * speed);
       // aimed shots bend a little towards the corner; hard-struck shots wobble (knuckle)
       ball.spinY = -(bend || 0) * attack * 1.6 + (g > 0.8 ? (Math.random() - 0.5) * 3 : 0);

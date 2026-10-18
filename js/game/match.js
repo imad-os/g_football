@@ -576,8 +576,8 @@
       NS.HUD.setScore(0, 0);
       NS.HUD.setClock(0, 0);
       NS.HUD.hideBanner();
+      NS.HUD.hideHint(); // nothing written over the play: only goals, fouls and half / full time when play stops
       NS.HUD.show(true);
-      NS.HUD.hint(NS.I18n.t('hud.hint'), 7);
       NS.HUD.applySettings(World.settings);
       NS.Audio.crowd(true);
     },

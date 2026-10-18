@@ -291,14 +291,6 @@
         }
       }
 
-      // keeper holding the ball: count down the 5 seconds he may keep it
-      if (has && p.gkHands && p.gkHold > 2) {
-        var left = Math.ceil(5 - p.gkHold);
-        if (left !== slot.gkLeft) { slot.gkLeft = left; NS.HUD.hint(NS.I18n.t('hud.gk5').replace('%s', left), 1.1); }
-      } else {
-        slot.gkLeft = 0;
-      }
-
       // a penalty: nobody runs; the taker aims with the stick and shoots (the gauge sets height and pace)
       if (World.match.penalty) { p.vel.x = 0; p.vel.z = 0; pad.burst = false; return; }
 

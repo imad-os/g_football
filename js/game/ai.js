@@ -330,9 +330,8 @@
         if (sc > best) { best = sc; bz = tz; bh = th; }
       }
     }
-    var g = Actions.gaugeFor(bh) + gauss() * 0.05 * prof.acc;
-    // from range a bit more power so it carries (a little more height too)
-    if (dist > 25) g += (dist - 25) * 0.006;
+    // the power that puts it at that height from here (a little human error on the gauge)
+    var g = Actions.gaugeFor(dist - 1, bh) + gauss() * 0.025 * prof.acc;
     var pressure = oppDist(p.pos.x, p.pos.z, p.team);
     Actions.shootAt(p, bz, g, 0.55 * prof.acc * (pressure < 2.5 ? 1.35 : 1));
   }
@@ -343,7 +342,7 @@
     var z = side * (2.4 + Math.random() * 2.3);
     if (Math.random() < 0.12) z = (Math.random() - 0.5) * 1.5; // straight down the middle
     var h = Math.random() < 0.6 ? 1.1 + Math.random() * 0.8 : 1.9 + Math.random() * 0.9; // struck firmly, low-ish or high
-    Actions.shootAt(p, z, Actions.gaugeFor(h), 0.5 * prof.acc);
+    Actions.shootAt(p, z, Actions.gaugeFor(10, h) + gauss() * 0.02, 0.5 * prof.acc);
   }
 
   function gauss() { return (Math.random() + Math.random() + Math.random() - 1.5) * 2; } // ~N(0, 1)
