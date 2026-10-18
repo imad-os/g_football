@@ -219,6 +219,7 @@
     ball.gkTried = 0;
     ball.receiver = null;
     ball.contester = null;
+    ball.pen = false;
     p.gkHands = false;
     p.gkHold = 0;
     if (p.returnTo) p.returnT = 0.28; // one-two: play it back
@@ -342,6 +343,108 @@
     else NS.Scene.followBall(dt, ball.pos.x * 0.5, 0, camMode);
   }
 
+  // ---------------------------------------------------------------- fouls, free kicks, penalties
+  // A tackle from behind (Actions.onFoul): play stops; a free kick where it happened, or a penalty when it happened in
+  // the fouling team's own penalty area.
+  function onFoul(tackler, victim) {
+    var m = World.match;
+    var ball = World.ball;
+    if (m.setPieceTimer > 0 || m.penalty || breakKind) return;
+    var ownGoalX = tackler.team === 0 ? -HALF_W : HALF_W;
+    var inBox = Math.abs(victim.pos.x - ownGoalX) < 18 && Math.abs(victim.pos.z) < 15.5;
+    m.setPiece = inBox ? 2 : 1;
+    m.setTeam = victim.team;
+    m.setX = clamp(victim.pos.x, -HALF_W + 2, HALF_W - 2);
+    m.setZ = clamp(victim.pos.z, -HALF_H + 2, HALF_H - 2);
+    m.setTaker = victim;
+    m.setPieceTimer = 1.6;
+    ball.owner = null;
+    ball.receiver = null;
+    ball.contester = null;
+    ball.vel.set(0, 0, 0);
+    ball.hard = false;
+    NS.Audio.whistle(0);
+    NS.HUD.banner(NS.I18n.t(inBox ? 'hud.penalty' : 'hud.foul'), NS.I18n.t(inBox ? 'hud.penalty.sub' : 'hud.freekick'), 1.5);
+  }
+
+  // At a penalty the keeper cannot react in time: he picks a side (left, right, or stays in the middle) as it is struck
+  // and dives there. He saves it only when he guessed right (or it is badly placed / too soft).
+  function penaltyGuess(shootingTeam) {
+    var players = World.players;
+    var gk = null;
+    for (var i = 0; i < players.length; i++) if (players[i].role === 'GK' && players[i].team !== shootingTeam) gk = players[i];
+    if (!gk) return;
+    var r = Math.random();
+    var side = r < 0.43 ? -1 : (r < 0.86 ? 1 : 0);
+    gk.diveCd = 1.6; // no other dive: he is committed
+    World.ball.pen = true; // a struck penalty is harder to keep out even when he guesses right
+    if (!side) return;
+    gk.facing = gk.team === 0 ? Math.PI / 2 : -Math.PI / 2;
+    gk.vel.z = side * 13;
+    gk.diveT = 0.8;
+    gk.diveHigh = Math.random() < 0.3;
+    gk.diveRoll = -side * Math.sin(gk.facing) > 0 ? -1.25 : 1.25;
+  }
+
+  // Sets the free kick / penalty up when the referee has stopped play.
+  function startSetPiece() {
+    var m = World.match;
+    var ball = World.ball;
+    var players = World.players;
+    var t = m.setTeam;
+    var a = t === 0 ? 1 : -1;
+    var i, p;
+    for (i = 0; i < players.length; i++) {
+      p = players[i];
+      p.vel.set(0, 0, 0);
+      p.stun = 0; p.tackleT = 0; p.slideT = 0; p.lungeT = 0; p.runToT = 0;
+    }
+    var taker = m.setTaker;
+    if (m.setPiece === 2) {
+      // penalty: the spot 11 m out, the taker behind the ball, the keeper on his line, everybody else outside the box
+      var goalX = a * HALF_W;
+      m.setX = goalX - a * 11;
+      m.setZ = 0;
+      var best = null;
+      for (i = 0; i < players.length; i++) { p = players[i]; if (p.team === t && p.role === 'FWD') { best = p; break; } }
+      taker = best || taker;
+      var k = 0;
+      for (i = 0; i < players.length; i++) {
+        p = players[i];
+        if (p === taker) continue;
+        if (p.role === 'GK' && p.team !== t) { p.pos.set(goalX - a * 0.6, 0, 0); p.facing = a > 0 ? -Math.PI / 2 : Math.PI / 2; continue; }
+        if (p.role === 'GK') continue;
+        p.pos.set(goalX - a * (20 + (k % 3) * 1.5), 0, -12 + (k * 2.2) % 24);
+        k++;
+      }
+      m.penalty = true;
+      taker.aiT = 0;
+    } else {
+      // free kick: opponents at least 8 m from the ball
+      for (i = 0; i < players.length; i++) {
+        p = players[i];
+        if (p.team === t) continue;
+        var dx = p.pos.x - m.setX, dz = p.pos.z - m.setZ;
+        var d = Math.sqrt(dx * dx + dz * dz);
+        if (d < 8) {
+          if (d < 0.1) { dx = -a; dz = 0; d = 1; }
+          p.pos.x = clamp(m.setX + dx / d * 8, -HALF_W + 1, HALF_W - 1);
+          p.pos.z = clamp(m.setZ + dz / d * 8, -HALF_H + 1, HALF_H - 1);
+        }
+      }
+      m.protectT = 2.2;
+    }
+    taker.pos.set(m.setX - a * 0.95, 0, m.setZ);
+    taker.facing = a > 0 ? Math.PI / 2 : -Math.PI / 2;
+    taker.carry = 0.95;
+    ball.pos.set(m.setX, R, m.setZ);
+    takeBall(taker);
+    ball.pickupCooldown = 0.3;
+    m.setPiece = 0;
+    NS.HUD.hideBanner();
+    NS.Input.clearEdges();
+  }
+
   var Match = {
     labels: function (l) { labels = l; },
 
@@ -433,6 +536,7 @@
       }
       World.pressT[0] = 0;
       World.pressT[1] = 0;
+      m.setPieceTimer = 0; m.setPiece = 0; m.penalty = false; m.protectT = 0;
       // the kicking-off team starts with the ball in the centre circle
       var kicker = null;
       for (var k = 0; k < World.players.length; k++) {
@@ -539,6 +643,20 @@
         NS.Scene.followBall(dt, ball.pos.x, ball.pos.z, settings.cameraMode);
         return;
       }
+      // the referee stopped play for a foul: players slow down, then the free kick / penalty is set up
+      if (m.setPieceTimer > 0) {
+        m.setPieceTimer -= dt;
+        for (i = 0; i < n; i++) { p = players[i]; p.vel.x *= 0.9; p.vel.z *= 0.9; p.pos.x += p.vel.x * dt; p.pos.z += p.vel.z * dt; animate(p, dt); }
+        if (m.setPieceTimer <= 0) startSetPiece();
+        NS.Scene.followBall(dt, m.setX, m.setZ, settings.cameraMode);
+        return;
+      }
+      if (m.protectT > 0) m.protectT -= dt;
+      // the penalty has been struck: the keeper has to guess, then everybody plays on
+      if (m.penalty && ball.owner !== m.setTaker && (ball.owner === null || ball.owner.team !== m.setTeam)) {
+        m.penalty = false;
+        if (!ball.owner) penaltyGuess(m.setTeam);
+      }
 
       // ----- clock -----
       m.timeSeconds += dt * (90 / settings.durationMins);
@@ -611,6 +729,8 @@
         } else if (p.stun > 0) {
           p.vel.x *= 0.85;
           p.vel.z *= 0.85;
+        } else if (m.penalty && p !== ball.owner && p.role !== 'GK') {
+          p.vel.x = 0; p.vel.z = 0; // a penalty: everybody waits outside the box
         } else if (!p.isCtl) {
           AI.step(p, dt, p.rank, prof, World.pressT[p.team] > 0);
         }
@@ -660,7 +780,7 @@
           var d2 = ddx * ddx + ddz * ddz;
           if (p.role === 'GK' && ball.lastTouchTeam !== p.team && inOwnBox(p.team)) {
             // a diving keeper reaches much further (full stretch, hands up to the top corner)
-            var gkReach = p.diveT > 0 ? 13 : 7.5;
+            var gkReach = p.diveT > 0 ? 7.3 : 4.4; // squared: ~2.1 standing, ~2.7 at full stretch
             // the save is decided when the ball passes him (its closest point), or at once when it is on top of him
             var rv = -(ddx * ball.vel.x + ddz * ball.vel.z);
             var passing = d2 < 2.2 || rv <= bs2 * dt * 1.5; // rv > 0 while it still comes closer
@@ -678,10 +798,11 @@
               }
               // placement matters most: at the keeper = nearly always kept out, the corners are hard
               // (a dive covers part of the distance); pace above 30 makes every save harder
-              var reach = Math.sqrt(d2) - (p.diveT > 0 ? 1.4 : 0);
-              var place = reach <= 0.9 ? 0.2 : -(reach - 0.9) * 0.2;
+              var reach = Math.sqrt(d2) - (p.diveT > 0 ? 1.0 : 0);
+              var place = reach <= 0.7 ? 0.15 : -(reach - 0.7) * 0.28;
               var chance = speed < 12 ? 1 : clamp(gkSkill(p.team) + 0.04 + place - Math.max(0, speed - 30) * 0.012, 0.15, 0.96);
               if (ball.chip) chance *= 0.4;
+              if (ball.pen) chance *= 0.55;
               if (Math.random() < chance) {
                 if (speed < (p.diveT > 0 ? 34 : 28)) { // a diving keeper holds on to harder shots
                   takeBall(p);
@@ -724,10 +845,17 @@
           }
         }
         if (!gkActed && taker) {
-          if (ball.hard && bs2 > 676 && Math.random() < 0.5) {
-            ball.vel.x *= 0.55;
-            ball.vel.z += (Math.random() - 0.5) * 6;
-            ball.pickupCooldown = 0.15;
+          if (ball.hard && bs2 > 324) {
+            // a hard shot is not controlled by an outfield player: it hits him and deflects
+            ball.vel.x = -ball.vel.x * 0.25 + (Math.random() - 0.5) * 8;
+            ball.vel.z = ball.vel.z * 0.35 + (Math.random() - 0.5) * 10;
+            ball.vel.y = 1 + Math.random() * 4;
+            ball.hard = false;
+            ball.pickupCooldown = 0.2;
+            ball.lastTouchTeam = taker.team;
+            ball.kicker = taker;
+            ball.kickerT = 0.25;
+            NS.Audio.tackle();
           } else {
             takeBall(taker);
           }
@@ -795,5 +923,6 @@
     }
   };
 
+  Actions.onFoul = onFoul;
   NS.Match = Match;
 })(window.RS6 = window.RS6 || {});

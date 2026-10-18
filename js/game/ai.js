@@ -279,25 +279,71 @@
 
   /* ------------------------------------------------------------------ ball carrier */
 
+  // shot targets: 4 points across the goal x 3 heights (low, chest high, top corner). With the gauge a low shot is a
+  // soft one, so low is only for close range; the pace comes from striking it higher.
+  var SHOT_Z = [-4.6, -2.6, 2.6, 4.6];
+  var SHOT_H = [0.9, 1.8, 2.8];
+
+  // opponents (not the keeper) standing in the line of a shot from (x, z) to (gx, gz)
+  function blockers(x, z, gx, gz, team) {
+    var dx = gx - x, dz = gz - z;
+    var L = Math.sqrt(dx * dx + dz * dz) || 1;
+    var n = 0;
+    var players = World.players;
+    for (var i = 0; i < players.length; i++) {
+      var o = players[i];
+      if (o.team === team || o.role === 'GK' || o.stun > 0) continue;
+      var ox = o.pos.x - x, oz = o.pos.z - z;
+      var u = (ox * dx + oz * dz) / L;
+      if (u < 1 || u > L - 0.5) continue;
+      if (Math.abs(ox * dz - oz * dx) / L < 1.3) n++;
+    }
+    return n;
+  }
+
+  // Picks where to put it: the corner the keeper covers least, a lane without a defender, a height that suits the
+  // distance (along the ground close in, higher from range), then strikes it with the matching gauge.
   function shootNow(p, prof) {
     var a = attackOf(p);
     var goalX = a * HALF_W;
     var gk = TEAMS[1 - p.team].gk;
     var dx = goalX - p.pos.x;
     var dist = Math.sqrt(dx * dx + p.pos.z * p.pos.z);
-    // far post from the keeper
-    var side = gk ? (gk.pos.z >= 0 ? -1 : 1) : (Math.random() < 0.5 ? -1 : 1);
+    var gkZ = gk ? gk.pos.z : 0;
+    var gkOff = gk ? Math.abs(gk.pos.x - goalX) : 0;
+
+    if (gk && gkOff > 5 && dist < 30 && Math.random() < 0.7) { Actions.kick(p, ACT.CHIP, 0.6, 0, gkZ > 0 ? -0.5 : 0.5, 0.4); return; }
+    if (Math.abs(p.pos.z) > 8 && dist < 28 && Math.random() < 0.3) {
+      Actions.kick(p, ACT.CURVE, clamp(0.45 + dist / 60, 0.45, 0.9), 0, p.pos.z > 0 ? 1 : -1, 0.4);
+      return;
+    }
+    var best = -1e9, bz = 0, bh = 1;
+    for (var i = 0; i < SHOT_Z.length; i++) {
+      for (var j = 0; j < SHOT_H.length; j++) {
+        var tz = SHOT_Z[i], th = SHOT_H[j];
+        // how far the keeper has to go (a high ball near his body is easier for him than a low one at his feet)
+        var reach = Math.abs(tz - gkZ) - (th > 2 ? 0.9 : (th < 1 ? 0.3 : 0.6));
+        var sc = reach * 0.55 - blockers(p.pos.x, p.pos.z, goalX, tz, p.team) * 1.6;
+        if (th < 1) sc -= dist > 10 ? 1.2 : -0.2;   // low: fine close in, too soft from further out
+        if (th > 2) sc -= 0.25 + (dist < 10 ? 0.5 : 0); // the top corner is harder to hit, and over the bar close in
+        sc += (Math.random() - 0.5) * prof.noise * 6;
+        if (sc > best) { best = sc; bz = tz; bh = th; }
+      }
+    }
+    var g = Actions.gaugeFor(bh) + gauss() * 0.05 * prof.acc;
+    // from range a bit more power so it carries (a little more height too)
+    if (dist > 25) g += (dist - 25) * 0.006;
     var pressure = oppDist(p.pos.x, p.pos.z, p.team);
-    var spread = (1.3 + dist * 0.09) * prof.acc * (pressure < 2.5 ? 1.35 : 1);
-    var aimZ = side * (2.2 + Math.random() * 2.4) + gauss() * spread;
-    var az = clamp(aimZ / (GOAL_HALF_W * 0.85), -1.6, 1.6);
-    // placed when close, driven from distance (not every shot at full power)
-    var power = clamp(0.3 + dist / 55 + (Math.random() - 0.5) * 0.25, 0.35, 0.92);
-    var type = ACT.SHOOT;
-    if (gk && Math.abs(gk.pos.x - goalX) > 5 && dist < 30 && Math.random() < 0.7) type = ACT.CHIP;
-    else if (Math.abs(p.pos.z) > 8 && dist < 28 && Math.random() < 0.45) { type = ACT.CURVE; az = p.pos.z > 0 ? 1 : -1; }
-    Actions.kick(p, type, power, 0, az, 0.4);
-    if (type === ACT.SHOOT) World.ball.vel.y += gauss() * spread * 0.25; // a few still fly over
+    Actions.shootAt(p, bz, g, 0.55 * prof.acc * (pressure < 2.5 ? 1.35 : 1));
+  }
+
+  // A penalty: corner and height chosen at random (low corners most of the time), struck after a short run-up wait.
+  function penaltyShot(p, prof) {
+    var side = Math.random() < 0.5 ? -1 : 1;
+    var z = side * (2.4 + Math.random() * 2.3);
+    if (Math.random() < 0.12) z = (Math.random() - 0.5) * 1.5; // straight down the middle
+    var h = Math.random() < 0.6 ? 1.1 + Math.random() * 0.8 : 1.9 + Math.random() * 0.9; // struck firmly, low-ish or high
+    Actions.shootAt(p, z, Actions.gaugeFor(h), 0.5 * prof.acc);
   }
 
   function gauss() { return (Math.random() + Math.random() + Math.random() - 1.5) * 2; } // ~N(0, 1)
@@ -404,6 +450,14 @@
   }
 
   function aiCarrier(p, dt, prof) {
+    var m = World.match;
+    if (m.penalty) {
+      // the penalty taker waits for the referee, then shoots
+      p.vel.x = 0; p.vel.z = 0;
+      p.aiT += dt;
+      if (p.aiT > 1.1) { p.aiT = 0; penaltyShot(p, prof); }
+      return;
+    }
     var a = attackOf(p);
     if (p.drX === 0 && p.drZ === 0) { p.drX = a; p.drZ = 0; }
 
@@ -541,6 +595,11 @@
         moveToward(p, tx, tz, 10.8 * prof.speedMul, dt);
         return;
       }
+      // a free kick: stand off the ball until it is played
+      if (World.match.protectT > 0) {
+        moveToward(p, c.pos.x + gx * 7.5, c.pos.z + gz * 7.5, 9 * prof.speedMul, dt);
+        return;
+      }
       if (d < 2.6 && p.tackleCd <= 0 && side > -0.1 && !c.gkHands) {
         // carrier running at us (facing our goal) is easier to time than one shielding the ball
         var facing = Math.sin(c.facing) * gx + Math.cos(c.facing) * gz;
@@ -610,6 +669,13 @@
     var limit = GOAL_HALF_W - 0.4;
     if (p.diveCd > 0) p.diveCd -= dt;
 
+    // facing a penalty: on the line, still, until it is struck
+    if (World.match.penalty && ball.owner && ball.owner.team !== p.team) {
+      p.vel.x = 0; p.vel.z = 0;
+      p.facing = Math.atan2(ball.pos.x - p.pos.x, ball.pos.z - p.pos.z);
+      return;
+    }
+
     // in the air during a dive: no steering, he glides and lands
     if (p.diveT > 0 && ball.owner !== p) {
       var glide = Math.exp(-2.2 * dt);
@@ -646,7 +712,7 @@
           // too far to step across in time: dive at it
           var dir = cz > p.pos.z ? 1 : -1;
           p.facing = Math.atan2(ball.pos.x - p.pos.x, ball.pos.z - p.pos.z);
-          p.vel.z = dir * clamp(need / Math.max(t, 0.22), 7, 15);
+          p.vel.z = dir * clamp(need / Math.max(t, 0.22), 6, 10); // a human dive, not a teleport
           p.vel.x = (lineX - p.pos.x) * 2;
           p.diveT = 0.8;
           p.diveCd = 1.2;

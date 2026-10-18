@@ -161,7 +161,8 @@
     chip: false, // lofted shot: the keeper is much less likely to save it
     pickupCooldown: 0,
     receiver: null,  // team-mate the last pass was played to (he runs onto it)
-    contester: null  // the opponent nearest to that pass (he runs to it too)
+    contester: null, // the opponent nearest to that pass (he runs to it too)
+    pen: false       // a penalty kick in flight
   };
 
   function makeSlot(idx) {
@@ -194,7 +195,10 @@
     match: {
       running: false, paused: true,
       score: [0, 0], timeSeconds: 0,
-      celebrationTimer: 0, fullTimeTimer: 0, kickoffTimer: 0, half: 1, firstKick: 0
+      celebrationTimer: 0, fullTimeTimer: 0, kickoffTimer: 0, half: 1, firstKick: 0,
+      setPieceTimer: 0, setPiece: 0, setTeam: 0, setX: 0, setZ: 0, setTaker: null, // 1 free kick, 2 penalty
+      penalty: false,  // a penalty is being taken: only the taker and the keeper move until the kick
+      protectT: 0      // a free kick is being taken: nobody may tackle the taker yet
     },
 
     resetBall: function () {

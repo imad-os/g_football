@@ -99,6 +99,7 @@
       ball.chip = type === ACT.CHIP;
       ball.receiver = null;
       ball.contester = null;
+      ball.pen = false;
       p.dribbling = false;
       p.gkHands = false;
       p.kickT = type >= ACT.SHOOT ? 0.36 : 0.28; // kick animation
@@ -148,8 +149,8 @@
           ball.spinY = 0;
           return;
         }
-        // Driven shot: aimed at a point in the goal and struck on a real trajectory (not lobbed).
-        // Where: the stick picks the side; without it, the far side from the keeper.
+        // Driven shot. Where: the stick picks the side; without it, the far side from the keeper.
+        // How: `power` is the gauge (see driveShot).
         var gk = null;
         for (var gi = 0; gi < World.players.length; gi++) {
           var q = World.players[gi];
@@ -158,23 +159,7 @@
         var goalZ;
         if (aimed) goalZ = clamp(az, -1, 1) * (GOAL_HALF_W - 0.9);
         else goalZ = (gk && gk.pos.z > p.pos.z * 0.15 ? -1 : 1) * (GOAL_HALF_W - 1.3);
-        // How high: power decides (soft = low and placed, full power = rising towards the top corner)
-        var ty = 0.45 + power * power * 2.5;
-        var sdx = goalX - p.pos.x, sdz = goalZ - p.pos.z;
-        var sd = Math.sqrt(sdx * sdx + sdz * sdz);
-        // error grows with distance, power and the shooter's accuracy
-        var err = (0.018 + sd * 0.0016) * (accuracy || 1) * (0.55 + power * 0.8);
-        angle = Math.atan2(sdx, sdz) + gaussR() * err;
-        ty += gaussR() * err * sd * 0.5 + (power > 0.9 ? Math.random() * 0.9 : 0);
-        speed = 24 + power * 22;
-        var kd = sd * AIR_K / speed;
-        var Ts = kd < 0.9 ? -Math.log(1 - kd) / AIR_K : sd / speed * 1.6; // time to the goal line, air drag included
-        vy = (ty - ball.pos.y) / Ts + 0.5 * G * Ts;
-        // a driven shot is never a sky-high lob: from far away it dips and bounces short instead
-        if (vy > 5.5 + power * 4.5) vy = 5.5 + power * 4.5;
-        ball.vel.set(Math.sin(angle) * speed, vy, Math.cos(angle) * speed);
-        // aimed shots bend a little towards the corner; full-power shots wobble (knuckle)
-        ball.spinY = (aimed ? -clamp(az, -1, 1) * attack * 1.6 : 0) + (power > 0.8 ? (Math.random() - 0.5) * 3 : 0);
+        this.driveShot(p, goalZ, power, accuracy, aimed ? clamp(az, -1, 1) : 0);
         return;
       }
 
@@ -214,6 +199,44 @@
         tz = mate.pos.z + mate.vel.z * 0.25;
       }
       this.launch(p, type, tx, tz, mate, accuracy, forceTarget);
+    },
+
+    // The shot gauge g (0..1, the power bar): it sets both the pace and how far above the grass the ball crosses the
+    // goal line. 0 = a ground shot that the grass slows down, ~0.5 = waist high, ~0.75 = just under the bar,
+    // ~0.85 = the bar, 1 = into the stands. Aimed at (goal line, goalZ); the error grows with distance, gauge and the
+    // shooter's accuracy.
+    gaugeHeight: function (g) { return NS.BALL_R + 5.2 * Math.pow(g < 0 ? 0 : (g > 1 ? 1 : g), 2.4); },
+    gaugeFor: function (h) { var v = (h - NS.BALL_R) / 5.2; return v <= 0 ? 0 : Math.min(1, Math.pow(v, 1 / 2.4)); },
+    driveShot: function (p, goalZ, g, accuracy, bend) {
+      var ball = World.ball;
+      var attack = p.team === 0 ? 1 : -1;
+      g = clamp(g, 0, 1);
+      var goalX = attack * HALF_W;
+      var sdx = goalX - ball.pos.x, sdz = goalZ - ball.pos.z; // from the ball (in front of his foot)
+      var sd = Math.sqrt(sdx * sdx + sdz * sdz);
+      var err = (0.016 + sd * 0.0015) * (accuracy || 1) * (0.6 + g * 0.7);
+      var angle = Math.atan2(sdx, sdz) + gaussR() * err;
+      var ty = this.gaugeHeight(g) + gaussR() * err * sd * 0.35 * g;
+      var speed = 21 + g * 25;
+      var vy;
+      if (ty < NS.BALL_R + 0.3) {
+        vy = 0; // along the ground
+        ball.pos.y = NS.BALL_R;
+      } else {
+        var kd = sd * AIR_K / speed;
+        var Ts = kd < 0.9 ? -Math.log(1 - kd) / AIR_K : sd / speed * 1.6; // time to the goal line, air drag included
+        vy = (ty - ball.pos.y) / Ts + 0.5 * G * Ts;
+        if (vy > 18) vy = 18;
+      }
+      ball.vel.set(Math.sin(angle) * speed, vy, Math.cos(angle) * speed);
+      // aimed shots bend a little towards the corner; hard-struck shots wobble (knuckle)
+      ball.spinY = -(bend || 0) * attack * 1.6 + (g > 0.8 ? (Math.random() - 0.5) * 3 : 0);
+    },
+
+    // CPU / penalty shot at an exact target: goal z and gauge.
+    shootAt: function (p, goalZ, g, accuracy) {
+      this.release(p, ACT.SHOOT);
+      this.driveShot(p, goalZ, g, accuracy, 0);
     },
 
     // AI pass to an exact point (receiver runs onto it).
@@ -376,7 +399,8 @@
       p.tackleT -= dt;
       var ball = World.ball;
       var carrier = ball.owner;
-      if (!p.tackleHit && carrier && carrier.team !== p.team && !carrier.gkHands) { // never from a keeper's hands
+      // never from a keeper's hands, nor while a free kick is being taken
+      if (!p.tackleHit && carrier && carrier.team !== p.team && !carrier.gkHands && World.match.protectT <= 0) {
         var dx = carrier.pos.x - p.pos.x;
         var dz = carrier.pos.z - p.pos.z;
         var bx = ball.pos.x - p.pos.x;
@@ -387,6 +411,14 @@
           var cl = Math.sqrt(dx * dx + dz * dz) || 1;
           // +1 = the tackler comes from the front (where the ball is), -1 = from behind
           var front = -(Math.sin(carrier.facing) * dx + Math.cos(carrier.facing) * dz) / cl;
+          // a tackle that goes through the man from behind is a foul (free kick, or a penalty in the box)
+          if (front < -0.35 && dx * dx + dz * dz < reach && this.onFoul && World.match.protectT <= 0) {
+            p.tackleT = 0;
+            p.stun = 1.0;
+            carrier.fallT = 0.55;
+            this.onFoul(p, carrier);
+            return;
+          }
           var chance = baseChance + (p.tackleSlide ? 0.08 : 0);
           if (front < -0.35) chance *= p.tackleSlide ? 0.22 : 0.1; // from behind: the carrier's body shields the ball
           else if (front < 0.3) chance *= 0.6;                      // from the side

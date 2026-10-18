@@ -27,7 +27,10 @@ controller**, since they all use the same standard button positions (shown with 
 Nintendo by position). There are no tap / hold gestures: **holding a button never changes the move**, only how it is played:
 
 * passes (low, through, long): the longer the hold, the firmer the pass (up to about 35% more pace; a long ball flies flatter)
-* shots (shoot, curve, chip): a tap is a soft placed shot, about 0.7 s is full power (the power bar shows it)
+* **shoot**: the power bar is the shot gauge. It sets both the pace and how far above the grass the ball crosses the goal
+  line: 0% = a ground shot that the grass slows down (from far out it never arrives), ~50% = waist high, ~75% = just under
+  the bar, ~85% = the bar, 100% = into the stands. The stick picks the side (without it: the far side from the keeper).
+* curve and chip shots: a tap is a soft one, about 0.7 s is full power
 * press and team press: active as long as the button is held
 * tackle, slide tackle, switch player: happen the moment the button is pressed
 
@@ -69,12 +72,22 @@ player's arrow blinks yellow until somebody has the ball.
 shot (the button must be down when the ball arrives). Only the player closest to the ball can head it. CPU players head
 clearances and chances; your team-mates never head for you.
 
-**Shots** are driven, not lobbed: the stick picks the side (without it: the far side from the keeper), the power (hold)
-picks the height, from low and placed to rising into the top corner (full power can fly over), with speed 24 to 46. Aimed
-shots bend a little, full-power shots wobble, and a streak follows the ball.
+**Shots** follow the gauge above (speed 21 to 46). Aimed shots bend a little, hard-struck shots wobble, a streak follows the
+ball. A hard shot that hits an outfield player is blocked and deflects; nobody but the keeper can simply collect it.
 
-**Goalkeepers** read the shot with the ball physics and **dive** to where it crosses the line, catching it at full stretch or
-pushing it away when it is too hard; shots straight at them are nearly always kept out, the corners are hard. The keeper catches (hands) shots and balls played by the opponents inside his penalty area; a pass from a
+**The CPU shoots like a player**: it weighs 12 targets (4 across the goal, low / chest high / top corner) by how far the keeper
+has to go, defenders in the line of the shot and the distance (low only close in, struck higher from range), then strikes it
+with the matching gauge. About 2 to 3 goals per CPU vs CPU match, keepers dive about 7 times a match.
+
+**Fouls**: a tackle (standing or sliding) that goes through the carrier from behind is a foul; from the side or the front it
+is fair. Play stops, the referee whistles: a **free kick** where it happened (opponents 8 m away, no tackling until it is
+played), or a **penalty** when it happened in the fouling team's own penalty area. At a penalty everybody waits outside the
+box; the taker aims with the stick and shoots with the gauge (the CPU picks a corner), and the keeper must guess a side as it
+is struck (about 3 in 4 penalties go in).
+
+**Goalkeepers** read the shot with the ball physics and **dive** to where it crosses the line (a human reach and dive speed),
+catching it at full stretch or pushing it away when it is too hard; shots straight at them are nearly always kept out, the
+corners are hard. The keeper catches (hands) shots and balls played by the opponents inside his penalty area; a pass from a
 team-mate must be played with the feet. A keeper may hold the ball 5 seconds at most: after that it is kicked long anyway.
 Player 2: the second controller or phone controller connected.
 

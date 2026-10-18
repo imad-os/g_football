@@ -358,16 +358,16 @@ h1, h2, p { margin: 0; }
 
 /* GOOOAL: animated letters, a flash, the scorer strip in the team colour */
 #goal-fx { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; --team: #f59e0b; }
-#goal-fx .goal-flash { position: absolute; inset: 0; background: radial-gradient(circle at 50% 45%, rgba(255, 244, 200, 0.55), rgba(255, 244, 200, 0) 60%); opacity: 0; }
+#goal-fx .goal-flash { position: absolute; inset: 0; background: rgba(255, 244, 200, 0.28); opacity: 0; will-change: opacity; }
 #goal-fx.play .goal-flash { animation: goalFlash 1s ease-out both; }
 .goal-word { position: relative; font-family: Impact, 'Arial Black', 'Segoe UI Black', sans-serif; font-weight: 900; font-style: italic; font-size: 8rem; line-height: 1; letter-spacing: 0.02em; white-space: nowrap; }
+/* solid colour + stroke + one hard shadow (no gradient clip, no filter): each letter is its own GPU layer and only its
+   transform animates, so the TV does not repaint the text every frame */
 .goal-word span {
-  display: inline-block; color: transparent;
-  background: linear-gradient(180deg, #fffbe0 0%, #fde047 35%, #f59e0b 62%, #dc2626 100%);
-  -webkit-background-clip: text; background-clip: text;
-  -webkit-text-stroke: 3px #1e1b4b; filter: drop-shadow(0 0.4rem 0 rgba(0, 0, 0, 0.45));
+  display: inline-block; color: #fde047; -webkit-text-stroke: 3px #7c2d12;
+  text-shadow: 0 0.35rem 0 #1e1b4b; will-change: transform;
 }
-#goal-fx.play .goal-word span { animation: goalPop 0.55s cubic-bezier(0.2, 1.6, 0.4, 1) both, goalWave 1.1s ease-in-out infinite; }
+#goal-fx.play .goal-word span { animation: goalPop 0.55s cubic-bezier(0.2, 1.6, 0.4, 1) both, goalWave 1.1s ease-in-out 2; }
 .goal-sub {
   position: relative; margin-top: 0.9rem; padding: 0.35rem 1.4rem; font-weight: 900; font-size: 1.4rem; letter-spacing: 0.04em;
   color: #fff; background: rgba(2, 6, 15, 0.7); border-radius: 0.5rem; border-left: 6px solid var(--team); border-right: 6px solid var(--team);

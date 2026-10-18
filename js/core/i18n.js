@@ -602,6 +602,13 @@
   Object.assign(D.es, { 'help.g2': 'Jugador 2: un segundo mando o mando de telefono (el segundo conectado).' });
   Object.assign(D.ar, { 'help.g2': 'اللاعب 2: ذراع لعب ثانية أو ذراع هاتف (الثانية المتصلة).' });
 
+
+  // v1.9: fouls, free kicks, penalties
+  Object.assign(D.en, { 'hud.foul': 'FOUL!', 'hud.freekick': 'Free kick', 'hud.penalty': 'PENALTY!', 'hud.penalty.sub': 'Foul in the box' });
+  Object.assign(D.fr, { 'hud.foul': 'FAUTE !', 'hud.freekick': 'Coup franc', 'hud.penalty': 'PENALTY !', 'hud.penalty.sub': 'Faute dans la surface' });
+  Object.assign(D.es, { 'hud.foul': '¡FALTA!', 'hud.freekick': 'Tiro libre', 'hud.penalty': '¡PENALTI!', 'hud.penalty.sub': 'Falta en el area' });
+  Object.assign(D.ar, { 'hud.foul': 'خطأ!', 'hud.freekick': 'ركلة حرة', 'hud.penalty': 'ضربة جزاء!', 'hud.penalty.sub': 'خطأ داخل منطقة الجزاء' });
+
   var lang = 'en';
 
   NS.I18n = {

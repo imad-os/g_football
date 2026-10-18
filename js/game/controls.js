@@ -49,7 +49,7 @@
   function tackleOrSwitch(slot, slide) {
     var p = slot.player;
     var c = World.ball.owner;
-    if (c && c.team !== p.team && !c.gkHands && p.tackleCd <= 0) {
+    if (c && c.team !== p.team && !c.gkHands && p.tackleCd <= 0 && World.match.protectT <= 0) {
       var dx = c.pos.x - p.pos.x;
       var dz = c.pos.z - p.pos.z;
       if (dx * dx + dz * dz < (slide ? 56 : 17.6)) { Actions.startTackle(p, c, true, slide); return; }
@@ -79,7 +79,7 @@
     if (mi === I_LOW) type = ACT.PASS;
     else if (mi === I_THR) type = ACT.THROUGH;
     else if (mi === I_LONG) type = ACT.LONG;
-    else if (mi === I_SHOOT) { type = ACT.SHOOT; power = holdPower(d); follow = false; }
+    else if (mi === I_SHOOT) { type = ACT.SHOOT; power = d / FULL_CHARGE > 1 ? 1 : d / FULL_CHARGE; follow = false; } // the gauge
     else if (mi === I_CURVE) { type = ACT.CURVE; power = holdPower(d); follow = false; }
     else if (mi === I_CHIP) { type = ACT.CHIP; power = holdPower(d); follow = false; }
     else if (mi === I_ONETWO) { Actions.oneTwo(p, pad.x, pad.y); slot.lockT = 1.4; return; }
@@ -298,6 +298,9 @@
       } else {
         slot.gkLeft = 0;
       }
+
+      // a penalty: nobody runs; the taker aims with the stick and shoots (the gauge sets height and pace)
+      if (World.match.penalty) { p.vel.x = 0; p.vel.z = 0; pad.burst = false; return; }
 
       // ---- movement ----
       if (pad.burst) { pad.burst = false; if (p.stamina > 20) slot.burstT = 0.8; }
