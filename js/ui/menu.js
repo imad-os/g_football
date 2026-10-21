@@ -720,6 +720,7 @@
       var b = btn('form', f, 'f:' + f, function () {
         World.session.formations[World.session.editingSquadIdx] = f;
         if (matchRunning()) NS.Match.refreshFromSession();
+        else NS.Match.refitRoster(World.session.editingSquadIdx); // the right players for the new positions
         renderGamePlan('f:' + f);
       });
       b.setAttribute('data-form', f);
@@ -770,6 +771,8 @@
     wrap.appendChild(foot);
   }
 
+  function clamp01(v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
+
   function drawBoard(layout, roster, teamObj) {
     var w = gpCanvas.width;
     var h = gpCanvas.height;
@@ -787,7 +790,8 @@
     gpCtx.stroke();
     for (var i = 0; i < layout.length; i++) {
       var slot = layout[i];
-      var px = ((slot.x + NS.PITCH_HALF_W) / (NS.PITCH_HALF_W * 2)) * (w - 36) + 18;
+      // kick-off positions are all in our half: spread them over the whole board (keeper left, forwards right)
+      var px = clamp01((slot.x + NS.PITCH_HALF_W) / NS.PITCH_HALF_W) * (w - 36) + 18;
       var pz = ((slot.z + NS.PITCH_HALF_H) / (NS.PITCH_HALF_H * 2)) * (h - 36) + 18;
       gpCtx.fillStyle = s.selectedStarterIdx === i ? '#f59e0b' : NS.Assets.hexToCss(teamObj.c1);
       gpCtx.beginPath();
@@ -796,9 +800,9 @@
       gpCtx.strokeStyle = '#ffffff';
       gpCtx.stroke();
       gpCtx.fillStyle = '#ffffff';
-      gpCtx.font = 'bold 11px sans-serif';
+      gpCtx.font = layout.length > 7 ? 'bold 9px sans-serif' : 'bold 11px sans-serif';
       gpCtx.textAlign = 'center';
-      gpCtx.fillText((roster[i] || '').slice(0, 9), px, pz + 20);
+      gpCtx.fillText((roster[i] || '').slice(0, 9), px, pz + (layout.length > 7 ? 17 : 20));
     }
   }
 
@@ -853,7 +857,7 @@
       b.appendChild(el('span', 'num', '#' + slot.num));
       refs.gpStarters.appendChild(b);
     });
-    for (var j = 7; j < roster.length; j++) {
+    for (var j = layout.length; j < roster.length; j++) {
       (function (k) {
         var b = btn('player sub', '', 'b:' + k, function () {
           if (s.selectedStarterIdx === null) return;

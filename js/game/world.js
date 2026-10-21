@@ -109,7 +109,8 @@
     return true;
   }
 
-  // Touchlines, goal lines, posts and bar. Returns the scoring team or -1.
+  // Posts, bar and net. Returns the scoring team, -1, -2 (hit the woodwork), -3 (all of the ball over a touchline) or
+  // -4 (over a goal line, not in the goal). Outside the goal there are no walls any more: the ball goes out of play.
   function collide(st, scoring) {
     var az = st.z < 0 ? -st.z : st.z;
     var hit = false;
@@ -140,12 +141,10 @@
       if (scoring && st.x * gs > HALF_W + R && az < GOAL_HALF_W - POST_R) return gs > 0 ? 0 : 1;
       return -1;
     }
-    if (st.z > HALF_H) { st.z = HALF_H; st.vz = -st.vz * 0.6; }
-    else if (st.z < -HALF_H) { st.z = -HALF_H; st.vz = -st.vz * 0.6; }
-    // goal line: wall everywhere except inside the goal mouth under the bar
-    if (st.x > HALF_W && (az >= GOAL_HALF_W || st.y >= GOAL_HEIGHT)) { st.x = HALF_W; st.vx = -st.vx * 0.6; }
-    else if (st.x < -HALF_W && (az >= GOAL_HALF_W || st.y >= GOAL_HEIGHT)) { st.x = -HALF_W; st.vx = -st.vx * 0.6; }
-    return hit ? -2 : -1;
+    if (hit) return -2;
+    if (az > HALF_H + R) return -3;
+    if (st.x > HALF_W + R || st.x < -HALF_W - R) return -4;
+    return -1;
   }
 
   var ball = {
@@ -162,7 +161,9 @@
     pickupCooldown: 0,
     receiver: null,  // team-mate the last pass was played to (he runs onto it)
     contester: null, // the opponent nearest to that pass (he runs to it too)
-    pen: false       // a penalty kick in flight
+    pen: false,      // a penalty kick in flight
+    shotD: 0,        // distance to goal the last shot was struck from
+    offTeam: -1      // team whose last pass left some of its players offside (their p.offside flags), -1 none
   };
 
   function makeSlot(idx) {
@@ -171,7 +172,8 @@
             chargeMove: -1, chargeFrac: -1, pressing: false, teamPress: false, evPlayer: null, burstT: 0, lockT: 0,
       evActive: false, evMask: 0, evT: 0, evSettle: 0, evCtx: 0, evMove: -1, evPrev: 0,
       gkLeft: 0, // keeper countdown shown (seconds left)
-      manual: false, manualOwner: null // switched by button: auto-switch waits until the ball changes hands
+      manual: false, manualOwner: null, // switched by button: auto-switch waits until the ball changes hands
+      shCd: 0 // shoulder challenge while pressing
     };
   }
 
@@ -201,7 +203,10 @@
       setPieceTimer: 0, setPiece: 0, setTeam: 0, setX: 0, setZ: 0, setTaker: null, // 1 free kick, 2 penalty
       penalty: false,  // a penalty is being taken: only the taker and the keeper move until the kick
       protectT: 0,     // a free kick is being taken: nobody may tackle the taker yet
-      sendOff: null    // a player shown a red card: he leaves when play restarts
+      sendOff: null,   // a player shown a red card: he leaves when play restarts
+      restart: 0,      // 3 throw-in, 4 corner, 5 goal kick: the taker has not played it yet (he cannot run with it)
+      restartT: 0,
+      extra: 0         // time played after 45 / 90 minutes while an attack is still on
     },
 
     resetBall: function () {
@@ -212,6 +217,7 @@
       ball.receiver = null;
       ball.contester = null;
       ball.pickupCooldown = 0.25;
+      ball.offTeam = -1;
     },
 
     // Advances the ball. Returns the scoring team (0 = home, +x goal; 1 = away) or -1.
@@ -221,11 +227,16 @@
 
       var o = ball.owner;
       if (o) {
-        var carry = o.gkHands ? 0.55 : o.carry; // a keeper holds it in his hands, at chest height
+        var carry = o.throwIn ? 0.2 : (o.gkHands ? 0.55 : o.carry); // a keeper holds it in his hands, at chest height
         ball.pos.x = o.pos.x + Math.sin(o.facing) * carry;
-        ball.pos.y = o.gkHands ? 1.45 : R;
+        ball.pos.y = o.throwIn ? 3.05 : (o.gkHands ? 1.45 : R); // a throw-in: over his head
         ball.pos.z = o.pos.z + Math.cos(o.facing) * carry;
         ball.vel.set(o.vel.x, 0, o.vel.z);
+        // he ran it over a line (not while he holds it for a throw-in / restart)
+        if (!o.throwIn && !World.match.restart) {
+          if (ball.pos.z > HALF_H + R || ball.pos.z < -HALF_H - R) return -3;
+          if (ball.pos.x > HALF_W + R || ball.pos.x < -HALF_W - R) return -4;
+        }
         return -1;
       }
 

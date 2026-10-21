@@ -109,12 +109,12 @@
     return !ball.owner && (ball.receiver === p || ball.contester === p);
   }
 
-  // A loose ball in the air right next to this player (a header is possible, nothing else).
+  // A loose ball in the air right next to this player, coming down to him (a header is possible, nothing else).
   function airNear(p) {
     var ball = World.ball;
-    if (ball.owner || ball.pos.y < 1.3) return false;
+    if (ball.owner || ball.pos.y < 1.3 || ball.pos.y > 6) return false;
     var dx = ball.pos.x - p.pos.x, dz = ball.pos.z - p.pos.z;
-    return dx * dx + dz * dz < 25;
+    return dx * dx + dz * dz < 16;
   }
 
   // The ball is at head height, in reach, and this player is the closest one to it.
@@ -238,8 +238,9 @@
           slot.evMask = held;
           slot.evT = 0;
           slot.evMove = -1;
-          // 1 = with the ball, 3 = a ball in the air coming to us / next to us (header only), 2 = defending
-          slot.evCtx = has ? 1 : ((receiving(p) || airNear(p)) ? 3 : 2);
+          // 1 = with the ball, 3 = a pass / shot button pressed while a ball in the air is right next to us (header
+          // only), 2 = everything else without the ball
+          slot.evCtx = has ? 1 : (airNear(p) && B.resolve(1, held) >= 0 ? 3 : 2);
           slot.evPlayer = p;
           slot.evSettle = B.needsSettle(held) ? 0.06 : 0;
         }
@@ -268,10 +269,14 @@
           mv = B.resolve(1, slot.evMask);
           if (mv < 0) mv = I_LOW;
           slot.chargeMove = mv;
+          // the ball went away from him (or too long since the press): the press is over, nothing is kept
+          if (!airNear(p) || slot.evT > 0.6) { endEvent(slot); mv = -1; }
           slot.chargeFrac = slot.evT > 0.06 ? Math.min(1, slot.evT / fullCharge()) : -1;
           // A header happens only while the button is down and the ball is at head height next to him. Nothing is
           // ever stored for later: released early, or the ball came to his feet = no action (press again to play).
-          if (has || ball.owner) {
+          if (mv < 0) {
+            // ended above
+          } else if (has || ball.owner) {
             endEvent(slot);
           } else if (inHeadZone(p)) {
             header(slot, p, mv, pad);
@@ -304,7 +309,8 @@
       }
 
       // a penalty: nobody runs; the taker aims with the stick and shoots (the gauge sets height and pace)
-      if (World.match.penalty) { p.vel.x = 0; p.vel.z = 0; pad.burst = false; return; }
+      // a throw-in / corner / goal kick: the taker stands still, the stick aims the ball
+      if (World.match.penalty || (World.match.restart && has)) { p.vel.x = 0; p.vel.z = 0; pad.burst = false; return; }
 
       // ---- movement ----
       if (pad.burst) { pad.burst = false; if (p.stamina > 20) slot.burstT = 0.8; }
@@ -341,6 +347,12 @@
         else { mx = cx / cl; mz = cz / cl; }
         len = Math.sqrt(mx * mx + mz * mz) || 1;
         if (slot.teamPress) World.pressT[p.team] = 0.3;
+        // close enough: lean in with the shoulder and try to take it (every half second or so while pressing)
+        if (slot.shCd > 0) slot.shCd -= dt;
+        if (cl < 1.9 && slot.shCd <= 0) {
+          slot.shCd = 0.55;
+          if (Actions.shoulder(p, carrier, 0.4)) return;
+        }
       }
 
       // a pass is on its way to this player: he goes to meet it (a lofted ball: where it comes down, or at head

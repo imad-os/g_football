@@ -2,13 +2,16 @@
 (function (NS) {
   'use strict';
 
-  NS.VERSION = '1.13.0';
+  NS.VERSION = '1.14.0';
 
-  // Pitch geometry (world units; x = length, z = width, y = up)
-  // The pitch is 20% bigger than the original 92 x 56 (PITCH_SCALE also scales the formations).
-  NS.PITCH_SCALE = 1.2;
-  NS.PITCH_HALF_W = 46 * NS.PITCH_SCALE;
-  NS.PITCH_HALF_H = 28 * NS.PITCH_SCALE;
+  // Pitch geometry (world units = metres; x = length, z = width, y = up): a real 105 x 68 pitch.
+  NS.PITCH_HALF_W = 52.5;
+  NS.PITCH_HALF_H = 34;
+  NS.PITCH_SCALE = NS.PITCH_HALF_W / 46; // the original 92 x 56 pitch (camera and stands are sized from it)
+  NS.BOX_D = 16.5;     // penalty area: depth and half width
+  NS.BOX_HW = 20.16;
+  NS.SIX_D = 5.5;      // goal area
+  NS.SIX_HW = 9.16;
   NS.GOAL_HALF_W = 5.6;
   NS.GOAL_DEPTH = 2.6;
   NS.GOAL_HEIGHT = 3.6;
@@ -24,6 +27,7 @@
   NS.DEFAULT_SETTINGS = {
     quality: 'AUTO',
     difficulty: 'NORMAL',
+    teamSize: 11,
     durationMins: 3,
     gameSpeed: 1.0,
     gaugeTime: 0.5,
@@ -43,6 +47,9 @@
   NS.SETTING_DEFS = [
     { key: 'difficulty', group: 'game', label: 'set.difficulty', hint: 'set.difficulty.h',
       options: [['EASY', 'opt.easy'], ['NORMAL', 'opt.normal'], ['HARD', 'opt.hard'], ['LEGEND', 'opt.legend']] },
+    // players per team (applies from the next match)
+    { key: 'teamSize', group: 'game', label: 'set.teamsize', hint: 'set.teamsize.h',
+      options: [[11, 'opt.t11'], [7, 'opt.t7']] },
     { key: 'durationMins', group: 'game', label: 'set.duration', hint: 'set.duration.h',
       options: [[3, 'opt.min3'], [5, 'opt.min5'], [10, 'opt.min10']] },
     { key: 'gameSpeed', group: 'game', label: 'set.pace', hint: 'set.pace.h',

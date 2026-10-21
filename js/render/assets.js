@@ -4,6 +4,8 @@
 
   var geo = {};
   var jerseyCache = {};
+  var limbCache = {};
+  var HIP = 1.2;      // hip height: legs are about half the body, like a person
   var pitchTexture = null;
   var ballTextures = {};
 
@@ -14,11 +16,11 @@
   }
 
   function initGeometries() {
-    geo.torso = new THREE.BoxGeometry(0.95, 1.25, 0.55);
-    geo.head = new THREE.BoxGeometry(0.62, 0.65, 0.62);
-    geo.hair = new THREE.BoxGeometry(0.66, 0.25, 0.66);
-    geo.limb = new THREE.BoxGeometry(0.32, 0.85, 0.32);
-    geo.arm = new THREE.BoxGeometry(0.22, 0.78, 0.22);
+    geo.torso = new THREE.BoxGeometry(0.82, 1.0, 0.48);
+    geo.head = new THREE.BoxGeometry(0.5, 0.56, 0.5);
+    geo.hair = new THREE.BoxGeometry(0.54, 0.2, 0.54);
+    geo.limb = new THREE.BoxGeometry(0.27, 1.17, 0.29); // one box per leg: shorts, sock and boot are painted on it
+    geo.arm = new THREE.BoxGeometry(0.2, 0.98, 0.2);    // sleeve and skin painted on it
     geo.card = new THREE.BoxGeometry(0.36, 0.5, 0.1); // booking card shown over the head
     geo.shadow = new THREE.CircleGeometry(0.85, 12);
     geo.shadow.rotateX(-Math.PI / 2);
@@ -56,29 +58,75 @@
     return tex;
   }
 
-  function buildPitchTexture(withStripes) {
+  // A leg (shorts / sock / boot) or an arm (sleeve / skin) painted from the top down: no extra meshes per player.
+  function limbTexture(top, mid, bottom, topPart, bottomPart) {
+    var key = top + '_' + mid + '_' + bottom + '_' + topPart;
+    if (limbCache[key]) return limbCache[key];
     var canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 256;
+    canvas.width = 8;
+    canvas.height = 64;
     var ctx = canvas.getContext('2d');
-    var stripes = 12;
-    var sw = canvas.width / stripes;
-    for (var i = 0; i < stripes; i++) {
-      ctx.fillStyle = (!withStripes || i % 2 === 0) ? '#1f7234' : '#26843d';
-      ctx.fillRect(i * sw, 0, sw, canvas.height);
+    ctx.fillStyle = hexToCss(mid);
+    ctx.fillRect(0, 0, 8, 64);
+    ctx.fillStyle = hexToCss(top);
+    ctx.fillRect(0, 0, 8, Math.round(64 * topPart));
+    if (bottomPart > 0) {
+      ctx.fillStyle = hexToCss(bottom);
+      ctx.fillRect(0, 64 - Math.round(64 * bottomPart), 8, 64);
     }
-    ctx.strokeStyle = 'rgba(255,255,255,0.88)';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(16, 14, canvas.width - 32, canvas.height - 28);
-    ctx.beginPath();
-    ctx.moveTo(canvas.width / 2, 14);
-    ctx.lineTo(canvas.width / 2, canvas.height - 14);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(canvas.width / 2, canvas.height / 2, 34, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.strokeRect(16, canvas.height / 2 - 58, 68, 116);
-    ctx.strokeRect(canvas.width - 84, canvas.height / 2 - 58, 68, 116);
+    var tex = new THREE.CanvasTexture(canvas);
+    limbCache[key] = tex;
+    return tex;
+  }
+
+  // The pitch: the lines sit exactly on the real 105 x 68 markings (the goal lines run through the posts), with a
+  // strip of grass outside them for throw-ins and corners: the plane is PITCH_MARGIN bigger on every side.
+  var PITCH_MARGIN = 4;
+  function buildPitchTexture(withStripes) {
+    var W = 1024, H = 512;
+    var HW = NS.PITCH_HALF_W, HH = NS.PITCH_HALF_H, M = PITCH_MARGIN;
+    var sx = W / (2 * (HW + M)), sy = H / (2 * (HH + M));
+    function X(x) { return (x + HW + M) * sx; }
+    function Y(z) { return (z + HH + M) * sy; }
+    var canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    var ctx = canvas.getContext('2d');
+    var stripes = 18;
+    var sw = (2 * HW) / stripes;
+    ctx.fillStyle = '#1f7234';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#26843d';
+    for (var i = 1; withStripes && i < stripes; i += 2) ctx.fillRect(X(-HW + i * sw), 0, sw * sx + 0.5, H);
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 2.5;
+    function rect(x0, z0, x1, z1) { ctx.strokeRect(X(x0), Y(z0), X(x1) - X(x0), Y(z1) - Y(z0)); }
+    // circles and arcs in metres (the canvas is not scaled the same way on both axes)
+    function arc(cx, cz, r, a0, a1, fill) {
+      ctx.save();
+      ctx.translate(X(cx), Y(cz));
+      ctx.scale(sx, sy);
+      ctx.beginPath();
+      ctx.arc(0, 0, r, a0, a1);
+      ctx.restore();
+      if (fill) { ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fill(); } else ctx.stroke();
+    }
+    rect(-HW, -HH, HW, HH);
+    ctx.beginPath(); ctx.moveTo(X(0), Y(-HH)); ctx.lineTo(X(0), Y(HH)); ctx.stroke();
+    arc(0, 0, 9.15, 0, Math.PI * 2);
+    arc(0, 0, 0.3, 0, Math.PI * 2, true);
+    var open = Math.acos((NS.BOX_D - 11) / 9.15); // the penalty arc: the part of the circle outside the box
+    for (var e = -1; e <= 1; e += 2) {
+      var gx = e * HW;
+      rect(Math.min(gx, gx - e * NS.BOX_D), -NS.BOX_HW, Math.max(gx, gx - e * NS.BOX_D), NS.BOX_HW);
+      rect(Math.min(gx, gx - e * NS.SIX_D), -NS.SIX_HW, Math.max(gx, gx - e * NS.SIX_D), NS.SIX_HW);
+      arc(gx - e * 11, 0, 0.3, 0, Math.PI * 2, true);
+      if (e < 0) arc(gx + 11, 0, 9.15, -open, open);
+      else arc(gx - 11, 0, 9.15, Math.PI - open, Math.PI + open);
+      // corner arcs
+      arc(gx, -HH, 1, e < 0 ? 0 : Math.PI / 2, e < 0 ? Math.PI / 2 : Math.PI);
+      arc(gx, HH, 1, e < 0 ? -Math.PI / 2 : Math.PI, e < 0 ? 0 : Math.PI * 1.5);
+    }
     if (pitchTexture) pitchTexture.dispose();
     pitchTexture = new THREE.CanvasTexture(canvas);
     return pitchTexture;
@@ -211,31 +259,32 @@
     var torsoMat = new Mat({ map: jerseyTexture(pattern, c1, c2) });
     var headMat = new Mat({ color: skinColor });
     var hairMat = new Mat({ color: 0x1a1816 });
-    var shortsMat = new Mat({ color: shortsColor });
-    var sleeveMat = new Mat({ color: c1 });
+    // legs: shorts (top 38%), socks in the shirt colour, dark boots; arms: short sleeve then skin
+    var shortsMat = new Mat({ map: limbTexture(shortsColor, c1, 0x111111, 0.38, 0.1) });
+    var sleeveMat = new Mat({ map: limbTexture(c1, skinColor, 0, 0.3, 0) });
     mats.push(torsoMat, headMat, hairMat, shortsMat, sleeveMat);
 
     var body = new THREE.Group();
-    body.position.y = 0.9; // hips
+    body.position.y = HIP; // hips
     root.add(body);
     var torso = new THREE.Mesh(geo.torso, torsoMat);
-    torso.position.y = 0.55;
+    torso.position.y = 0.52;
     body.add(torso);
     var head = new THREE.Mesh(geo.head, headMat);
-    head.position.y = 1.55;
+    head.position.y = 1.34;
     body.add(head);
     var hair = new THREE.Mesh(geo.hair, hairMat);
-    hair.position.y = 1.88;
+    hair.position.y = 1.62;
     body.add(hair);
-    var leftArm = limb(body, geo.arm, sleeveMat, -0.6, 1.12, 0.78);
-    var rightArm = limb(body, geo.arm, sleeveMat, 0.6, 1.12, 0.78);
-    var leftLeg = limb(body, geo.limb, shortsMat, -0.24, 0, 0.85);
-    var rightLeg = limb(body, geo.limb, shortsMat, 0.24, 0, 0.85);
+    var leftArm = limb(body, geo.arm, sleeveMat, -0.52, 0.94, 0.98);
+    var rightArm = limb(body, geo.arm, sleeveMat, 0.52, 0.94, 0.98);
+    var leftLeg = limb(body, geo.limb, shortsMat, -0.2, 0.03, 1.17);
+    var rightLeg = limb(body, geo.limb, shortsMat, 0.2, 0.03, 1.17);
     // his booking (warning / yellow / red), hidden until he gets one; it sits just under the controlled-player arrow
     var cardMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
     mats.push(cardMat);
     var card = new THREE.Mesh(geo.card, cardMat);
-    card.position.y = 3.35;
+    card.position.y = 3.5;
     card.visible = false;
     root.add(card);
     return { root: root, body: body, leftLeg: leftLeg, rightLeg: rightLeg, leftArm: leftArm, rightArm: rightArm, card: card, mats: mats };
@@ -250,6 +299,8 @@
     for (k in geo) geo[k].dispose();
     for (k in jerseyCache) jerseyCache[k].dispose();
     jerseyCache = {};
+    for (k in limbCache) limbCache[k].dispose();
+    limbCache = {};
     if (pitchTexture) pitchTexture.dispose();
     pitchTexture = null;
     for (k in ballTextures) ballTextures[k].dispose();
@@ -258,6 +309,8 @@
 
   NS.Assets = {
     geo: geo,
+    HIP: HIP,
+    PITCH_MARGIN: PITCH_MARGIN,
     hexToCss: hexToCss,
     initGeometries: initGeometries,
     pitchTexture: buildPitchTexture,

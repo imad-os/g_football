@@ -57,8 +57,9 @@
 
   // scratch for interception results and marking (pre-allocated)
   var ICX = 0, ICZ = 0;
-  var OPP = [null, null, null, null, null, null, null, null];
-  var DNG = new Float64Array(8);
+  var OPP = [null, null, null, null, null, null, null, null, null, null, null];
+  var DNG = new Float64Array(11);
+  var ZX = 0, ZZ = 0; // zoneSpot result
 
   /* ------------------------------------------------------------------ helpers */
 
@@ -172,6 +173,33 @@
     return q;
   }
 
+  // The offside line `team` attacks against (x): the second-last opponent (O.lastX: their deepest outfield player),
+  // or the ball when it is further forward, and never inside our own half.
+  function offLine(team, ball) {
+    var a = team === 0 ? 1 : -1;
+    var O = TEAMS[1 - team];
+    return a * Math.max(O.lastX * a, ball.pos.x * a, 0);
+  }
+
+  // p stands in an offside position right now
+  function offsideNow(p, ball) {
+    var a = p.team === 0 ? 1 : -1;
+    return p.pos.x * a > offLine(p.team, ball) * a + 0.2;
+  }
+
+  // Defensive shape (we do not have the ball): one back line, the midfield a few metres in front of it, the forwards
+  // further up, everybody shifted towards the ball's side and squeezed narrow. Sets ZX / ZZ.
+  function zoneSpot(p, T, ball) {
+    var a = attackOf(p);
+    var depth = (ball.pos.x - T.lineX) * a; // how far the ball is in front of our line
+    var x;
+    if (p.role === 'DEF') x = T.lineX;
+    else if (p.role === 'MID') x = T.lineX + a * clamp(depth * 0.5, 5, 13);
+    else x = T.lineX + a * clamp(depth * 0.85, 14, 30);
+    ZX = clamp(x, -HALF_W + 4, HALF_W - 4);
+    ZZ = clamp(p.homeZ * 0.72 + ball.pos.z * 0.32, -HALF_H + 3, HALF_H - 3);
+  }
+
   // Earliest time `p` can reach the ball (the ball's own physics: flight, bounce, curl, roll). Sets ICX / ICZ.
   function interceptTime(p, speed, reachY) {
     var t = World.intercept(p, speed, reachY);
@@ -191,7 +219,8 @@
     for (i = 0; i < players.length; i++) {
       var p = players[i];
       if (p.team === t) { p.mark = null; continue; }
-      if (p.role === 'GK' || p === carrier || n >= 8) continue;
+      if (p.role === 'GK' || p === carrier || n >= 11) continue;
+      if ((p.pos.x - ownGoalX) * a > 42) continue; // far from our goal: covered by the zone, not man-marked
       OPP[n] = p;
       DNG[n] = -Math.abs(p.pos.x - ownGoalX) - Math.abs(p.pos.z) * 0.3; // closer to our goal and central = more dangerous
       n++;
@@ -211,6 +240,10 @@
         if (d.team !== t || d.role === 'GK' || d.mark || d === T.presser || d === T.cover || d.isCtl) continue;
         // forwards only pick up opponents in their own half of the pitch
         if (d.role === 'FWD' && (o.pos.x * a) < -10) continue;
+        // the man is picked up by the player whose place in the shape is near him (nobody is dragged across)
+        zoneSpot(d, T, World.ball);
+        var zx = ZX - o.pos.x, zz = ZZ - o.pos.z;
+        if (zx * zx + zz * zz > 400) continue;
         var dx = d.pos.x - o.pos.x, dz = d.pos.z - o.pos.z;
         var dd = dx * dx + dz * dz;
         if (dd < bestD) { bestD = dd; best = d; }
@@ -364,15 +397,17 @@
     var k, sc;
 
     // --- dribble: five directions around "forward"
+    var gdist0 = Math.sqrt((a * HALF_W - px) * (a * HALF_W - px) + pz * pz);
     var fwd = Math.atan2(a, 0);
     for (k = 0; k < DRIBBLE_OFF.length; k++) {
       var f = fwd + DRIBBLE_OFF[k];
       var dx = Math.sin(f), dz = Math.cos(f);
       var tx = px + dx * 7, tz = pz + dz * 7;
       var space = Math.min(oppDist(tx, tz, p.team), 9) / 9;
-      sc = 0.12 + 0.22 * dx * a + 0.3 * space;
+      sc = 0.12 + 0.22 * dx * a + 0.3 * space + (space > 0.75 && dx * a > 0.8 ? 0.12 : 0);
       if (Math.abs(tz) > HALF_H - 3) sc -= 0.35;
       if (pressure < 2.4) sc -= 0.2;
+      if (gdist0 < 30 && pressure < 4.5) sc -= 0.12;
       if (p.drX * dx + p.drZ * dz > 0.9) sc += 0.05; // keep a direction once chosen
       sc += (Math.random() - 0.5) * noise;
       if (sc > best) { best = sc; bType = -1; bx = dx; bz = dz; }
@@ -382,8 +417,13 @@
     var gdx = a * HALF_W - px;
     var gdist = Math.sqrt(gdx * gdx + pz * pz);
     if (gdist < 34) {
-      sc = shotQuality(px, pz, p.team) * 1.6 + prof.shootBias + T.urgency * 0.12 - T.caution * 0.05;
-      if (gdist > 26) sc -= 0.12;
+      sc = shotQuality(px, pz, p.team) * 2.3 + prof.shootBias + T.urgency * 0.12 - T.caution * 0.05;
+      // from range: worth a try when nobody blocks the way (more for a good finisher)
+      if (gdist > 14 && gdist < 30) {
+        var bl = Math.min(blockers(px, pz, a * HALF_W, 3.5, p.team), blockers(px, pz, a * HALF_W, -3.5, p.team));
+        sc += ((bl === 0 ? 0.18 : 0.06) + p.st.sht / 99 * 0.16) * (gdist > 25 ? 0.55 : 1);
+      }
+      if (gdist > 28) sc -= 0.12;
       sc += (Math.random() - 0.5) * noise;
       if (sc > best) { best = sc; bType = ACT.SHOOT; }
     }
@@ -393,6 +433,7 @@
     for (var i = 0; i < players.length; i++) {
       var mt = players[i];
       if (mt.team !== p.team || mt === p || mt.role === 'GK' || mt.stun > 0) continue;
+      if (offsideNow(mt, World.ball)) continue; // he would be flagged
       var mdx = mt.pos.x - px, mdz = mt.pos.z - pz;
       var md = Math.sqrt(mdx * mdx + mdz * mdz);
 
@@ -402,7 +443,7 @@
         var spd = clamp(md * NS.PHYS.ROLL_K + 12, 21, 40);
         var risk = laneRisk(px, pz, sx, sz, p.team, spd, false);
         var rspace = clamp((oppDist(sx, sz, p.team) - 1.5) / 7, 0, 1);
-        var val = 0.26 + 0.45 * (sx - px) * a / 35 + 0.32 * rspace + 0.5 * shotQuality(sx, sz, p.team);
+        var val = 0.26 + 0.7 * (sx - px) * a / 35 + 0.32 * rspace + 0.5 * shotQuality(sx, sz, p.team);
         sc = (1 - risk) * val - risk * loss * 1.5 + (Math.random() - 0.5) * noise;
         if (sc > best) { best = sc; bType = ACT.PASS; bMate = mt; bx = sx; bz = sz; }
       }
@@ -417,11 +458,39 @@
           var tspd = clamp(ld * NS.PHYS.ROLL_K + 8, 18, 38);
           var trisk = laneRisk(px, pz, lx, lz, p.team, tspd, false);
           var mateT = Math.max(0, Math.sqrt((lx - mt.pos.x) * (lx - mt.pos.x) + (lz - mt.pos.z) * (lz - mt.pos.z)) - 1) / 11;
+          if (mt.runT > 0.9) mateT *= 0.45; // he is already sprinting in behind, the defender has to turn
           var race = 1 / (1 + Math.exp(-(mateT - oppArrival(lx, lz, p.team)) * 5));
           if (race > trisk) trisk = race;
-          var tval = 0.3 + 0.5 * (lx - px) * a / 35 + 0.6 * shotQuality(lx, lz, p.team) + ((lx - oppLine) * a > 0 ? 0.22 : 0);
+          var tval = 0.3 + 0.5 * (lx - px) * a / 35 + 0.6 * shotQuality(lx, lz, p.team) + ((lx - oppLine) * a > 0 ? 0.22 : 0) +
+            (mt.runT > 0.9 ? 0.15 : 0);
           sc = (1 - trisk) * tval - trisk * loss * 1.5 - 0.03 + (Math.random() - 0.5) * noise;
           if (sc > best) { best = sc; bType = ACT.THROUGH; bMate = mt; bx = lx; bz = lz; }
+        }
+      }
+
+      // a runner in behind (his run has just started, he is still onside): played into his path, along the ground
+      // through a gap or chipped over the line when a defender is in the way
+      if (mt.runT > 0.9 && mt.role !== 'DEF' && md < 45) {
+        var rx2 = clamp(mt.pos.x + mt.vel.x * 0.9, -HALF_W + 4, HALF_W - 4);
+        var rz2 = clamp(mt.pos.z + mt.vel.z * 0.9, -HALF_H + 3, HALF_H - 3);
+        var rdist = Math.sqrt((rx2 - px) * (rx2 - px) + (rz2 - pz) * (rz2 - pz));
+        var gr = laneRisk(px, pz, rx2, rz2, p.team, clamp(rdist * NS.PHYS.ROLL_K + 8, 18, 38), false) * 0.7;
+        var lr = rdist > 16 ? laneRisk(px, pz, rx2, rz2, p.team, 25, true) : 1;
+        var race2 = 1 / (1 + Math.exp(-(0.3 - oppArrival(rx2, rz2, p.team)) * 5));
+        var rrisk = Math.max(Math.min(gr, lr), race2);
+        var rval = 0.42 + 0.5 * (rx2 - px) * a / 35 + 0.8 * shotQuality(rx2, rz2, p.team);
+        sc = (1 - rrisk) * rval - rrisk * loss * 1.2 + (Math.random() - 0.5) * noise;
+        if (sc > best) { best = sc; bType = gr <= lr ? ACT.THROUGH : ACT.LONG; bMate = mt; bx = rx2; bz = rz2; }
+      }
+
+      // a cross from a wide position near the box to a team-mate in it (he attacks it with his head or his foot)
+      if (Math.abs(pz) > 13 && (a * HALF_W - px) * a < 30) {
+        var inBox = Math.abs(a * HALF_W - mt.pos.x) < NS.BOX_D - 1 && Math.abs(mt.pos.z) < 12;
+        if (inBox) {
+          var crisk = laneRisk(px, pz, mt.pos.x, mt.pos.z, p.team, 25, true) * 0.75;
+          var cval = 0.38 + 0.9 * shotQuality(mt.pos.x, mt.pos.z, p.team) + mt.st.hdr / 99 * 0.15;
+          sc = (1 - crisk) * cval - crisk * loss + (Math.random() - 0.5) * noise;
+          if (sc > best) { best = sc; bType = ACT.LONG; bMate = mt; bx = mt.pos.x - a * 0.5; bz = mt.pos.z; }
         }
       }
 
@@ -432,7 +501,7 @@
         var mT = Math.max(0, Math.sqrt((gx - mt.pos.x) * (gx - mt.pos.x)) - 1) / 11 + 0.2;
         var lrace = 1 / (1 + Math.exp(-(mT - oppArrival(gx, gz, p.team) - 0.5) * 4));
         if (lrace > lrisk) lrisk = lrace;
-        var gval = 0.24 + 0.45 * (gx - px) * a / 35 + 0.3 * clamp((oppDist(gx, gz, p.team) - 2) / 8, 0, 1) +
+        var gval = 0.24 + 0.6 * (gx - px) * a / 35 + 0.3 * clamp((oppDist(gx, gz, p.team) - 2) / 8, 0, 1) +
           0.4 * shotQuality(gx, gz, p.team) + (pressure < 3 ? 0.08 : 0);
         sc = (1 - lrisk) * gval - lrisk * loss * 1.5 - 0.16 + (Math.random() - 0.5) * noise;
         if (sc > best) { best = sc; bType = ACT.LONG; bMate = mt; bx = gx; bz = gz; }
@@ -449,8 +518,46 @@
     }
   }
 
+  // Throw-in / corner taken by the CPU: a cross to the best header of the ball in the box (now and then a short one),
+  // a throw to the free team-mate nearest the touchline spot.
+  function restartPlay(p, prof) {
+    var m = World.match;
+    var players = World.players;
+    var a = attackOf(p);
+    var goalX = a * HALF_W;
+    var best = -1e9, bm = null, i, mt, sc;
+    for (i = 0; i < players.length; i++) {
+      mt = players[i];
+      if (mt.team !== p.team || mt === p || mt.role === 'GK') continue;
+      var dx = mt.pos.x - p.pos.x, dz = mt.pos.z - p.pos.z;
+      var d = Math.sqrt(dx * dx + dz * dz);
+      var room = Math.min(oppDist(mt.pos.x, mt.pos.z, p.team), 4) / 4;
+      if (m.restart === 4) {
+        var inBox = Math.abs(goalX - mt.pos.x) < NS.BOX_D && Math.abs(mt.pos.z) < NS.BOX_HW;
+        if (inBox) sc = mt.st.hdr / 99 + room * 0.6;
+        else sc = d < 14 ? 0.35 + room * 0.4 : -1; // a short corner
+      } else {
+        if (d > 22 || d < 3) continue;
+        sc = (1 - laneRisk(p.pos.x, p.pos.z, mt.pos.x, mt.pos.z, p.team, 14, true)) + room * 0.5 + (mt.pos.x - p.pos.x) * a / 40;
+      }
+      sc += (Math.random() - 0.5) * prof.noise * 2;
+      if (sc > best) { best = sc; bm = mt; }
+    }
+    if (!bm) { Actions.kick(p, m.restart === 4 ? ACT.LONG : ACT.PASS, 0.6, a, 0, prof.acc); return; }
+    var inB = Math.abs(goalX - bm.pos.x) < NS.BOX_D;
+    var type = m.restart === 4 && inB ? ACT.LONG : ACT.PASS;
+    Actions.kickTo(p, type, bm.pos.x + (type === ACT.LONG ? -a * 0.5 : bm.vel.x * 0.3), bm.pos.z, bm, prof.acc);
+  }
+
   function aiCarrier(p, dt, prof) {
     var m = World.match;
+    if (m.restart && p === m.setTaker) {
+      // throw-in / corner / goal kick: he stands, looks up, then plays it
+      p.vel.x = 0; p.vel.z = 0;
+      p.aiT += dt;
+      if (p.aiT > 1.1) { p.aiT = 0; restartPlay(p, prof); }
+      return;
+    }
     if (m.penalty) {
       // the penalty taker waits for the referee, then shoots
       p.vel.x = 0; p.vel.z = 0;
@@ -511,6 +618,12 @@
     p.tgtZ = rz;
   }
 
+  // a supporter only comes over from close by (the others keep their places in the shape)
+  function supportNear(p, c) {
+    var dx = p.pos.x - c.pos.x, dz = p.pos.z - c.pos.z;
+    return dx * dx + dz * dz < 26 * 26;
+  }
+
   function attackOffBall(p, T, prof, dt) {
     var ball = World.ball;
     var carrier = ball.owner;
@@ -522,25 +635,27 @@
     if (p.aiT <= 0) {
       p.aiT = 0.3 + Math.random() * 0.15;
       var oppLine = O.lastX;
-      var carrierFree = oppDist(carrier.pos.x, carrier.pos.z, p.team) > 3.5;
+      var carrierFree = oppDist(carrier.pos.x, carrier.pos.z, p.team) > 2.5;
 
       // start a run in behind the last defender
-      if (p.runT <= 0 && p.runCd <= 0 && p.role !== 'DEF' && carrierFree && carrier.pos.x * a > -12 &&
-          Math.random() < 0.3 + T.urgency * 0.25 - T.caution * 0.2) {
+      if (p.runT <= 0 && p.runCd <= 0 && p.role !== 'DEF' && carrierFree && carrier.pos.x * a > -20 && !offsideNow(p, ball) &&
+          Math.random() < 0.38 + T.urgency * 0.25 - T.caution * 0.2) {
         p.runT = 1.6;
         p.runCd = 4.5;
-        p.runX = clamp(oppLine + a * 7, -HALF_W + 5, HALF_W - 5);
+        // the carrier looks up now: the pass has to go while the runner is still level with the last defender
+        if (carrier.aiCd > 0.06) carrier.aiCd = 0.06;
+        p.runX = clamp(oppLine + a * 9, -HALF_W + 5, HALF_W - 5);
         p.runZ = clamp(p.pos.z * 0.6 + (Math.random() - 0.5) * 6, -HALF_H + 5, HALF_H - 5);
       }
 
       if (p.runT > 0) {
         p.tgtX = p.runX; p.tgtZ = p.runZ; p.tgtS = 12;
-      } else if (p === T.sup1 || p === T.sup2) {
-        // offer a passing angle near the carrier
+      } else if ((p === T.sup1 || p === T.sup2) && supportNear(p, carrier)) {
+        // offer a passing angle near the carrier (the nearest one short, the second one further)
         var bestS = -1e9, sx = p.pos.x, sz = p.pos.z;
         for (var k = 0; k < SUPPORT_ANG.length; k++) {
           var th = SUPPORT_ANG[k];
-          var r = 10;
+          var r = p === T.sup1 ? 11 : 17;
           var x = clamp(carrier.pos.x + a * Math.cos(th) * r, -HALF_W + 3, HALF_W - 3);
           var z = clamp(carrier.pos.z + Math.sin(th) * r, -HALF_H + 2, HALF_H - 2);
           var lane = 1 - laneRisk(carrier.pos.x, carrier.pos.z, x, z, p.team, 18, false);
@@ -550,16 +665,22 @@
             Math.min(mateDist(x, z, p.team, p), 6) / 12;
           if (sc > bestS) { bestS = sc; sx = x; sz = z; }
         }
+        if ((sx - offLine(p.team, ball)) * a > -0.5) sx = offLine(p.team, ball) - a * 0.5;
         p.tgtX = sx; p.tgtZ = sz; p.tgtS = 10;
       } else {
-        // shape: formation pushed up with the ball, width, stay level with the last defender
-        var push = 9 + T.urgency * 6 - T.caution * 5 + (p.role === 'FWD' ? 5 : (p.role === 'MID' ? 2 : 0));
-        var bx = p.homeX + ball.pos.x * 0.55 + a * push;
-        var bz = p.homeZ * 1.15 + ball.pos.z * 0.2;
-        if (Math.abs(p.homeZ) > 10) bz = (p.homeZ > 0 ? 1 : -1) * Math.min(HALF_H - 3, Math.abs(p.homeZ) * 1.3);
-        if ((bx - oppLine) * a > -0.5) bx = oppLine - a * 0.5;
-        if (p.role === 'DEF' && (bx - carrier.pos.x) * a > -4) bx = carrier.pos.x - a * 4; // defenders stay behind the ball
-        freeSpot(p, bx, bz);
+// shape: the formation moved up with the ball, wide players wide, forwards on the offside line (never
+        // beyond it), defenders a line behind the ball
+        var push = (p.role === 'FWD' ? 14 : (p.role === 'MID' ? 8 : 4)) + T.urgency * 5 - T.caution * 5;
+        var bx = p.homeX * 0.6 + ball.pos.x * 0.65 + a * push;
+        var bz = p.homeZ * 1.15 + ball.pos.z * 0.25;
+        if (Math.abs(p.homeZ) > 15) bz = (p.homeZ > 0 ? 1 : -1) * Math.min(HALF_H - 3, Math.abs(p.homeZ) * 1.3);
+        var line = offLine(p.team, ball);
+        if (p.role === 'FWD' && ball.pos.x * a > -18) bx = line - a * 1.2; // stretch them: on the last defender
+        if ((bx - line) * a > -0.8) bx = line - a * 0.8;
+        if (p.role === 'DEF' && (bx - carrier.pos.x) * a > -8) bx = carrier.pos.x - a * 8;
+        if (p.role === 'DEF' && bx * a > 12) bx = a * 12;
+                freeSpot(p, bx, bz);
+        if ((p.tgtX - line) * a > -0.5) p.tgtX = line - a * 0.8; // the search for space never takes him offside
         p.tgtS = 8.6;
       }
     }
@@ -578,6 +699,7 @@
     gx /= gl; gz /= gl;
     var teamPress = pressing || T.urgency > 0.5 || (prof.press2 && (c.pos.x * a) < -10);
 
+    if (p.shCd > 0) p.shCd -= dt;
     if (p === T.presser || (teamPress && p === T.cover)) {
       // close down goal-side, jockey when near, tackle when the moment is right
       var tx = c.pos.x + c.vel.x * 0.25 + gx * 1.4;
@@ -586,6 +708,21 @@
       var d = Math.sqrt(cdx * cdx + cdz * cdz);
       // where we stand relative to the carrier: +1 in front of him (where the ball is), -1 behind his back
       var side = -(Math.sin(c.facing) * cdx + Math.cos(c.facing) * cdz) / (d || 1);
+      var cSpeed = Math.sqrt(c.vel.x * c.vel.x + c.vel.z * c.vel.z);
+      // alongside or just behind him: lean in with the shoulder to win it or knock it off his foot
+      if (d < 1.9 && side < 0.5 && p.shCd <= 0 && World.match.protectT <= 0 && !c.gkHands) {
+        p.shCd = 0.7 + Math.random() * 0.5;
+        if (Actions.shoulder(p, c, prof.tackle * 0.5)) return;
+      }
+      // he is running away with it: sprint after him and get alongside (where the ball can be reached)
+      if (side < -0.3 && d < 7 && cSpeed > 6) {
+        var rx = -Math.cos(c.facing), rz = Math.sin(c.facing); // carrier's right
+        var lat2 = (-cdx * rx - cdz * rz) >= 0 ? 1 : -1;
+        moveToward(p, c.pos.x + c.vel.x * 0.3 + rx * lat2 * 1.1, c.pos.z + c.vel.z * 0.3 + rz * lat2 * 1.1, 11.6 * prof.speedMul, dt);
+        // a slide from the side when he is level
+        if (d < 3 && side > -0.5 && p.tackleCd <= 0 && Math.random() < prof.tackleRate * 0.3 * dt) Actions.startTackle(p, c, false, true);
+        return;
+      }
       if (side < -0.3 && d < 4.5) {
         // behind the carrier: the ball is shielded, run round him (on the side we already are) to get goal-side
         var px = -Math.cos(c.facing), pz = Math.sin(c.facing); // carrier's right
@@ -600,7 +737,7 @@
         moveToward(p, c.pos.x + gx * 7.5, c.pos.z + gz * 7.5, 9 * prof.speedMul, dt);
         return;
       }
-      if (d < 2.6 && p.tackleCd <= 0 && side > -0.1 && !c.gkHands) {
+      if (d < 2.6 && p.tackleCd <= 0 && side > -0.45 && !c.gkHands) {
         // carrier running at us (facing our goal) is easier to time than one shielding the ball
         var facing = Math.sin(c.facing) * gx + Math.cos(c.facing) * gz;
         var rate = prof.tackleRate * (0.8 + 0.5 * Math.max(0, facing)) * (c.dribbling ? 0.8 : 1.15);
@@ -628,12 +765,8 @@
       return;
     }
     // zonal: one compact block behind the ball
-    var zx, zz;
-    if (p.role === 'DEF') zx = T.lineX;
-    else if (p.role === 'MID') zx = (T.lineX + ball.pos.x) * 0.5;
-    else zx = ball.pos.x * 0.5 + a * 4;
-    zz = p.homeZ * 0.7 + ball.pos.z * 0.35;
-    moveToward(p, clamp(zx, -HALF_W + 4, HALF_W - 4), clamp(zz, -HALF_H + 3, HALF_H - 3), 9 * prof.speedMul, dt);
+    zoneSpot(p, T, ball);
+    moveToward(p, ZX, ZZ, 9 * prof.speedMul, dt);
   }
 
   /* ------------------------------------------------------------------ goalkeeper */
@@ -756,6 +889,12 @@
       var ball = World.ball;
       if (p.role === 'GK') { aiGoalkeeper(p, dt, prof); return; }
       if (ball.owner === p) { aiCarrier(p, dt, prof); return; }
+      if (World.match.restart === 4) {
+        // a corner: everybody holds his place in the box until it is struck
+        p.vel.x *= 0.8; p.vel.z *= 0.8;
+        p.facing = Math.atan2(ball.pos.x - p.pos.x, ball.pos.z - p.pos.z);
+        return;
+      }
 
       p.dribbling = false;
       p.carry = 0.95;
@@ -793,11 +932,9 @@
           moveToward(p, p.icX, p.icZ, 10.8 * prof.speedMul, dt);
           return;
         }
-        // loose ball: keep a sensible shape around it
-        var a = attackOf(p);
-        var zx = p.role === 'DEF' ? T.lineX : (p.role === 'MID' ? (T.lineX + ball.pos.x) * 0.5 : ball.pos.x * 0.5 + a * 6);
-        var zz = p.homeZ * 0.8 + ball.pos.z * 0.3;
-        moveToward(p, clamp(zx, -HALF_W + 4, HALF_W - 4), clamp(zz, -HALF_H + 3, HALF_H - 3), 9 * prof.speedMul, dt);
+        // loose ball: keep the shape around it
+        zoneSpot(p, T, ball);
+        moveToward(p, ZX, ZZ, 9 * prof.speedMul, dt);
         return;
       }
       if (phase === 1) { attackOffBall(p, T, prof, dt); return; }

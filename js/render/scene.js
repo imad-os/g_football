@@ -48,19 +48,20 @@
   }
 
   function buildStadium(tier) {
-    var surroundGeo = new THREE.PlaneGeometry(NS.PITCH_HALF_W * 2 + 36, NS.PITCH_HALF_H * 2 + 30);
+    var M = NS.Assets.PITCH_MARGIN;
+    var surroundGeo = new THREE.PlaneGeometry(NS.PITCH_HALF_W * 2 + 40, NS.PITCH_HALF_H * 2 + 34);
     surroundGeo.rotateX(-Math.PI / 2);
     var surround = new THREE.Mesh(surroundGeo, new THREE.MeshBasicMaterial({ color: 0x0f172a }));
     surround.position.y = -0.05;
     scene.add(surround);
 
-    var pitchGeo = new THREE.PlaneGeometry(NS.PITCH_HALF_W * 2, NS.PITCH_HALF_H * 2);
+    var pitchGeo = new THREE.PlaneGeometry((NS.PITCH_HALF_W + M) * 2, (NS.PITCH_HALF_H + M) * 2); // lines drawn M inside
     pitchGeo.rotateX(-Math.PI / 2);
     pitchMesh = new THREE.Mesh(pitchGeo, new THREE.MeshBasicMaterial({ map: NS.Assets.pitchTexture(tier.pitchStripes) }));
     scene.add(pitchMesh);
 
     var board = new THREE.Mesh(new THREE.BoxGeometry(NS.PITCH_HALF_W * 2 + 6, 1.4, 0.5), new THREE.MeshBasicMaterial({ color: 0x090d16 }));
-    board.position.set(0, 0.7, -NS.PITCH_HALF_H - 2.5);
+    board.position.set(0, 0.7, -NS.PITCH_HALF_H - M - 1);
     scene.add(board);
 
     buildGoal(-NS.PITCH_HALF_W);
@@ -74,7 +75,7 @@
     for (var i = 0; i < COUNT; i++) {
       var row = Math.floor(i / 28);
       var col = i % 28;
-      dummy.position.set(-NS.PITCH_HALF_W + col * 3.4 * NS.PITCH_SCALE, 2.2 + row * 1.6, -NS.PITCH_HALF_H - 5.5 - row * 2.1);
+      dummy.position.set(-NS.PITCH_HALF_W + col * 3.4 * NS.PITCH_SCALE, 2.2 + row * 1.6, -NS.PITCH_HALF_H - M - 3.5 - row * 2.1);
       dummy.updateMatrix();
       crowdMesh.setMatrixAt(i, dummy.matrix);
       color.setHex(palette[i % palette.length]);
@@ -209,14 +210,14 @@
       }
       var cfg = CAM[mode] || CAM.WIDE;
       var tx = bx * cfg.trackX;
-      var lim = 24 * NS.PITCH_SCALE;
+      var lim = NS.PITCH_HALF_W * 0.6;
       if (tx > lim) tx = lim; else if (tx < -lim) tx = -lim;
-      var tz = cfg.dist + bz * 0.25;
+      var tz = cfg.dist + bz * 0.5; // far enough to show throw-ins and corners on the near touchline
       var k = Math.min(1, 5 * dt);
       camera.position.x += (tx - camera.position.x) * k;
       camera.position.y += (cfg.height - camera.position.y) * k;
       camera.position.z += (tz - camera.position.z) * k;
-      lookTarget.set(bx * 0.45, 0, bz * 0.25);
+      lookTarget.set(bx * 0.5, 0, bz * 0.58);
       camera.lookAt(lookTarget);
     },
     render: function () { renderer.render(scene, camera); },

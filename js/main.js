@@ -83,6 +83,8 @@
       if (NS.Quality.mode() !== s.quality) NS.Quality.apply(s.quality);
       NS.HUD.applySettings(s);
       NS.Scene.setBallSkin(s.ballSkin);
+      // 7 or 11 a side: the squads are rebuilt for the next match (a running match keeps its own)
+      if (!World.match.running && NS.TEAM_SIZE !== s.teamSize) NS.Match.syncRosters();
     },
     // Extra entries of My PC's pause menu (only while a match is running).
     syncMenuItems: function () {

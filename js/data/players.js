@@ -224,6 +224,35 @@
         v.push(base + prof[k] + jitter);
       }
       return make(pos, v);
+    },
+
+    // The squad ordered for a formation: each slot gets the best free player of that position (a keeper in goal, the
+    // best defenders at the back...), a neighbouring position when none is left; the rest are the substitutes.
+    fitRoster: function (t, names, layout) {
+      var self = this;
+      var left = names.slice();
+      var out = [];
+      var NEAR = { GK: ['GK'], DEF: ['DEF', 'MID', 'FWD'], MID: ['MID', 'DEF', 'FWD'], FWD: ['FWD', 'MID', 'DEF'] };
+      for (var i = 0; i < layout.length; i++) {
+        var want = NEAR[layout[i].role] || NEAR.MID;
+        var pick = -1;
+        for (var w = 0; w < want.length && pick < 0; w++) {
+          var best = -1;
+          for (var k = 0; k < left.length; k++) {
+            var st = self.statsFor(t, left[k]);
+            if (st.pos !== want[w]) continue;
+            if (best < 0 || st.ovr > best) { best = st.ovr; pick = k; }
+          }
+        }
+        if (pick < 0) {
+          // only keepers left for an outfield slot (or no keeper for the goal): take the first outfield one
+          for (var j = 0; j < left.length && pick < 0; j++) if ((self.statsFor(t, left[j]).pos === 'GK') === (layout[i].role === 'GK')) pick = j;
+          if (pick < 0) pick = 0;
+        }
+        out.push(left[pick]);
+        left.splice(pick, 1);
+      }
+      return out.concat(left);
     }
   };
 })(window.RS6 = window.RS6 || {});

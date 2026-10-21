@@ -634,6 +634,17 @@
   Object.assign(D.es, { 'st.spd': 'Velocidad', 'st.drb': 'Regate', 'st.sht': 'Tiro', 'st.sta': 'Resistencia', 'st.hdr': 'Cabezazo', 'st.def': 'Defensa' });
   Object.assign(D.ar, { 'st.spd': 'السرعة', 'st.drb': 'المراوغة', 'st.sht': 'التسديد', 'st.sta': 'التحمل', 'st.hdr': 'الرأسيات', 'st.def': 'الدفاع' });
 
+
+  // v1.14: 11 a side, restarts, offside
+  Object.assign(D.en, { 'set.teamsize': 'Players per team', 'set.teamsize.h': '11-a-side on a full pitch, or 7-a-side (from the next match)',
+    'opt.t11': '11 v 11', 'opt.t7': '7 v 7', 'hud.offside': 'OFFSIDE', 'hud.corner': 'CORNER', 'hud.goalkick': 'GOAL KICK', 'hud.throwin': 'THROW-IN' });
+  Object.assign(D.fr, { 'set.teamsize': 'Joueurs par equipe', 'set.teamsize.h': 'A 11 sur un grand terrain, ou a 7 (des le prochain match)',
+    'opt.t11': '11 c. 11', 'opt.t7': '7 c. 7', 'hud.offside': 'HORS-JEU', 'hud.corner': 'CORNER', 'hud.goalkick': 'SIX METRES', 'hud.throwin': 'TOUCHE' });
+  Object.assign(D.es, { 'set.teamsize': 'Jugadores por equipo', 'set.teamsize.h': 'Fútbol 11 en campo completo, o fútbol 7 (desde el próximo partido)',
+    'opt.t11': '11 c. 11', 'opt.t7': '7 c. 7', 'hud.offside': 'FUERA DE JUEGO', 'hud.corner': 'CÓRNER', 'hud.goalkick': 'SAQUE DE PUERTA', 'hud.throwin': 'SAQUE DE BANDA' });
+  Object.assign(D.ar, { 'set.teamsize': 'عدد اللاعبين', 'set.teamsize.h': '11 لاعبًا في ملعب كامل، أو 7 (من المباراة القادمة)',
+    'opt.t11': '11 ضد 11', 'opt.t7': '7 ضد 7', 'hud.offside': 'تسلل', 'hud.corner': 'ركنية', 'hud.goalkick': 'ركلة مرمى', 'hud.throwin': 'رمية تماس' });
+
   var lang = 'en';
 
   NS.I18n = {

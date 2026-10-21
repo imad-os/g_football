@@ -1,6 +1,6 @@
 # Real Soccer 6 (My PC game)
 
-3D 7-a-side football for **My PC** (Samsung Smart TV 2024+ and browsers), played with game controllers and phone controllers. 1P vs CPU, 1P vs 2P, co-op vs CPU or CPU vs CPU.
+3D 11-a-side (or 7-a-side) football for **My PC** (Samsung Smart TV 2024+ and browsers), played with game controllers and phone controllers. 1P vs CPU, 1P vs 2P, co-op vs CPU or CPU vs CPU.
 Static site, no build step. Plug it into the My PC App Store with the address `https://imad-os.github.io/g_football/`.
 
 ## Game modes
@@ -99,6 +99,30 @@ corners are hard. The keeper catches (hands) shots and balls played by the oppon
 team-mate must be played with the feet. A keeper may hold the ball 5 seconds at most: after that it is kicked long anyway.
 Player 2: the second controller or phone controller connected.
 
+## 11-a-side, the rules of the game
+
+* **Settings > Gameplay > Players per team**: 11 v 11 (default) or 7 v 7, from the next match. Both are played on a real
+  105 x 68 pitch with the real markings (penalty area, goal area, spot, arc, corner arcs); the goal posts stand on the goal
+  line. Four formations for each size (4-4-2, 4-3-3, 4-2-3-1, 3-5-2); the squad is picked for the formation (the best keeper in
+  goal, defenders at the back...), and it is picked again when the formation is changed before kick-off.
+* **Out of play**: no invisible walls. Over a touchline = **throw-in** (thrown from over the head, up to about 24 m; no shots);
+  over a goal line = **corner** when the defenders touched it last (the best headers go into the box with a marker each), else a
+  **goal kick** taken by the keeper (the opponents leave the box). The taker cannot run with it; the stick aims. A player who
+  runs the ball over the line loses it too.
+* **Offside**: judged when the ball is played (in the opponents' half, ahead of the ball and of the second-last opponent;
+  never from a throw-in, a corner or a goal kick). An offside player who plays the ball gives an indirect free kick. The CPU
+  never passes to a player who is offside and keeps its forwards on the line until they run in behind.
+* **End of a half**: when time is up and a team is attacking in the last third (or a shot, a corner or a penalty is on), the
+  referee waits until the ball goes out, changes team or leaves the last third (20 seconds at most).
+* **Shoulder to shoulder**: holding **Press** next to the carrier makes the player lean in with his shoulder: he may win the
+  ball or knock it off the carrier's foot (from behind rarely); otherwise both are bumped off their line. Never a foul. The CPU
+  does it too, and sprints alongside a carrier who runs away with the ball (it can now win it back from a running player, not
+  only from the front).
+* **Headers**: the player jumps for it. A header only happens when a pass / shot button is pressed while the ball is in the
+  air right next to him (a button pressed earlier while a long ball is on its way does nothing any more).
+* **Shots from range** can go in, less often the further out they are struck (the keeper sees a long shot coming for longer).
+* Players have longer legs (about half their height) with shorts, socks and boots painted on, no extra polygons.
+
 ## Player ratings (js/data/players.js)
 
 Every player has six ratings (0 to 99): **Speed, Dribble, Shoot, Stamina, Header, Defense** (for a keeper Defense is his
@@ -112,7 +136,7 @@ fixed personal variation. They change the game:
 * Shoot: shot accuracy and pace; Header: how far he reaches a header and how hard he heads it
 
 The game plan shows every player's overall rating and the six bars of the selected player. Both teams start in 4-4-2
-(4-3-3, with three forwards against two defenders, is a strong attacking choice in 7-a-side).
+(in 7-a-side 4-3-3, with three forwards against two defenders, is a strong attacking choice).
 
 ## CPU football brain (js/game/ai.js)
 
@@ -163,7 +187,7 @@ that differ from both teams.
 
 ## Physics and animation
 
-* Pitch 110 x 67 (20% bigger than before), ball radius 0.43 (10% smaller). Formations are stretched with the pitch (`PITCH_SCALE`).
+* Pitch 105 x 68 (real size), ball radius 0.43. The 7-a-side formations are stretched to it.
 * Ball (js/game/world.js): gravity, light air drag, rolling drag plus rolling resistance (the ball stops instead of creeping),
   bounces that lose height and some pace, spin that curls the ball sideways in the air, posts and crossbar that the ball bounces
   off. `World.predict` / `World.intercept` run the same physics ahead so receivers, the CPU and the keeper read the flight.

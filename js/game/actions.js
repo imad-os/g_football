@@ -91,6 +91,8 @@
     // The ball leaves the player's foot (shared by every kick).
     release: function (p, type) {
       var ball = World.ball;
+      this.markOffside(p);
+      if (p.throwIn) { p.throwIn = false; p.throwT = 0.4; }
       ball.owner = null;
       ball.pickupCooldown = 0.28;
       ball.lastTouchTeam = p.team;
@@ -103,9 +105,10 @@
       ball.receiver = null;
       ball.contester = null;
       ball.pen = false;
+      ball.shotD = 0;
       p.dribbling = false;
       p.gkHands = false;
-      p.kickT = type >= ACT.SHOOT ? 0.36 : 0.28; // kick animation
+      p.kickT = p.throwT > 0 ? 0 : (type >= ACT.SHOOT ? 0.36 : 0.28); // kick animation (not on a throw-in)
       p.kickHard = type >= ACT.SHOOT || type === ACT.LONG;
       this.lastTarget = null;
       NS.Audio.kick(type >= ACT.SHOOT);
@@ -114,6 +117,9 @@
 
     kick: function (p, type, power, ax, az, accuracy, forceTarget) {
       var ball = World.ball;
+      // a throw-in is thrown to a team-mate (no shots from the touchline); a corner / goal kick may not be shot either
+      if (p.throwIn && type !== ACT.LONG && type !== ACT.THROUGH) type = ACT.PASS;
+      if (World.match.restart && type >= ACT.SHOOT && type !== ACT.CHIP) type = ACT.LONG;
       this.release(p, type);
       var attack = p.team === 0 ? 1 : -1;
 
@@ -236,6 +242,7 @@
       var goalX = attack * HALF_W;
       var sdx = goalX - ball.pos.x, sdz = goalZ - ball.pos.z; // from the ball (in front of his foot)
       var sd = Math.sqrt(sdx * sdx + sdz * sdz);
+      ball.shotD = sd; // the keeper sees a shot from range coming for longer
       // his Shoot rating: accuracy (a great finisher misses by much less) and pace
       var err = (0.016 + sd * 0.0015) * (accuracy || 1) * (0.6 + g * 0.7) * (1.7 - p.st.sht / 99 * 1.1);
       var angle = Math.atan2(sdx, sdz) + gaussR() * err;
@@ -283,7 +290,14 @@
       angle = Math.atan2(dx, dz);
       angle += (Math.random() - 0.5) * 0.05 * (accuracy || 1) * (d > 25 ? 1.6 : 1);
 
-      if (type === ACT.LONG) {
+      if (p.throwT > 0.35) {
+        // thrown from over the head: a flat lob that lands at the target (a long throw reaches ~24 m)
+        if (d > 24) { dx *= 24 / d; dz *= 24 / d; d = 24; }
+        var Tt = clamp(d / 20, 0.4, 1.05);
+        speed = airSpeed(d, Tt);
+        vy = (R0 - ball.pos.y) / Tt + 0.5 * G * Tt;
+        if (mate) { mate.runToX = p.pos.x + dx; mate.runToZ = p.pos.z + dz; mate.runToT = Tt + 0.4; }
+      } else if (type === ACT.LONG) {
         // lobbed: flight time T, vertical speed from gravity, horizontal speed = distance / T
         var T = clamp(d / 30, 0.75, 1.6);
         vy = 0.5 * G * T;
@@ -301,7 +315,7 @@
         if (mate) { mate.runToX = tx - (dx / d) * 1.5; mate.runToZ = tz - (dz / d) * 1.5; mate.runToT = Math.min(1.0, d / speed + 0.2); }
       }
       // a human held the pass button: a tap is the normal pace, a full hold ~35% firmer (a long ball flies flatter)
-      if (this.passPower > 0) {
+      if (this.passPower > 0 && !(p.throwT > 0.35)) {
         var pw = 1 + this.passPower * 0.35;
         speed *= pw;
         if (type === ACT.LONG) vy /= pw;
@@ -309,6 +323,93 @@
       ball.vel.set(Math.sin(angle) * speed, vy, Math.cos(angle) * speed);
       ball.receiver = mate || null;
       this.pickContester(p.team);
+    },
+
+    // Offside, read when the ball is played: a team-mate of the kicker is offside when he is in the opponents' half,
+    // nearer to their goal line than the ball and than the second-last opponent (the keeper usually being the last).
+    // Not from a throw-in, a corner or a goal kick.
+    markOffside: function (p) {
+      var players = World.players;
+      var ball = World.ball;
+      var a = p.team === 0 ? 1 : -1;
+      var i, q;
+      for (i = 0; i < players.length; i++) players[i].offside = false;
+      ball.offTeam = -1;
+      if (p.throwIn || World.match.restart) return;
+      // the two deepest opponents
+      var d1 = -1e9, d2 = -1e9;
+      for (i = 0; i < players.length; i++) {
+        q = players[i];
+        if (q.team === p.team) continue;
+        var dq = q.pos.x * a;
+        if (dq > d1) { d2 = d1; d1 = dq; } else if (dq > d2) d2 = dq;
+      }
+      var line = Math.max(d2, ball.pos.x * a, 0);
+      for (i = 0; i < players.length; i++) {
+        q = players[i];
+        if (q.team !== p.team || q === p) continue;
+        if (q.pos.x * a > line + 0.25) { q.offside = true; ball.offTeam = p.team; }
+      }
+    },
+
+    // Player q plays the ball. Returns true when he was offside (play stops: this.onOffside), and every flag is cleared
+    // either way (the next pass sets them again).
+    touch: function (q) {
+      var ball = World.ball;
+      if (ball.offTeam < 0) return false;
+      var off = q.offside && q.team === ball.offTeam;
+      var players = World.players;
+      for (var i = 0; i < players.length; i++) players[i].offside = false;
+      ball.offTeam = -1;
+      if (off && this.onOffside) { this.onOffside(q); return true; }
+      return false;
+    },
+
+    // Shoulder to shoulder while running for the ball / pressing: the challenger leans into the carrier. He may win it
+    // (or knock it loose) when he is alongside, rarely from behind; otherwise both are bumped off their line.
+    // Never a foul. Returns true when the ball changed hands or came loose.
+    shoulder: function (p, c, skill) {
+      var ball = World.ball;
+      if (!c || ball.owner !== c || c.team === p.team || c.gkHands || c.throwIn || World.match.protectT > 0) return false;
+      var dx = c.pos.x - p.pos.x, dz = c.pos.z - p.pos.z;
+      var d = Math.sqrt(dx * dx + dz * dz) || 1;
+      if (d > 1.9) return false;
+      var front = -(Math.sin(c.facing) * dx + Math.cos(c.facing) * dz) / d; // +1 in front of him, -1 behind
+      p.shoulderT = 0.32;
+      p.shoulderDir = (Math.cos(p.facing) * dx - Math.sin(p.facing) * dz) > 0 ? 1 : -1;
+      // body strength ~ Defense and Header (aerial / physical) against his Dribble and balance
+      var strength = (p.st.def * 0.6 + p.st.hdr * 0.4) / 99;
+      var chance = (skill || 0.3) * (0.55 + strength * 0.7) * (1.35 - c.st.drb / 99 * 0.7);
+      if (front < -0.55) chance *= 0.3;       // from behind: his back shields the ball
+      else if (front > 0.45) chance *= 0.8;  // in front: it is a tackle's job
+      if (c.dribbling) chance *= 0.8;
+      // the bump: the carrier is pushed away from the challenger and slowed, the challenger loses a little speed
+      var nx = dx / d, nz = dz / d;
+      c.vel.x = c.vel.x * 0.8 + nx * 2.6; c.vel.z = c.vel.z * 0.8 + nz * 2.6;
+      p.vel.x *= 0.85; p.vel.z *= 0.85;
+      NS.Audio.tackle();
+      if (Math.random() >= clamp(chance, 0.03, 0.6)) return false;
+      ball.receiver = null;
+      ball.contester = null;
+      if (Math.random() < 0.5) {
+        // he takes it off him
+        ball.owner = p;
+        ball.lastTouchTeam = p.team;
+        ball.lastToucher = p.name;
+        ball.pickupCooldown = 0.12;
+        this.touch(p);
+      } else {
+        // knocked loose: it runs on ahead, whoever is first gets it
+        ball.owner = null;
+        ball.vel.set(c.vel.x * 0.9 - nz * 1.5 * p.shoulderDir, 0, c.vel.z * 0.9 + nx * 1.5 * p.shoulderDir);
+        ball.lastTouchTeam = p.team;
+        ball.pickupCooldown = 0.08;
+        ball.kicker = c; ball.kickerT = 0.35;
+      }
+      c.dribbling = false;
+      c.stun = 0.3;
+      c.fallT = 0.4;
+      return true;
     },
 
     // The opponent who can reach the pass first goes for it too (he is marked like a receiver).
@@ -328,7 +429,7 @@
     // (a player between him and the ball would get there first).
     canHead: function (p) {
       var ball = World.ball;
-      if (ball.owner || ball.pos.y < 1.5 || ball.pos.y > 3.3 || p.stun > 0) return false;
+      if (ball.owner || ball.pos.y < 1.5 || ball.pos.y > 3.6 || p.stun > 0) return false; // up to 3.6: he jumps for it
       if (p === ball.kicker && ball.kickerT > 0) return false;
       var dx = ball.pos.x - p.pos.x, dz = ball.pos.z - p.pos.z;
       var d2 = dx * dx + dz * dz;
@@ -349,9 +450,10 @@
       var ball = World.ball;
       var attack = p.team === 0 ? 1 : -1;
       var y0 = ball.pos.y;
+      if (this.touch(p)) return;
       this.release(p, shot ? ACT.SHOOT : type);
       p.kickT = 0;
-      p.headT = 0.4; // header animation
+      p.headT = 0.55; // header animation: the jump
       var tx, tz, speed, mate = null, ty = R0;
       if (shot) {
         var aimed = az > 0.1 || az < -0.1;
@@ -460,6 +562,7 @@
             ball.lastTouchTeam = p.team;
             ball.lastToucher = p.name;
             ball.pickupCooldown = 0.12;
+            this.touch(p);
             carrier.stun = 0.55;
             carrier.fallT = 0.55;
             carrier.vel.set(0, 0, 0);

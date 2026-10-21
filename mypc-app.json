@@ -2,11 +2,11 @@
   "mypc": 1,
   "id": "real-soccer-6",
   "name": "Real Soccer 6",
-  "description": "3D 7-a-side football for game controllers and phone controllers: leagues, cups, world cup, 1P, 2P or co-op.",
+  "description": "3D 11-a-side (or 7-a-side) football for game controllers and phone controllers: leagues, cups, world cup, 1P, 2P or co-op.",
   "type": "game",
   "entry": "index.html",
   "icon": "icon.svg",
-  "version": "1.13.0",
+  "version": "1.14.0",
   "scores": true,
   "config": {
     "difficulty": "NORMAL",
@@ -16,7 +16,8 @@
     "cameraMode": "WIDE",
     "ballSkin": "CLASSIC",
     "crowdChants": true,
-    "gaugeTime": 0.5
+    "gaugeTime": 0.5,
+    "teamSize": 11
   },
   "touch": false
 }
