@@ -308,6 +308,18 @@ h1, h2, p { margin: 0; }
 /* + (Start) badge on each screen's main button */
 .map-val.pad { min-width: 5rem; text-align: right; }
 .set-tabs { margin-bottom: 0.6rem; }
+/* player ratings in the game plan */
+.ovr { margin-left: auto; margin-right: 0.4rem; min-width: 1.8rem; text-align: center; font-weight: 900; color: #fcd34d; }
+.gp-stats { margin: 0.5rem 0 0.2rem; width: 100%; align-self: stretch; box-sizing: border-box; }
+.gp-st-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.25rem; }
+.gp-st-row { display: grid; grid-template-columns: 5.2rem minmax(8rem, 1fr) 1.8rem; align-items: center; gap: 0.4rem; font-size: 0.78rem; margin: 0.08rem 0; }
+.gp-st-name { color: var(--muted); font-weight: 700; }
+.gp-st-bar { height: 0.42rem; background: rgba(30, 41, 59, 0.9); border-radius: 0.2rem; overflow: hidden; }
+.gp-st-bar i { display: block; height: 100%; }
+.gp-st-bar i.hi { background: #22c55e; }
+.gp-st-bar i.mid { background: #eab308; }
+.gp-st-bar i.lo { background: #ef4444; }
+.gp-st-val { text-align: right; font-weight: 900; }
 .plus-key {
   display: inline-flex; align-items: center; justify-content: center; margin-left: 0.55rem; width: 1.35rem; height: 1.35rem;
   border-radius: 50%; background: rgba(255, 255, 255, 0.92); color: #0f172a; font-weight: 900; font-size: 1rem; line-height: 1;

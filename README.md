@@ -99,6 +99,21 @@ corners are hard. The keeper catches (hands) shots and balls played by the oppon
 team-mate must be played with the feet. A keeper may hold the ball 5 seconds at most: after that it is kicked long anyway.
 Player 2: the second controller or phone controller connected.
 
+## Player ratings (js/data/players.js)
+
+Every player has six ratings (0 to 99): **Speed, Dribble, Shoot, Stamina, Header, Defense** (for a keeper Defense is his
+keeping). About 300 known players are rated by hand from their real level (Mbappe 97 speed / 91 shooting, Haaland 94 shooting /
+88 heading, Courtois 90 keeping, Ezzalzouli 93 speed / 87 dribbling...); everybody else gets ratings from his club or nation
+level (stars and league: a Real Madrid squad averages about 85, a Botola squad about 65), his position in the squad order and a
+fixed personal variation. They change the game:
+
+* Speed: running pace (about 84% to 110%); Stamina: how fast he tires (a tired player slows down; a restart gives some back)
+* Dribble: how hard the ball is to take off him; Defense: how well he tackles, and a keeper's saves
+* Shoot: shot accuracy and pace; Header: how far he reaches a header and how hard he heads it
+
+The game plan shows every player's overall rating and the six bars of the selected player. Both teams start in 4-4-2
+(4-3-3, with three forwards against two defenders, is a strong attacking choice in 7-a-side).
+
 ## CPU football brain (js/game/ai.js)
 
 * **Team plan every step**: attack / defend / loose-ball phase, who presses, who covers, man-marking of the most dangerous
@@ -166,7 +181,7 @@ css/style.css         plain CSS, no framework, no CDN
 vendor/three.min.js   three.js r128 (MIT), self-hosted
 vendor/zzfx.js        ZzFX sound generator (MIT), self-hosted
 js/core/              config (constants + settings schema), i18n (en fr es ar), bindings (button map), gamepad (MyPC.gamepad), audio, storage (MyPC.save/load), input (per-player controller state), quality
-js/data/              teams (110 clubs and nations), formations
+js/data/              teams (110 clubs and nations), players (ratings), formations
 js/render/            assets (procedural kits and players), scene (three.js scene, camera, stadium)
 js/game/              world (state + ball physics), actions (kicks, tackle), ai (CPU), controls (human), match (flow + fixed step), comp (league / cup / world cup)
 js/ui/                hud (cached DOM writes, radar), menu (remote-friendly spatial focus navigation), mapper (real button detection)

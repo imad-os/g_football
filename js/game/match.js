@@ -157,6 +157,18 @@
 
   function layoutOf(teamIdx) { return NS.FORMATIONS[World.session.formations[teamIdx]]; }
 
+  // A player's ratings and what they do in play (computed when the teams are built or the squad changes).
+  //   mSpd  pace factor from Speed (~0.84 .. 1.10)        drain  how fast he tires, from Stamina
+  function rate(p, teamObj) {
+    var st = NS.Players.statsFor(teamObj, p.name);
+    p.st = st;
+    p.mSpd = 0.84 + st.spd / 99 * 0.26;
+    p.drain = 1.5 - st.sta / 99;
+  }
+
+  // tired players slow down (below a third of the tank)
+  function fatigue(p) { return p.stamina >= 35 ? 1 : 0.86 + 0.14 * p.stamina / 35; }
+
   function humanTeam(team) {
     return (World.slots[0].active && World.slots[0].team === team) || (World.slots[1].active && World.slots[1].team === team);
   }
@@ -550,8 +562,10 @@
             fouls: 0, card: 0, // bookings: 1 warning (green), 2 yellow, 3 red (sent off)
             // AI brain state
             mark: null, icX: 0, icZ: 0, drX: 0, drZ: 0, runT: 0, runCd: 0, runX: 0, runZ: 0,
-            aiT: 0, tgtX: 0, tgtZ: 0, tgtS: 8, gkRT: 0
+            aiT: 0, tgtX: 0, tgtZ: 0, tgtS: 8, gkRT: 0,
+            st: null, mSpd: 1, drain: 1
           });
+          rate(World.players[World.players.length - 1], t === 0 ? homeT : awayT);
         }
       }
       NS.HUD.setTeams(homeT, awayT, kits.home.c1, kits.away.c1);
@@ -566,6 +580,7 @@
         var slot = layout[p.index];
         var dir = p.team === 0 ? 1 : -1;
         p.name = s.rosters[p.team][p.index] || ('PLAYER ' + slot.num);
+        rate(p, NS.Teams.byId(p.team === 0 ? s.homeTeamId : s.awayTeamId));
         p.role = slot.role;
         p.num = slot.num;
         p.roleText = slot.role + ' #' + slot.num;
@@ -586,7 +601,7 @@
         p.kickT = 0; p.lungeT = 0; p.slideT = 0; p.fallT = 0; p.diveT = 0; p.headT = 0; p.catchT = 0; p.gkHands = false;
         p.mood = 0; p.slid = false;
         animate(p, 0);
-        p.mark = null; p.drX = 0; p.drZ = 0; p.runT = 0; p.runCd = 0; p.aiT = 0; p.gkRT = 0; p.stamina = 100; p.gkHold = 0;
+        p.mark = null; p.drX = 0; p.drZ = 0; p.runT = 0; p.runCd = 0; p.aiT = 0; p.gkRT = 0; p.stamina = Math.min(100, p.stamina + 30); p.gkHold = 0;
       }
       World.pressT[0] = 0;
       World.pressT[1] = 0;
@@ -790,8 +805,15 @@
           AI.step(p, dt, p.rank, prof, World.pressT[p.team] > 0);
         }
 
-        var nx = p.pos.x + p.vel.x * dt;
-        var nz = p.pos.z + p.vel.z * dt;
+        // pace from his Speed rating, less when he is tired; stamina drains when he runs hard (his Stamina rating)
+        var pace = p.mSpd * fatigue(p);
+        if (!p.isCtl) {
+          var run = Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z);
+          if (run > 6.5) p.stamina = Math.max(5, p.stamina - (run - 6.5) * 0.65 * dt * p.drain);
+          else p.stamina = Math.min(100, p.stamina + 0.9 * dt * (1.6 - p.drain));
+        }
+        var nx = p.pos.x + p.vel.x * dt * pace;
+        var nz = p.pos.z + p.vel.z * dt * pace;
         p.pos.x = clamp(nx, -HALF_W + 1, HALF_W - 1);
         p.pos.z = clamp(nz, -HALF_H + 1, HALF_H - 1);
         p.mesh.root.rotation.y = p.facing;
@@ -855,7 +877,8 @@
               // (a dive covers part of the distance); pace above 30 makes every save harder
               var reach = Math.sqrt(d2) - (p.diveT > 0 ? 1.0 : 0);
               var place = reach <= 0.7 ? 0.15 : -(reach - 0.7) * 0.28;
-              var chance = speed < 12 ? 1 : clamp(gkSkill(p.team) + 0.1 + place - Math.max(0, speed - 36) * 0.009, 0.15, 0.96);
+              var keeper = gkSkill(p.team) * 0.5 + (0.4 + p.st.def / 99 * 0.5) * 0.5;
+              var chance = speed < 12 ? 1 : clamp(keeper + 0.1 + place - Math.max(0, speed - 36) * 0.009, 0.15, 0.96);
               if (ball.chip) chance *= 0.4;
               if (ball.pen) chance *= 0.55;
               if (Math.random() < chance) {

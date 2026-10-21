@@ -189,7 +189,7 @@
       activeCategory: 'LEAGUE_MAR',
       homeTeamId: 'WAC',
       awayTeamId: 'RCA',
-      formations: ['4-4-2', '4-3-3'],
+      formations: ['4-4-2', '4-4-2'], // both sides alike by default (4-3-3 is a strong attacking choice in 7-a-side)
       rosters: [[], []],
       editingSquadIdx: 0,
       selectedStarterIdx: null

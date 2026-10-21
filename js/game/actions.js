@@ -236,9 +236,10 @@
       var goalX = attack * HALF_W;
       var sdx = goalX - ball.pos.x, sdz = goalZ - ball.pos.z; // from the ball (in front of his foot)
       var sd = Math.sqrt(sdx * sdx + sdz * sdz);
-      var err = (0.016 + sd * 0.0015) * (accuracy || 1) * (0.6 + g * 0.7);
+      // his Shoot rating: accuracy (a great finisher misses by much less) and pace
+      var err = (0.016 + sd * 0.0015) * (accuracy || 1) * (0.6 + g * 0.7) * (1.7 - p.st.sht / 99 * 1.1);
       var angle = Math.atan2(sdx, sdz) + gaussR() * err;
-      var speed = this.shotSpeed(g);
+      var speed = this.shotSpeed(g) * (0.9 + p.st.sht / 99 * 0.14);
       var ty = this.gaugeHeight(g);
       var vy;
       if (ty < 0) {
@@ -331,7 +332,7 @@
       if (p === ball.kicker && ball.kickerT > 0) return false;
       var dx = ball.pos.x - p.pos.x, dz = ball.pos.z - p.pos.z;
       var d2 = dx * dx + dz * dz;
-      if (d2 > 1.7) return false;
+      if (d2 > 1.7 * (0.75 + p.st.hdr / 99 * 0.5)) return false; // his Header rating: how far he reaches
       var players = World.players;
       for (var i = 0; i < players.length; i++) {
         var q = players[i];
@@ -375,6 +376,7 @@
       var d = Math.sqrt(dx * dx + dz * dz);
       if (d < 1) d = 1;
       speed = shot ? clamp(d * 1.1 + 8, 18, 28) : clamp(d * 0.9 + 5, 9, 20);
+      speed *= 0.85 + p.st.hdr / 99 * 0.3; // a good header of the ball puts more on it
       var angle = Math.atan2(dx, dz) + (Math.random() - 0.5) * 0.1;
       var T = d / speed;
       ball.vel.set(Math.sin(angle) * speed, (ty - y0) / T + 0.5 * G * T, Math.cos(angle) * speed);
@@ -444,7 +446,8 @@
             this.onFoul(p, carrier);
             return;
           }
-          var chance = baseChance + (p.tackleSlide ? 0.08 : 0);
+          // the tackler's Defense against the carrier's Dribble
+          var chance = (baseChance + (p.tackleSlide ? 0.08 : 0)) * (0.6 + p.st.def / 99 * 0.6) * (1.3 - carrier.st.drb / 99 * 0.6);
           if (front < -0.35) chance *= p.tackleSlide ? 0.22 : 0.1; // from behind: the carrier's body shields the ball
           else if (front < 0.3) chance *= 0.6;                      // from the side
           else chance *= 1.08;

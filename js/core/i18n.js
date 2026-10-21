@@ -627,6 +627,13 @@
   Object.assign(D.es, { 'card.green': 'AVISO (tarjeta verde)', 'card.yellow': 'TARJETA AMARILLA', 'card.red': 'SEGUNDA AMARILLA: ROJA' });
   Object.assign(D.ar, { 'card.green': 'إنذار (بطاقة خضراء)', 'card.yellow': 'بطاقة صفراء', 'card.red': 'إنذار ثانٍ: بطاقة حمراء' });
 
+
+  // v1.12: player ratings
+  Object.assign(D.en, { 'st.spd': 'Speed', 'st.drb': 'Dribble', 'st.sht': 'Shoot', 'st.sta': 'Stamina', 'st.hdr': 'Header', 'st.def': 'Defense' });
+  Object.assign(D.fr, { 'st.spd': 'Vitesse', 'st.drb': 'Dribble', 'st.sht': 'Tir', 'st.sta': 'Endurance', 'st.hdr': 'Jeu de tete', 'st.def': 'Defense' });
+  Object.assign(D.es, { 'st.spd': 'Velocidad', 'st.drb': 'Regate', 'st.sht': 'Tiro', 'st.sta': 'Resistencia', 'st.hdr': 'Cabezazo', 'st.def': 'Defensa' });
+  Object.assign(D.ar, { 'st.spd': 'السرعة', 'st.drb': 'المراوغة', 'st.sht': 'التسديد', 'st.sta': 'التحمل', 'st.hdr': 'الرأسيات', 'st.def': 'الدفاع' });
+
   var lang = 'en';
 
   NS.I18n = {

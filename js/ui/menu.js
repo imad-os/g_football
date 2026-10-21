@@ -738,6 +738,8 @@
     gpCanvas.className = 'board-canvas';
     gpCtx = gpCanvas.getContext('2d');
     boardCard.appendChild(gpCanvas);
+    refs.gpStats = el('div', 'gp-stats');
+    boardCard.appendChild(refs.gpStats);
     boardCard.appendChild(el('p', 'muted small', T('gp.hint')));
     mid.appendChild(boardCard);
 
@@ -800,6 +802,31 @@
     }
   }
 
+  // the six ratings of one player as bars (green = strong, amber, red = weak)
+  var STAT_KEYS = [['spd', 'st.spd'], ['drb', 'st.drb'], ['sht', 'st.sht'], ['sta', 'st.sta'], ['hdr', 'st.hdr'], ['def', 'st.def']];
+  function showStats(teamObj, name) {
+    var box = refs.gpStats;
+    clear(box);
+    if (!name) return;
+    var st = NS.Players.statsFor(teamObj, name);
+    var head = el('div', 'gp-st-head');
+    head.appendChild(el('b', null, name));
+    head.appendChild(el('span', 'chip', st.pos + '  ' + st.ovr));
+    box.appendChild(head);
+    STAT_KEYS.forEach(function (k) {
+      var v = st[k[0]];
+      var row = el('div', 'gp-st-row');
+      row.appendChild(el('span', 'gp-st-name', T(k[1])));
+      var bar = el('span', 'gp-st-bar');
+      var fill = el('i', v >= 80 ? 'hi' : (v >= 65 ? 'mid' : 'lo'));
+      fill.style.width = v + '%';
+      bar.appendChild(fill);
+      row.appendChild(bar);
+      row.appendChild(el('span', 'gp-st-val', String(v)));
+      box.appendChild(row);
+    });
+  }
+
   function renderGamePlan(keepKey) {
     var s = World.session;
     var idx = s.editingSquadIdx;
@@ -822,6 +849,7 @@
       });
       b.appendChild(el('span', 'role', slot.role));
       b.appendChild(el('span', 'pname', roster[n] || ('PLAYER ' + (n + 1))));
+      b.appendChild(el('span', 'ovr', String(NS.Players.statsFor(teamObj, roster[n]).ovr)));
       b.appendChild(el('span', 'num', '#' + slot.num));
       refs.gpStarters.appendChild(b);
     });
@@ -839,11 +867,13 @@
         });
         b.appendChild(el('span', 'role sub', T('gp.sub')));
         b.appendChild(el('span', 'pname', roster[k]));
+        b.appendChild(el('span', 'ovr', String(NS.Players.statsFor(teamObj, roster[k]).ovr)));
         b.appendChild(el('span', 'num good', s.selectedStarterIdx !== null ? T('gp.swap') : T('gp.ready')));
         refs.gpSubs.appendChild(b);
       })(j);
     }
     drawBoard(layout, roster, teamObj);
+    showStats(teamObj, roster[s.selectedStarterIdx !== null ? s.selectedStarterIdx : 0]);
     if (keepKey) { focused = null; if (!focusByKey(keepKey)) focusDefault(); }
   }
 
