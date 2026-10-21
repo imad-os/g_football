@@ -137,7 +137,8 @@
       var ball = World.ball;
       // a throw-in is thrown to a team-mate (no shots from the touchline); a corner / goal kick may not be shot either
       if (p.throwIn && type !== ACT.LONG && type !== ACT.THROUGH) type = ACT.PASS;
-      if (World.match.restart && type >= ACT.SHOOT && type !== ACT.CHIP) type = ACT.LONG;
+      var rs = World.match.restart;
+      if (rs >= 3 && rs <= 5 && type >= ACT.SHOOT && type !== ACT.CHIP) type = ACT.LONG;
       this.release(p, type);
       var attack = p.team === 0 ? 1 : -1;
 
@@ -354,7 +355,8 @@
       var i, q;
       for (i = 0; i < players.length; i++) players[i].offside = false;
       ball.offTeam = -1;
-      if (p.throwIn || World.match.restart) return;
+      var rk = World.match.restart;
+      if (p.throwIn || (rk >= 3 && rk <= 5)) return;
       // the two deepest opponents
       var d1 = -1e9, d2 = -1e9;
       for (i = 0; i < players.length; i++) {

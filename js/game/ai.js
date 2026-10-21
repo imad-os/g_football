@@ -583,7 +583,16 @@
       // throw-in / corner / goal kick: he stands, looks up, then plays it
       p.vel.x = 0; p.vel.z = 0;
       p.aiT += dt;
-      if (p.aiT > 1.1) { p.aiT = 0; restartPlay(p, prof); }
+      if (p.aiT > 1.1) {
+        p.aiT = 0;
+        // a free kick: the usual choice (a shot when it is on, else a pass); a kick-off and the others: a set play
+        if (m.restart === 1) {
+          decide(p, prof);
+          if (World.ball.owner === p) restartPlay(p, prof); // it chose to dribble: not allowed, play it
+        } else {
+          restartPlay(p, prof);
+        }
+      }
       return;
     }
     if (m.penalty) {

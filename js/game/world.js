@@ -212,7 +212,8 @@
       protectT: 0,     // a free kick is being taken: nobody may tackle the taker yet
       sendOff: null,   // a player shown a red card: he leaves when play restarts
       warned: [false, false], // the team had its verbal warning (its next foul is a yellow)
-      restart: 0,      // 3 throw-in, 4 corner, 5 goal kick: the taker has not played it yet (he cannot run with it)
+      restart: 0,      // 1 free kick, 3 throw-in, 4 corner, 5 goal kick, 6 kick-off: the taker has not played it yet
+                       // (he stands at the ball and has to pass / shoot it, he cannot run with it)
       restartT: 0,
       extra: 0         // time played after 45 / 90 minutes while an attack is still on
     },

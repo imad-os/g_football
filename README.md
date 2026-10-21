@@ -112,6 +112,9 @@ Player 2: the second controller or phone controller connected.
   **goal kick** taken by the keeper (the opponents leave the box). The taker cannot run with it; the stick aims. A player who
   runs the ball over the line loses it too. Nothing freezes: the ball runs on over the line, then everybody jogs to his
   place and the taker to the ball, and it is taken when he gets there.
+* **Kick-offs and free kicks** are taken like real ones: the taker stands at the ball and has to play it (a pass, or a
+  shot from a free kick); he cannot run off with it, and nobody comes in until it is played. The stick aims. If nothing
+  happens for 10 seconds it is played anyway.
 * **Offside**: judged when the ball is played (in the opponents' half, ahead of the ball and of the second-last opponent;
   never from a throw-in, a corner or a goal kick). An offside player who plays the ball gives an indirect free kick. The CPU
   never passes to a player who is offside and keeps its forwards on the line until they run in behind.

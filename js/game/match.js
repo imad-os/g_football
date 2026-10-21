@@ -764,7 +764,7 @@
           p.pos.z = clamp(bz + dz / dd * 9, -HALF_H + 1, HALF_H - 1);
         }
       }
-      m.protectT = 2.2;
+      m.restart = 1; // he has to play it (pass or shot), not run with it
       taker.pos.set(bx - a * 0.95, 0, bz);
       taker.facing = a > 0 ? Math.PI / 2 : -Math.PI / 2;
       taker.carry = 0.95;
@@ -948,6 +948,12 @@
         kicker.carry = 0.95;
         World.ball.owner = kicker;
         World.ball.lastTouchTeam = kicker.team;
+        // the kick-off is played like a real one: he stands at the ball and passes it (nobody comes in before)
+        m.restart = 6;
+        m.restartT = 0;
+        m.setTaker = kicker;
+        m.protectT = 99;
+        kicker.aiT = 0;
       }
       assignKickoffCursors();
       lastOwner = World.ball.owner;
