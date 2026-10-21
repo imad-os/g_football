@@ -23,6 +23,7 @@
   var Actions = NS.Actions;
   var HALF_W = NS.PITCH_HALF_W;
   var HALF_H = NS.PITCH_HALF_H;
+  NS.pitchHooks.push(function () { HALF_W = NS.PITCH_HALF_W; HALF_H = NS.PITCH_HALF_H; });
   var GOAL_HALF_W = NS.GOAL_HALF_W;
 
   // Difficulty = speed AND intelligence: reaction time, decision noise, pass accuracy, marking tightness, keeper.
@@ -39,6 +40,14 @@
   var SUPPORT_ANG = [0.55, -0.55, 1.25, -1.25, 2.3, -2.3];
 
   function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+  // The team's plan for a block (Game plan > Tactics): -1 defensive, 0 balanced, +1 attacking.
+  // block 0 = defence, 1 = midfield, 2 = attack
+  function moodOf(t, block) {
+    var tac = World.session.tactics;
+    return tac && tac[t] ? tac[t][block] - 1 : 0;
+  }
+  function mood(p) { return moodOf(p.team, p.role === 'DEF' ? 0 : (p.role === 'MID' ? 1 : 2)); }
 
   function makeTeam() {
     return {
@@ -194,8 +203,8 @@
     var depth = (ball.pos.x - T.lineX) * a; // how far the ball is in front of our line
     var x;
     if (p.role === 'DEF') x = T.lineX;
-    else if (p.role === 'MID') x = T.lineX + a * clamp(depth * 0.5, 5, 13);
-    else x = T.lineX + a * clamp(depth * 0.85, 14, 30);
+    else if (p.role === 'MID') x = T.lineX + a * (clamp(depth * 0.5, 5, 13) + moodOf(p.team, 1) * 2);
+    else x = T.lineX + a * (clamp(depth * 0.85, 14, 30) + moodOf(p.team, 2) * 4); // attacking: they wait up the pitch
     ZX = clamp(x, -HALF_W + 4, HALF_W - 4);
     ZZ = clamp(p.homeZ * 0.72 + ball.pos.z * 0.32, -HALF_H + 3, HALF_H - 3);
   }
@@ -220,7 +229,7 @@
       var p = players[i];
       if (p.team === t) { p.mark = null; continue; }
       if (p.role === 'GK' || p === carrier || n >= 11) continue;
-      if ((p.pos.x - ownGoalX) * a > 42) continue; // far from our goal: covered by the zone, not man-marked
+      if ((p.pos.x - ownGoalX) * a > 42 - moodOf(t, 0) * 6) continue; // far from our goal: covered by the zone, not man-marked
       OPP[n] = p;
       DNG[n] = -Math.abs(p.pos.x - ownGoalX) - Math.abs(p.pos.z) * 0.3; // closer to our goal and central = more dangerous
       n++;
@@ -297,10 +306,11 @@
       else { T.sup1 = best1; T.sup2 = best2; }
 
       // back line: follows the ball, never deeper than 7 from our goal, higher when chasing the game
-      var lx = ball.pos.x - a * (15 - T.urgency * 4 + T.caution * 3);
-      var deepLimit = -a * (HALF_W - 7);
+      var dm = moodOf(t, 0);
+      var lx = ball.pos.x - a * (15 - T.urgency * 4 + T.caution * 3 - dm * (dm > 0 ? 3 : 2));
+      var deepLimit = -a * (HALF_W - 7 - (dm > 0 ? dm * 3 : 0));
       if ((lx - deepLimit) * a < 0) lx = deepLimit;
-      if (lx * a > 8) lx = a * 8;
+      if (lx * a > 8 + dm * 6) lx = a * (8 + dm * 6);
       T.lineX = lx;
 
       T.markT -= dt;
@@ -636,6 +646,68 @@
     p.tgtZ = rz;
   }
 
+  // Off-the-ball runs while a team-mate has the ball. A human on the ball gets them too (so he has someone to play a
+  // through ball to). How often depends on the block's plan (Tactics) and the score. At most two or three at once.
+  //  - in behind: a forward or midfielder level with the last defender bends a run into the space behind him, through
+  //    the gap with the most room (straight or diagonal); he starts onside
+  //  - late run: a midfielder arrives in the box when the ball is in the last third
+  //  - overlap: the full-back on the ball's side runs past the carrier down the touchline
+  function startRun(p, T, carrier, carrierFree, oppLine) {
+    var ball = World.ball;
+    var a = attackOf(p);
+    var mo = mood(p);
+    var human = carrier.isCtl;
+    var players = World.players;
+    var runners = 0;
+    for (var i = 0; i < players.length; i++) if (players[i].team === p.team && players[i].runT > 0) runners++;
+    if (runners >= (mo > 0 ? 3 : 2)) return;
+    var cx = carrier.pos.x * a;           // how far up the carrier is (0 = half-way line)
+    var behind = (p.pos.x - carrier.pos.x) * a;
+    var line = offLine(p.team, ball);
+    var wide = Math.abs(p.homeZ) > HALF_H * 0.4;
+    var bias = mo * 0.08 + T.urgency * 0.2 - T.caution * 0.2 + (human ? 0.12 : 0);
+    var r = Math.random();
+
+    // overlap: a wide defender on the ball's side, from behind the carrier, while we build up
+    if (p.role === 'DEF') {
+      if (!wide || mo < 0 || (p.homeZ > 0) !== (carrier.pos.z > 0) || behind > -2 || cx < -18 || cx > HALF_W * 0.6) return;
+      if (r > 0.12 + mo * 0.2 + bias * 0.5) return;
+      p.runT = 2.6; p.runCd = 7 - mo * 2;
+      p.runX = clamp(carrier.pos.x + a * 16, -HALF_W + 5, HALF_W - 5);
+      p.runZ = (p.homeZ > 0 ? 1 : -1) * (HALF_H - 4);
+      return;
+    }
+
+    // late run into the box: midfielders, once the ball is in the last third
+    if (p.role === 'MID' && cx > HALF_W * 0.3 && behind < 6 && r < 0.18 + bias) {
+      p.runT = 2.2; p.runCd = 5 - mo;
+      var gx = a * HALF_W;
+      p.runX = gx - a * (NS.PEN_D + (Math.random() - 0.5) * 5);
+      p.runZ = (Math.random() < 0.5 ? -1 : 1) * (2 + Math.random() * 6);
+      if ((p.runX - line) * a > -0.5) p.runX = line - a * 0.5; // arrives level, not offside
+      return;
+    }
+
+    // in behind: from level with the last defender, when the carrier can look up
+    if ((!carrierFree && !human) || cx < -25 || offsideNow(p, ball)) return;
+    if (Math.abs(p.pos.x - line) > 12 || behind < -25) return;
+    if (r > 0.3 + bias + (p.role === 'FWD' ? 0.1 : -0.08)) return;
+    // the gap with the most room behind the line (straight on, or diagonal across a defender)
+    var tx = clamp(oppLine + a * 10, -HALF_W + 5, HALF_W - 5);
+    var bz = p.pos.z, bs = -1e9;
+    for (var k = -1; k <= 1; k++) {
+      var z = clamp(p.pos.z * 0.75 + k * 9, -HALF_H + 5, HALF_H - 5);
+      var sc = Math.min(oppDist(tx, z, p.team), 10) - Math.abs(z) * 0.06 + (k === 0 ? 0.6 : 0) + Math.random();
+      if (sc > bs) { bs = sc; bz = z; }
+    }
+    p.runT = 2.0;
+    p.runCd = 3.6 - mo * 0.8;
+    p.runX = tx;
+    p.runZ = bz;
+    // the carrier looks up now: the pass has to go while the runner is still level with the last defender
+    if (carrier.aiCd > 0.06) carrier.aiCd = 0.06;
+  }
+
   // a supporter only comes over from close by (the others keep their places in the shape)
   function supportNear(p, c) {
     var dx = p.pos.x - c.pos.x, dz = p.pos.z - c.pos.z;
@@ -655,16 +727,7 @@
       var oppLine = O.lastX;
       var carrierFree = oppDist(carrier.pos.x, carrier.pos.z, p.team) > 2.5;
 
-      // start a run in behind the last defender
-      if (p.runT <= 0 && p.runCd <= 0 && p.role !== 'DEF' && carrierFree && carrier.pos.x * a > -20 && !offsideNow(p, ball) &&
-          Math.random() < 0.38 + T.urgency * 0.25 - T.caution * 0.2) {
-        p.runT = 1.6;
-        p.runCd = 4.5;
-        // the carrier looks up now: the pass has to go while the runner is still level with the last defender
-        if (carrier.aiCd > 0.06) carrier.aiCd = 0.06;
-        p.runX = clamp(oppLine + a * 9, -HALF_W + 5, HALF_W - 5);
-        p.runZ = clamp(p.pos.z * 0.6 + (Math.random() - 0.5) * 6, -HALF_H + 5, HALF_H - 5);
-      }
+      if (p.runT <= 0 && p.runCd <= 0) startRun(p, T, carrier, carrierFree, oppLine);
 
       if (p.runT > 0) {
         p.tgtX = p.runX; p.tgtZ = p.runZ; p.tgtS = 12;
@@ -688,7 +751,7 @@
       } else {
 // shape: the formation moved up with the ball, wide players wide, forwards on the offside line (never
         // beyond it), defenders a line behind the ball
-        var push = (p.role === 'FWD' ? 14 : (p.role === 'MID' ? 8 : 4)) + T.urgency * 5 - T.caution * 5;
+        var push = (p.role === 'FWD' ? 14 : (p.role === 'MID' ? 8 : 4)) + T.urgency * 5 - T.caution * 5 + mood(p) * 3;
         var bx = p.homeX * 0.6 + ball.pos.x * 0.65 + a * push;
         var bz = p.homeZ * 1.15 + ball.pos.z * 0.25;
         if (Math.abs(p.homeZ) > 15) bz = (p.homeZ > 0 ? 1 : -1) * Math.min(HALF_H - 3, Math.abs(p.homeZ) * 1.3);
@@ -728,7 +791,7 @@
       var side = -(Math.sin(c.facing) * cdx + Math.cos(c.facing) * cdz) / (d || 1);
       var cSpeed = Math.sqrt(c.vel.x * c.vel.x + c.vel.z * c.vel.z);
       // alongside or just behind him: lean in with the shoulder to win it or knock it off his foot
-      if (d < 1.9 && side < 0.5 && p.shCd <= 0 && World.match.protectT <= 0 && !c.gkHands) {
+      if (d < 1.45 && side < 0.5 && p.shCd <= 0 && World.match.protectT <= 0 && !c.gkHands) {
         p.shCd = 0.7 + Math.random() * 0.5;
         if (Actions.shoulder(p, c, prof.tackle * 0.5)) return;
       }
@@ -738,7 +801,7 @@
         var lat2 = (-cdx * rx - cdz * rz) >= 0 ? 1 : -1;
         moveToward(p, c.pos.x + c.vel.x * 0.3 + rx * lat2 * 1.1, c.pos.z + c.vel.z * 0.3 + rz * lat2 * 1.1, 11.6 * prof.speedMul, dt);
         // a slide from the side when he is level
-        if (d < 3 && side > -0.5 && p.tackleCd <= 0 && Math.random() < prof.tackleRate * 0.3 * dt) Actions.startTackle(p, c, false, true);
+        if (d < 2.4 && side > -0.5 && p.tackleCd <= 0 && Math.random() < prof.tackleRate * 0.3 * dt) Actions.startTackle(p, c, false, true);
         return;
       }
       if (side < -0.3 && d < 4.5) {
@@ -755,7 +818,7 @@
         moveToward(p, c.pos.x + gx * 7.5, c.pos.z + gz * 7.5, 9 * prof.speedMul, dt);
         return;
       }
-      if (d < 2.6 && p.tackleCd <= 0 && side > -0.45 && !c.gkHands) {
+      if (d < 2.0 && p.tackleCd <= 0 && side > -0.45 && !c.gkHands) {
         // carrier running at us (facing our goal) is easier to time than one shielding the ball
         var facing = Math.sin(c.facing) * gx + Math.cos(c.facing) * gz;
         var rate = prof.tackleRate * (0.8 + 0.5 * Math.max(0, facing)) * (c.dribbling ? 0.8 : 1.15);
@@ -775,7 +838,8 @@
       var ol = Math.sqrt(ox * ox + oz * oz) || 1;
       var bxv = ball.pos.x - o.pos.x, bzv = ball.pos.z - o.pos.z;
       var bl = Math.sqrt(bxv * bxv + bzv * bzv) || 1;
-      var tight = (3.4 - 2.0 * clamp(1 - ol / 45, 0, 1)) / prof.tight;
+      // a defensive block sits tighter on its man (less room to turn and shoot)
+      var tight = (3.4 - 2.0 * clamp(1 - ol / 45, 0, 1)) / prof.tight * (moodOf(p.team, 0) < 0 ? 0.75 : 1);
       var mx = o.pos.x + ox / ol * tight + bxv / bl * 1.0 + o.vel.x * 0.2;
       var mz = o.pos.z + oz / ol * tight + bzv / bl * 1.0 + o.vel.z * 0.2;
       var fast = o.vel.x * o.vel.x + o.vel.z * o.vel.z > 60;

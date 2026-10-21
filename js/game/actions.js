@@ -6,6 +6,7 @@
   var ACT = NS.ACT;
   var HALF_W = NS.PITCH_HALF_W;
   var HALF_H = NS.PITCH_HALF_H;
+  NS.pitchHooks.push(function () { HALF_W = NS.PITCH_HALF_W; HALF_H = NS.PITCH_HALF_H; });
   var GOAL_HALF_W = NS.GOAL_HALF_W;
   var G = NS.PHYS.G;
   var DRAG_K = NS.PHYS.ROLL_K; // ground speed needed per unit of distance
@@ -24,6 +25,13 @@
   var MIN_D = [0, 3, 6, 14];
   var MAX_D = [0, 32, 44, 72];
   var LEAD_T = [0, 0.3, 0.55, 0.8];
+  // a human's power bar (0..1) -> the distance he is passing to: DEPTH0 + DEPTH1 * power
+  var DEPTH0 = [0, 6, 10, 18];
+  var DEPTH1 = [0, 30, 34, 52];
+
+  // Human reaction: the seconds a player needs between a ball being played and a controlled header / first touch
+  var REACT_HEAD = 0.5;
+  var REACT_TOUCH = 0.38;
 
   function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
   function gaussR() { return (Math.random() + Math.random() + Math.random() - 1.5) * 2; } // ~N(0, 1)
@@ -39,12 +47,14 @@
       var fx, fz;
       if (al > 0.1) { fx = ax / al; fz = az / al; } else { fx = Math.sin(passer.facing); fz = Math.cos(passer.facing); }
       var t = type >= ACT.PASS && type <= ACT.LONG ? type : ACT.PASS;
-      var best = this.scanTargets(passer, fx, fz, t, 0.34); // within ~70 degrees of the aim
-      if (!best) best = this.scanTargets(passer, fx, fz, t, -0.2);
+      // a human's power bar says how far: a tap to the near one, a full bar to the one behind him
+      var want = this.passPower >= 0 ? DEPTH0[t] + DEPTH1[t] * this.passPower : -1;
+      var best = this.scanTargets(passer, fx, fz, t, 0.34, want); // within ~70 degrees of the aim
+      if (!best) best = this.scanTargets(passer, fx, fz, t, -0.2, want);
       return best;
     },
 
-    scanTargets: function (passer, fx, fz, t, minDot) {
+    scanTargets: function (passer, fx, fz, t, minDot, want) {
       var players = World.players;
       var attack = passer.team === 0 ? 1 : -1;
       var lofted = t === ACT.LONG;
@@ -63,9 +73,16 @@
         var dot = (dx * fx + dz * fz) / d;
         if (dot < minDot) continue;
         var ang = Math.acos(dot > 1 ? 1 : dot);
-        var off = Math.abs(d - IDEAL_D[t]) / IDEAL_D[t];
-        var score = -ang * 2.8 - off * 0.6;
+        var off, score;
+        if (want > 0) {
+          off = Math.abs(d - want) / Math.max(want, 8);
+          score = -ang * 2.8 - off * 1.8;
+        } else {
+          off = Math.abs(d - IDEAL_D[t]) / IDEAL_D[t];
+          score = -ang * 2.8 - off * 0.6;
+        }
         if (t !== ACT.PASS) score += (m.pos.x - passer.pos.x) * attack * 0.012; // through / long balls go forward
+        if (t === ACT.THROUGH && m.runT > 0) score += 0.45; // a team-mate making a run in behind
         for (var j = 0; j < players.length; j++) {
           var o = players[j];
           if (o.team === passer.team || o.stun > 0) continue;
@@ -318,7 +335,7 @@
       }
       // a human held the pass button: a tap is the normal pace, a full hold ~35% firmer (a long ball flies flatter)
       if (this.passPower > 0 && !(p.throwT > 0.35)) {
-        var pw = 1 + this.passPower * 0.35;
+        var pw = 1 + this.passPower * 0.15; // the bar picks the receiver; a little firmer too
         speed *= pw;
         if (type === ACT.LONG) vy /= pw;
       }
@@ -375,7 +392,7 @@
       if (!c || ball.owner !== c || c.team === p.team || c.gkHands || c.throwIn || World.match.protectT > 0) return false;
       var dx = c.pos.x - p.pos.x, dz = c.pos.z - p.pos.z;
       var d = Math.sqrt(dx * dx + dz * dz) || 1;
-      if (d > 1.9) return false;
+      if (d > 1.45) return false; // shoulder to shoulder
       var front = -(Math.sin(c.facing) * dx + Math.cos(c.facing) * dz) / d; // +1 in front of him, -1 behind
       p.shoulderT = 0.32;
       p.shoulderDir = (Math.cos(p.facing) * dx - Math.sin(p.facing) * dz) > 0 ? 1 : -1;
@@ -437,11 +454,10 @@
       var dx = ball.pos.x - p.pos.x, dz = ball.pos.z - p.pos.z;
       var d2 = dx * dx + dz * dz;
       if (d2 > 1.7 * (0.75 + p.st.hdr / 99 * 0.5)) return false; // his Header rating: how far he reaches
-      // no time to react: a ball played from close by (or a moment ago) cannot be headed on, it hits him; and nobody heads
-      // straight back a header from a few metres away (no head tennis)
-      var fx = p.pos.x - ball.fromX, fz = p.pos.z - ball.fromZ;
-      var from2 = fx * fx + fz * fz;
-      if (from2 < 100 || ball.age < 0.45 || (ball.headed && from2 < 324)) return false;
+      // no time to react: a header needs the time to see the ball, jump and set the neck. A ball that reaches him less
+      // than REACT_HEAD seconds after it was played (struck hard from close by) just hits him; a slow ball from close
+      // by gives him the time. A header coming back off a header needs a little longer (no head tennis).
+      if (ball.age < (ball.headed ? REACT_HEAD + 0.1 : REACT_HEAD)) return false;
       var players = World.players;
       for (var i = 0; i < players.length; i++) {
         var q = players[i];
@@ -543,8 +559,10 @@
         var dz = carrier.pos.z - p.pos.z;
         var bx = ball.pos.x - p.pos.x;
         var bz = ball.pos.z - p.pos.z;
-        var reach = p.tackleSlide ? 6.4 : 3.6;
-        if (dx * dx + dz * dz < reach || bx * bx + bz * bz < reach) {
+        // the ball within his leg's reach (or the man, for a clumsy one): ~1.25 m standing, ~2 m sliding
+        var reach = p.tackleSlide ? 4.0 : 1.56;
+        var onBall = bx * bx + bz * bz < reach;
+        if (onBall || dx * dx + dz * dz < reach * 0.8) {
           p.tackleHit = true;
           var cl = Math.sqrt(dx * dx + dz * dz) || 1;
           // +1 = the tackler comes from the front (where the ball is), -1 = from behind
@@ -563,6 +581,7 @@
           else if (front < 0.3) chance *= 0.6;                      // from the side
           else chance *= 1.08;
           if (carrier.dribbling) chance *= 0.75;
+          if (!onBall) chance *= 0.45; // into the man, not the ball
           chance = clamp(chance, 0.03, 0.92);
           if (Math.random() < chance) {
             ball.receiver = null;
@@ -610,10 +629,11 @@
       var vx = ball.vel.x - p.vel.x * 0.5, vz = ball.vel.z - p.vel.z * 0.5;
       var s = Math.sqrt(vx * vx + vz * vz);
       if (s < 7 && ball.pos.y < 0.9) return true;
-      var fx = p.pos.x - ball.fromX, fz = p.pos.z - ball.fromZ;
-      var react = Math.sqrt(fx * fx + fz * fz) / Math.max(s, 6); // seconds he saw it coming
+      // seconds he saw it coming (the time since it was played: its speed and the distance together)
+      var react = ball.age;
+      if (react < 0.15 && s > 14) return false; // a reflex: a hard ball from right next to him just hits him
       var pace = Math.max(0, s - 10) / 25;
-      var quick = react < 0.4 ? (0.4 - react) / 0.4 : 0;
+      var quick = react < REACT_TOUCH ? Math.min(1, (REACT_TOUCH - react) / (REACT_TOUCH - 0.15)) : 0;
       var skill = (p.role === 'GK' ? p.st.drb * 0.5 + 30 : p.st.drb) / 99;
       var fail = (pace * 0.35 + quick * 0.5) * (1.35 - skill * 0.7);
       if (ball.receiver === p) fail *= 0.45;

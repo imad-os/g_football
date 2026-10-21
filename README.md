@@ -88,8 +88,8 @@ played), or a **penalty** when it happened in the fouling team's own penalty are
 box; the taker aims with the stick and shoots with the gauge (the CPU picks a corner), and the keeper must guess a side as it
 is struck (about 3 in 4 penalties go in).
 
-**Bookings**: a player's first foul is a warning (shown as a **green card** for now), the second a **yellow card**, the third a
-second yellow = **red card**: he is sent off when play restarts and his team plays one short until the end of the match. The
+**Bookings**: a team's first foul gets a **verbal warning** from the referee (no card) for the whole team; after that any
+foul by anyone in that team is a **yellow card**, and a player's second yellow = **red card**: he is sent off when play restarts and his team plays one short until the end of the match. The
 card is shown over the player's head (under the arrow when you control him), every booking is a tiny card next to the team
 name on the scoreboard, and the foul banner says who got what.
 
@@ -101,14 +101,17 @@ Player 2: the second controller or phone controller connected.
 
 ## 11-a-side, the rules of the game
 
-* **Settings > Gameplay > Players per team**: 11 v 11 (default) or 7 v 7, from the next match. Both are played on a real
-  105 x 68 pitch with the real markings (penalty area, goal area, spot, arc, corner arcs); the goal posts stand on the goal
-  line. Four formations for each size (4-4-2, 4-3-3, 4-2-3-1, 3-5-2); the squad is picked for the formation (the best keeper in
+* **Settings > Gameplay > Players per team**: 11 v 11 (default) or 7 v 7, from the next match.
+* **Settings > Gameplay > Stadium**: Compact 100 x 64, Classic 110 x 72 (default), Grand 120 x 78, Mega 130 x 86, each with
+  its own grass. The players and goals are drawn about 1.5x real size, so the penalty area, goal area, spot, arc and centre
+  circle are the real markings scaled to the goal (x1.25), the same in every stadium; the goal posts stand on the goal line.
+  The formations are stretched to the stadium. Four formations for each size (4-4-2, 4-3-3, 4-2-3-1, 3-5-2); the squad is picked for the formation (the best keeper in
   goal, defenders at the back...), and it is picked again when the formation is changed before kick-off.
 * **Out of play**: no invisible walls. Over a touchline = **throw-in** (thrown from over the head, up to about 24 m; no shots);
   over a goal line = **corner** when the defenders touched it last (the best headers go into the box with a marker each), else a
   **goal kick** taken by the keeper (the opponents leave the box). The taker cannot run with it; the stick aims. A player who
-  runs the ball over the line loses it too.
+  runs the ball over the line loses it too. Nothing freezes: the ball runs on over the line, then everybody jogs to his
+  place and the taker to the ball, and it is taken when he gets there.
 * **Offside**: judged when the ball is played (in the opponents' half, ahead of the ball and of the second-last opponent;
   never from a throw-in, a corner or a goal kick). An offside player who plays the ball gives an indirect free kick. The CPU
   never passes to a player who is offside and keeps its forwards on the line until they run in behind.
@@ -125,8 +128,25 @@ Player 2: the second controller or phone controller connected.
   for it. A bad touch knocks it off him in a new direction (he touched it last: over his own goal line it is a corner).
   Won tackles often only poke the ball away. Keepers tip hard shots round the post or over the bar; defenders pinned on their
   own goal line put it behind; clearances go long towards the touchline.
-* **No head tennis**: a ball played from less than about 10 m away (or a moment ago), or a header from less than about 18 m,
-  cannot be headed straight back; it hits the player instead.
+* **Reaction time**: measured from when the ball was played, so its speed and the distance count together. A header needs
+  0.5 s (0.6 s off another header: no head tennis); sooner, the ball just hits the player. A first touch is harder under
+  about 0.4 s and impossible on a hard ball under 0.15 s. A slow ball from close by leaves time for both.
+* **Tackles** only win the ball when the foot can reach it (about 1.25 m standing, 2 m sliding); a tackle that only reaches
+  the man rarely works. Shoulder challenges need the players side by side.
+* **Tactics** (Game plan): for each block, defence / midfield / attack: **Defensive**, **Balanced** or **Attacking**. A
+  defensive defence sits deeper and marks tighter; an attacking one holds a high line and its full-backs overlap. Attacking
+  midfielders make late runs into the box; attacking forwards stay high and run in behind more often. Attacking scores
+  more and concedes more; defensive makes tight, low-scoring games.
+* **Off-the-ball runs** (CPU and your team-mates): forwards level with the last defender bend runs into the gap behind it
+  (straight or diagonal) so you can play a through ball; midfielders arrive in the box late; full-backs overlap. A through
+  ball prefers a team-mate who is making a run.
+* **Pass power picks the depth**: the longer you hold pass / through / long ball, the further away the receiver: with two
+  team-mates in a row in that direction, a short tap finds the near one and a full bar the one behind him.
+* **Player switching** goes to the team-mate who reaches the ball first (where it is going, not only where it is); a pass
+  that is cut out frees the cursor at once, and holding Press keeps pressing with the new player.
+* **Referee** on the pitch, in black, or yellow when a team plays in a dark kit.
+* **Teams screen**: each side picks from its own league / group (PSG against Real Madrid, a club against a nation).
+* **Player ratings** are shown on a PES-style hexagon (Speed, Dribble, Shoot, Stamina, Header, Defense).
 * **Shots from range** can go in, less often the further out they are struck (the keeper sees a long shot coming for longer).
 * Players have longer legs (about half their height) with shorts, socks and boots painted on, no extra polygons.
 

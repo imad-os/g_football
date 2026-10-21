@@ -311,7 +311,14 @@
       }
       gk[g] = bestG;
     }
-    return { home: h, away: a, gk: gk };
+    // the referee: black, or yellow when a team (or a keeper) plays in a dark kit
+    var REF = [0x161616, 0xfacc15];
+    var ref = REF[0], br = -1;
+    for (var r = 0; r < REF.length; r++) {
+      var rs = Math.min(colorDist(REF[r], h.c1), colorDist(REF[r], a.c1), colorDist(REF[r], gk[0]), colorDist(REF[r], gk[1])) + (r === 0 ? 20 : 0);
+      if (rs > br) { br = rs; ref = REF[r]; }
+    }
+    return { home: h, away: a, gk: gk, ref: ref };
   }
 
   NS.Teams = {

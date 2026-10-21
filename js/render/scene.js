@@ -4,6 +4,7 @@
 
   var renderer, scene, camera, dirLight, ambLight;
   var pitchMesh, crowdMesh, ballMesh;
+  var stadium = null;       // everything sized from the pitch (rebuilt when the stadium changes)
   var trail = [];           // pooled spheres behind a shot
   var TRAIL_N = 9;
   var trailCount = 0;
@@ -28,7 +29,7 @@
     BLIMP: { height: 54, dist: 56, trackX: 0.5 }
   };
 
-  function buildGoal(xPos) {
+  function buildGoal(xPos, scene) {
     var sign = xPos < 0 ? -1 : 1;
     var postMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
     var netMat = new THREE.MeshBasicMaterial({ color: 0xcbd5e1, wireframe: true, transparent: true, opacity: 0.45 });
@@ -48,24 +49,26 @@
   }
 
   function buildStadium(tier) {
+    stadium = new THREE.Group();
+    scene.add(stadium);
     var M = NS.Assets.PITCH_MARGIN;
     var surroundGeo = new THREE.PlaneGeometry(NS.PITCH_HALF_W * 2 + 40, NS.PITCH_HALF_H * 2 + 34);
     surroundGeo.rotateX(-Math.PI / 2);
     var surround = new THREE.Mesh(surroundGeo, new THREE.MeshBasicMaterial({ color: 0x0f172a }));
     surround.position.y = -0.05;
-    scene.add(surround);
+    stadium.add(surround);
 
     var pitchGeo = new THREE.PlaneGeometry((NS.PITCH_HALF_W + M) * 2, (NS.PITCH_HALF_H + M) * 2); // lines drawn M inside
     pitchGeo.rotateX(-Math.PI / 2);
     pitchMesh = new THREE.Mesh(pitchGeo, new THREE.MeshBasicMaterial({ map: NS.Assets.pitchTexture(tier.pitchStripes) }));
-    scene.add(pitchMesh);
+    stadium.add(pitchMesh);
 
     var board = new THREE.Mesh(new THREE.BoxGeometry(NS.PITCH_HALF_W * 2 + 6, 1.4, 0.5), new THREE.MeshBasicMaterial({ color: 0x090d16 }));
     board.position.set(0, 0.7, -NS.PITCH_HALF_H - M - 1);
-    scene.add(board);
+    stadium.add(board);
 
-    buildGoal(-NS.PITCH_HALF_W);
-    buildGoal(NS.PITCH_HALF_W);
+    buildGoal(-NS.PITCH_HALF_W, stadium);
+    buildGoal(NS.PITCH_HALF_W, stadium);
 
     var COUNT = 140;
     crowdMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.9, 1.2, 0.9), new THREE.MeshBasicMaterial({ color: 0xffffff }), COUNT);
@@ -73,15 +76,15 @@
     var palette = [0xef4444, 0x38bdf8, 0xfacc15, 0xf8fafc, 0x22c55e];
     var color = new THREE.Color();
     for (var i = 0; i < COUNT; i++) {
-      var row = Math.floor(i / 28);
-      var col = i % 28;
+      var row = i % 5;
+      var col = Math.floor(i / 5);
       dummy.position.set(-NS.PITCH_HALF_W + col * 3.4 * NS.PITCH_SCALE, 2.2 + row * 1.6, -NS.PITCH_HALF_H - M - 3.5 - row * 2.1);
       dummy.updateMatrix();
       crowdMesh.setMatrixAt(i, dummy.matrix);
       color.setHex(palette[i % palette.length]);
       crowdMesh.setColorAt(i, color);
     }
-    scene.add(crowdMesh);
+    stadium.add(crowdMesh);
   }
 
   NS.Scene = {
@@ -221,6 +224,16 @@
       camera.lookAt(lookTarget);
     },
     render: function () { renderer.render(scene, camera); },
+    // A new stadium (pitch size): the pitch, lines, goals, boards and stands are built again.
+    rebuildStadium: function () {
+      if (!scene || !stadium) return;
+      scene.remove(stadium);
+      stadium.traverse(function (o) {
+        if (o.geometry && o.geometry.dispose) o.geometry.dispose();
+        if (o.material && o.material.dispose) o.material.dispose();
+      });
+      buildStadium(currentTier || { pitchStripes: true });
+    },
     lit: function () { return currentTier ? currentTier.useLighting : true; },
     dispose: function () {
       if (!scene) return;

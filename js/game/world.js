@@ -5,6 +5,7 @@
   var R = NS.BALL_R;
   var HALF_W = NS.PITCH_HALF_W;
   var HALF_H = NS.PITCH_HALF_H;
+  NS.pitchHooks.push(function () { HALF_W = NS.PITCH_HALF_W; HALF_H = NS.PITCH_HALF_H; });
   var GOAL_HALF_W = NS.GOAL_HALF_W;
   var GOAL_HEIGHT = NS.GOAL_HEIGHT;
 
@@ -195,6 +196,9 @@
       homeTeamId: 'WAC',
       awayTeamId: 'RCA',
       formations: ['4-4-2', '4-4-2'], // both sides alike by default (4-3-3 is a strong attacking choice in 7-a-side)
+      // Tactics per block (defence, midfield, attack): 0 defensive, 1 balanced, 2 attacking
+      tactics: [[1, 1, 1], [1, 1, 1]],
+      awayCategory: 'LEAGUE_MAR', // the away side's league / group on the Teams screen
       rosters: [[], []],
       editingSquadIdx: 0,
       selectedStarterIdx: null
@@ -207,6 +211,7 @@
       penalty: false,  // a penalty is being taken: only the taker and the keeper move until the kick
       protectT: 0,     // a free kick is being taken: nobody may tackle the taker yet
       sendOff: null,   // a player shown a red card: he leaves when play restarts
+      warned: [false, false], // the team had its verbal warning (its next foul is a yellow)
       restart: 0,      // 3 throw-in, 4 corner, 5 goal kick: the taker has not played it yet (he cannot run with it)
       restartT: 0,
       extra: 0         // time played after 45 / 90 minutes while an attack is still on

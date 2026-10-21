@@ -401,3 +401,19 @@ h1, h2, p { margin: 0; }
 #event-banner:not(.hidden) #event-title { animation: titleGlow 1.6s ease-in-out infinite; }
 @keyframes bannerIn { 0% { transform: translateX(-60vw) skewX(-12deg); opacity: 0; } 100% { transform: none; opacity: 1; } }
 @keyframes titleGlow { 0%, 100% { text-shadow: 0 0 0 rgba(245, 158, 11, 0); } 50% { text-shadow: 0 0 1.2rem rgba(245, 158, 11, 0.8); } }
+
+/* v1.15: PES-style ratings hexagon, tactics buttons, a league tab row per side */
+.hex-canvas { display: block; width: 100%; max-width: 17rem; margin: 0 auto; }
+.btn.tac { font-size: 0.85rem; }
+.btn.tac.m0 { border-color: rgba(56, 189, 248, 0.7); }
+.btn.tac.m2 { border-color: rgba(239, 68, 68, 0.75); }
+.two-cols .tabs { margin-bottom: 0.2rem; }
+.two-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.two-cols .panel-card, .two-cols .tabs { min-width: 0; }
+@media (max-aspect-ratio: 1/1) { .two-cols { grid-template-columns: minmax(0, 1fr); } }
+.boardcard { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; align-items: center; gap: 0.3rem 0.8rem; overflow: hidden; }
+.boardcard > .tag { grid-column: 1 / -1; justify-self: start; }
+.boardcard > .board-canvas { grid-column: 1; max-width: none; margin: 0; }
+.boardcard > .gp-stats { grid-column: 2; margin: 0; min-height: 0; }
+.boardcard > p { grid-column: 1 / -1; margin: 0; }
+.hex-canvas { max-width: none; }

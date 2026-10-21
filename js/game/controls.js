@@ -42,7 +42,8 @@
     var other = otherPlayer(slot);
     var o = ball.owner;
     if (o && o.team === slot.team && o !== p && o !== other) { slot.player = o; return; }
-    var n = Actions.nearestToBall(slot.team, p, other);
+    var n = fastestToBall(slot.team, other);
+    if (n === p) n = Actions.nearestToBall(slot.team, p, other);
     if (n) {
       slot.player = n;
       // the player chose: auto-switch keeps his choice while the same opponent keeps the ball
@@ -58,7 +59,7 @@
     if (c && c.team !== p.team && !c.gkHands && p.tackleCd <= 0 && World.match.protectT <= 0) {
       var dx = c.pos.x - p.pos.x;
       var dz = c.pos.z - p.pos.z;
-      if (dx * dx + dz * dz < (slide ? 56 : 17.6)) { Actions.startTackle(p, c, true, slide); return; }
+      if (dx * dx + dz * dz < (slide ? 30 : 9)) { Actions.startTackle(p, c, true, slide); return; }
     }
     switchCursor(slot);
   }
@@ -137,6 +138,26 @@
 
   var assignT = 0;
 
+  // Seconds p needs to reach the ball (at a run, where the ball will be in a moment).
+  function timeTo(p) {
+    var ball = World.ball;
+    var bx = ball.owner ? ball.pos.x : ball.pos.x + ball.vel.x * 0.4;
+    var bz = ball.owner ? ball.pos.z : ball.pos.z + ball.vel.z * 0.4;
+    var dx = bx - p.pos.x, dz = bz - p.pos.z;
+    return Math.sqrt(dx * dx + dz * dz) / 11 + (p.stun > 0 ? p.stun : 0);
+  }
+  function fastestToBall(team, ex) {
+    var players = World.players;
+    var best = null, bt = 1e9;
+    for (var i = 0; i < players.length; i++) {
+      var q = players[i];
+      if (q.team !== team || q.role === 'GK' || q === ex) continue;
+      var t = timeTo(q);
+      if (t < bt) { bt = t; best = q; }
+    }
+    return best;
+  }
+
   NS.Controls = {
     // The ball changed hands: a human team always controls its ball carrier (any switch mode), and a team that just
     // lost the ball may switch to a defender at once.
@@ -188,19 +209,25 @@
           if (ball.receiver && ball.receiver.team === s.team) rcv = ball.receiver;
           else if (ball.contester && ball.contester.team === s.team) rcv = ball.contester;
         }
-        if (rcv && rcv !== cur && rcv !== other) { s.player = rcv; continue; }
-        if (s.lockT > 0 || s.evActive) continue; // never change player in the middle of a button gesture
+        if (rcv && rcv !== cur && rcv !== other) {
+          // the receiver, unless a team-mate gets to the ball much sooner (a pass cut out, a deflection)
+          var nr = fastestToBall(s.team, other);
+          if (!nr || nr === rcv || timeTo(nr) > timeTo(rcv) * 0.6 - 0.2) { s.player = rcv; continue; }
+        }
+        // a lock waits for the pass he made: over as soon as that ball is no longer coming to him
+        if (s.lockT > 0 && (o || ball.receiver !== cur)) s.lockT = 0;
+        if (s.lockT > 0 || (s.evActive && s.evCtx !== 2)) continue; // never in the middle of a pass / shot gesture
         // after a switch by button: nothing changes until something happens (the ball changes hands, a pass, a shot)
         if (s.manual) {
           if (o && o === s.manualOwner) continue;
           s.manual = false;
         }
         if (auto) {
-          var n = Actions.nearestToBall(s.team, other, null);
+          // the team-mate who gets to the ball first (where it is going, not only where it is)
+          var n = fastestToBall(s.team, other);
           if (n && n !== cur) {
-            var dn = (n.pos.x - ball.pos.x) * (n.pos.x - ball.pos.x) + (n.pos.z - ball.pos.z) * (n.pos.z - ball.pos.z);
-            var dc = (cur.pos.x - ball.pos.x) * (cur.pos.x - ball.pos.x) + (cur.pos.z - ball.pos.z) * (cur.pos.z - ball.pos.z);
-            if (cur.stun > 0 || dn < dc * 0.6 - 2) s.player = n;
+            var tn = timeTo(n), tc = timeTo(cur);
+            if (cur.stun > 0 || tn < tc * 0.75 - 0.15) s.player = n;
           }
         }
       }
@@ -220,7 +247,10 @@
       var rising = held & ~slot.evPrev;
       slot.evPrev = cur;
 
-      if (slot.evActive && slot.evPlayer !== p) endEvent(slot);
+      if (slot.evActive && slot.evPlayer !== p) {
+        if (slot.evCtx === 2) slot.evPlayer = p; // a held press / team press goes on with the new player
+        else endEvent(slot);
+      }
 
       if (p.stun > 0 || p.tackleT > 0) {
         endEvent(slot);
@@ -349,7 +379,7 @@
         if (slot.teamPress) World.pressT[p.team] = 0.3;
         // close enough: lean in with the shoulder and try to take it (every half second or so while pressing)
         if (slot.shCd > 0) slot.shCd -= dt;
-        if (cl < 1.9 && slot.shCd <= 0) {
+        if (cl < 1.45 && slot.shCd <= 0) {
           slot.shCd = 0.55;
           if (Actions.shoulder(p, carrier, 0.4)) return;
         }

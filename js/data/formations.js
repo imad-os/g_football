@@ -43,7 +43,7 @@
       { role: 'FWD', num: 11, x: -3, z: 8 }
     ]
   };
-  var kx = NS.PITCH_HALF_W / 46, kz = NS.PITCH_HALF_H / 28;
+  var kx = 52.5 / 46, kz = 34 / 28; // the spots are given for a 105 x 68 pitch (stretched to the stadium at kick-off)
   for (var f in F7) {
     for (var i = 0; i < F7[f].length; i++) { F7[f][i].x *= kx; F7[f][i].z *= kz; }
   }

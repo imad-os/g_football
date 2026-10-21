@@ -9,6 +9,7 @@
   var AI = NS.AI;
   var HALF_W = NS.PITCH_HALF_W;
   var HALF_H = NS.PITCH_HALF_H;
+  NS.pitchHooks.push(function () { HALF_W = NS.PITCH_HALF_W; HALF_H = NS.PITCH_HALF_H; });
 
   var SKIN = [0xf1c27d, 0xe0ac69, 0x8d5524, 0xc68642];
   var ballRotX = 0;
@@ -18,6 +19,10 @@
   var lastOwner = null;
   // breaks without freezing: 1 = goal celebration, 2 = half time, 3 = full time
   var breakKind = 0;
+  // ball out of play: the players walk to their places for the throw-in / corner / goal kick (no frozen screen)
+  var walking = false, walkT = 0, walkBallY = 0;
+  // the referee (not one of World.players: he never touches the ball)
+  var ref = null;
   var scorer = null;
   var breakClock = 0;
   var dangerT = 0;
@@ -29,6 +34,10 @@
   // Pose of one player for this step (rotations only, no allocation). Priority: dive, header, catch, throw, slide, fall,
   // shoulder, lunge, kick, run. HIP = height of the hips (the body pivots there, legs hang from it).
   var HIP = NS.Assets.HIP;
+  // formation spots are given for a 105 x 68 pitch
+  function SX() { return HALF_W / 52.5; }
+  function SZ() { return HALF_H / 34; }
+
   function animate(p, dt) {
     var mesh = p.mesh;
     if (p.kickT > 0) p.kickT -= dt;
@@ -378,8 +387,8 @@
   // ---------------------------------------------------------------- fouls, free kicks, penalties
   // A tackle from behind (Actions.onFoul): play stops; a free kick where it happened, or a penalty when it happened in
   // the fouling team's own penalty area.
-  var CARD_COLOR = [0, 0x22c55e, 0xfacc15, 0xef4444];
-  var CARD_KEY = ['', 'card.green', 'card.yellow', 'card.red'];
+  var CARD_COLOR = [0, 0, 0xfacc15, 0xef4444];
+  var CARD_KEY = ['card.warn', '', 'card.yellow', 'card.red'];
 
   // The scoreboard cards of team t (every booking of the match, sent-off players included).
   function refreshCards(t) {
@@ -390,11 +399,13 @@
     NS.HUD.setCards(t, list);
   }
 
-  // A player who fouls is booked: first a warning (shown as a green card for now), then a yellow card, then a second
-  // yellow = a red card and he is sent off when play restarts.
+  // The referee's bookings: the first foul of a team gets a word (a warning for the whole team, no card); after that
+  // any foul by that team is a yellow card, and a player's second yellow is a red (sent off when play restarts).
   function book(p) {
+    var m = World.match;
+    if (!m.warned[p.team]) { m.warned[p.team] = true; return 0; }
     p.fouls++;
-    p.card = p.fouls >= 3 ? 3 : p.fouls;
+    p.card = p.fouls >= 2 ? 3 : 2;
     p.mesh.card.material.color.setHex(CARD_COLOR[p.card]);
     p.mesh.card.visible = true;
     refreshCards(p.team);
@@ -460,6 +471,80 @@
     gk.diveRoll = -side * Math.sin(gk.facing) > 0 ? -1.25 : 1.25;
   }
 
+  // The referee keeps up with play from ~14 m, on the far side of the ball (where the camera sees him), out of the way.
+  function refStep(dt) {
+    if (!ref) return;
+    var ball = World.ball;
+    var tx = ball.pos.x - (ball.pos.x > 0 ? 5 : -5);
+    var tz = ball.pos.z - 13;
+    if (tz < -HALF_H + 2) tz = ball.pos.z + 13;
+    tx = clamp(tx, -HALF_W + 6, HALF_W - 6);
+    var dx = tx - ref.pos.x, dz = tz - ref.pos.z;
+    var d = Math.sqrt(dx * dx + dz * dz);
+    var sp = d > 6 ? 9.5 : (d > 1.5 ? d * 1.5 : 0);
+    var k = Math.min(1, 6 * dt);
+    ref.vel.x += ((d > 0.01 ? dx / d : 0) * sp - ref.vel.x) * k;
+    ref.vel.z += ((d > 0.01 ? dz / d : 0) * sp - ref.vel.z) * k;
+    ref.pos.x += ref.vel.x * dt;
+    ref.pos.z += ref.vel.z * dt;
+    var v2 = ref.vel.x * ref.vel.x + ref.vel.z * ref.vel.z;
+    ref.facing = v2 > 9 ? Math.atan2(ref.vel.x, ref.vel.z) : Math.atan2(ball.pos.x - ref.pos.x, ball.pos.z - ref.pos.z);
+    ref.mesh.root.rotation.y = ref.facing;
+    animate(ref, dt);
+  }
+
+  // The ball runs on after it went out (no freeze): it rolls / drops and stops at the advertising boards.
+  function rollOut(dt) {
+    var ball = World.ball;
+    ball.vel.y -= 19.6 * dt;
+    ball.pos.x += ball.vel.x * dt;
+    ball.pos.y += ball.vel.y * dt;
+    ball.pos.z += ball.vel.z * dt;
+    if (ball.pos.y < R) { ball.pos.y = R; ball.vel.y = -ball.vel.y * 0.4; ball.vel.x *= 0.92; ball.vel.z *= 0.92; }
+    ball.vel.x *= 0.99; ball.vel.z *= 0.99;
+    var lx = HALF_W + 3.5, lz = HALF_H + 3.5;
+    if (Math.abs(ball.pos.x) > lx) { ball.pos.x = ball.pos.x > 0 ? lx : -lx; ball.vel.x *= -0.3; }
+    if (Math.abs(ball.pos.z) > lz) { ball.pos.z = ball.pos.z > 0 ? lz : -lz; ball.vel.z *= -0.3; }
+  }
+
+  // Walk-up for a throw-in / corner / goal kick: everybody jogs to his place, the taker to the ball; it is taken when
+  // he is there (the others arrive by then, or are put in place).
+  function walkStep(dt) {
+    var players = World.players;
+    walkT += dt;
+    var taker = World.match.setTaker;
+    var done = true, takerIn = false;
+    for (var i = 0; i < players.length; i++) {
+      var p = players[i];
+      var dx = p.wX - p.pos.x, dz = p.wZ - p.pos.z;
+      var d = Math.sqrt(dx * dx + dz * dz);
+      if (d > 0.25) {
+        var sp = Math.min(p === taker ? 10 : 9, 1.5 + d * 3);
+        p.vel.x = dx / d * sp; p.vel.z = dz / d * sp;
+        p.pos.x += p.vel.x * dt; p.pos.z += p.vel.z * dt;
+        p.facing = Math.atan2(dx, dz);
+        if (d > 1.5) done = false;
+      } else {
+        p.vel.x = 0; p.vel.z = 0;
+        p.facing = p.wF;
+        if (p === taker) takerIn = true;
+      }
+      p.mesh.root.rotation.y = p.facing;
+      animate(p, dt);
+    }
+    if (!(takerIn && (done || walkT > 1.2)) && walkT < 3.2) return;
+    // everybody in place: the restart is on
+    walking = false;
+    for (i = 0; i < players.length; i++) {
+      p = players[i];
+      p.pos.x = p.wX; p.pos.z = p.wZ; p.vel.set(0, 0, 0); p.facing = p.wF;
+      p.mesh.root.rotation.y = p.facing;
+      animate(p, 0);
+    }
+    World.ball.pos.y = walkBallY;
+    NS.Input.clearEdges();
+  }
+
   // Play stops (foul, offside, ball out): nobody has the ball, no pass is on its way, the offside snapshot is gone.
   function stopPlay() {
     var ball = World.ball;
@@ -484,7 +569,7 @@
       m.setPiece = 3;
       m.setTeam = 1 - last;
       m.setX = clamp(ball.pos.x, -HALF_W + 1, HALF_W - 1);
-      m.setPieceTimer = 0.9;
+      m.setPieceTimer = 0.6;
       return;
     }
     var gs = ball.pos.x > 0 ? 1 : -1;
@@ -493,13 +578,13 @@
     if (last === defending) {
       m.setPiece = 4;
       m.setTeam = 1 - defending;
-      m.setPieceTimer = 1.3;
+      m.setPieceTimer = 0.8;
       NS.Audio.whistle(0);
       NS.HUD.banner(NS.I18n.t('hud.corner'), '', 1.0);
     } else {
       m.setPiece = 5;
       m.setTeam = defending;
-      m.setPieceTimer = 1.1;
+      m.setPieceTimer = 0.6;
     }
   }
 
@@ -606,8 +691,10 @@
     var a = t === 0 ? 1 : -1;
     var kind = m.setPiece;
     var i, p;
+    var walk = kind >= 3 && kind <= 5;
     for (i = 0; i < players.length; i++) {
       p = players[i];
+      p.wX = p.pos.x; p.wZ = p.pos.z; // where he is now (the walk starts here)
       p.vel.set(0, 0, 0);
       p.stun = 0; p.tackleT = 0; p.slideT = 0; p.lungeT = 0; p.runToT = 0; p.throwIn = false; p.gkHands = false;
     }
@@ -618,7 +705,7 @@
     if (kind === 2) {
       // penalty: the spot 11 m out, the taker behind the ball, the keeper on his line, everybody else outside the box
       var goalX = a * HALF_W;
-      bx = goalX - a * 11;
+      bx = goalX - a * NS.PEN_D;
       bz = 0;
       var best = null;
       for (i = 0; i < players.length; i++) { p = players[i]; if (p.team === t && p.role === 'FWD') { best = p; break; } }
@@ -697,6 +784,19 @@
     m.setPiece = 0;
     NS.HUD.hideBanner();
     NS.Input.clearEdges();
+    if (walk) {
+      // the places just set up are where they walk to: everybody starts from where he was
+      for (i = 0; i < players.length; i++) {
+        p = players[i];
+        var fx = p.wX, fz = p.wZ;
+        p.wX = p.pos.x; p.wZ = p.pos.z; p.wF = p.facing;
+        p.pos.x = fx; p.pos.z = fz;
+      }
+      walkBallY = ball.pos.y;
+      ball.pos.y = R; // the ball waits on the ground at the spot
+      walking = true;
+      walkT = 0;
+    }
     for (i = 0; i < players.length; i++) { players[i].mesh.root.rotation.y = players[i].facing; animate(players[i], 0); }
   }
 
@@ -762,11 +862,11 @@
             td.shorts, SKIN[(i + t) % SKIN.length], lit);
           NS.Scene.add(mesh.root);
           var pos = mesh.root.position;
-          pos.set(slot.x * dir, 0, slot.z * dir);
+          pos.set(slot.x * dir * SX(), 0, slot.z * dir * SZ());
           World.players.push({
             team: t, index: i, name: names[i] || ('PLAYER ' + slot.num), role: slot.role, num: slot.num,
             roleText: slot.role + ' #' + slot.num,
-            homeX: slot.x * dir, homeZ: slot.z * dir,
+            homeX: slot.x * dir * SX(), homeZ: slot.z * dir * SZ(),
             pos: pos, vel: new THREE.Vector3(),
             facing: t === 0 ? Math.PI / 2 : -Math.PI / 2,
             stamina: 100, animPhase: Math.random() * 6, mesh: mesh,
@@ -777,7 +877,7 @@
             // animation timers
             kickT: 0, kickHard: false, lungeT: 0, slideT: 0, fallT: 0, diveT: 0, diveRoll: 0, headT: 0, catchT: 0,
             gkHands: false, diveCd: 0, diveHigh: false, mood: 0, celX: 0, celZ: 0, slid: false,
-            fouls: 0, card: 0, // bookings: 1 warning (green), 2 yellow, 3 red (sent off)
+            fouls: 0, card: 0, // yellow cards, and the card shown: 2 yellow, 3 red (sent off)
             throwIn: false, throwT: 0, shoulderT: 0, shoulderDir: 1, shCd: 0, offside: false,
             // AI brain state
             mark: null, icX: 0, icZ: 0, drX: 0, drZ: 0, runT: 0, runCd: 0, runX: 0, runZ: 0,
@@ -788,6 +888,14 @@
         }
       }
       NS.HUD.setTeams(homeT, awayT, kits.home.c1, kits.away.c1);
+      if (ref) { NS.Scene.remove(ref.mesh.root); NS.Assets.disposePlayer(ref.mesh); }
+      var rm = NS.Assets.createPlayer('SOLID', kits.ref, kits.ref, 0x111111, SKIN[1], lit);
+      NS.Scene.add(rm.root);
+      ref = {
+        mesh: rm, pos: rm.root.position, vel: new THREE.Vector3(), facing: 0, index: 0, animPhase: 0, mood: 0, stun: 0,
+        kickT: 0, kickHard: false, lungeT: 0, slideT: 0, fallT: 0, diveT: 0, diveRoll: 0, diveHigh: false, headT: 0, catchT: 0,
+        gkHands: false, throwIn: false, throwT: 0, shoulderT: 0, shoulderDir: 1
+      };
     },
 
     // Roster / formation edits during a match: update data in place, players keep their position.
@@ -803,8 +911,8 @@
         p.role = slot.role;
         p.num = slot.num;
         p.roleText = slot.role + ' #' + slot.num;
-        p.homeX = slot.x * dir;
-        p.homeZ = slot.z * dir;
+        p.homeX = slot.x * dir * SX();
+        p.homeZ = slot.z * dir * SZ();
       }
     },
 
@@ -824,6 +932,8 @@
       }
       World.pressT[0] = 0;
       World.pressT[1] = 0;
+      walking = false;
+      if (ref) { ref.pos.set(-3, 0, -12); ref.vel.set(0, 0, 0); ref.facing = 0; }
       m.setPieceTimer = 0; m.setPiece = 0; m.penalty = false; m.protectT = 0; m.restart = 0; m.setTaker = null;
       World.ball.offTeam = -1;
       // the kicking-off team starts with the ball in the centre circle
@@ -854,12 +964,18 @@
         this.refitRoster(0);
         this.refitRoster(1);
       }
+      // the stadium of the settings (its pitch size)
+      if (NS.stadiumId !== World.settings.stadium) {
+        NS.usePitch(World.settings.stadium);
+        NS.Scene.rebuildStadium();
+      }
       configureSlots();
       this.rebuildTeams();
       m.score[0] = 0; m.score[1] = 0;
       m.timeSeconds = 0;
       m.half = 1;
       m.extra = 0;
+      m.warned[0] = false; m.warned[1] = false;
       // coin toss: either team may kick off; the other one kicks off the second half
       m.firstKick = Math.random() < 0.5 ? 0 : 1;
       World.kickoffTeam = m.firstKick;
@@ -946,11 +1062,24 @@
       // the referee stopped play for a foul: players slow down, then the free kick / penalty is set up
       if (m.setPieceTimer > 0) {
         m.setPieceTimer -= dt;
-        for (i = 0; i < n; i++) { p = players[i]; p.vel.x *= 0.9; p.vel.z *= 0.9; p.pos.x += p.vel.x * dt; p.pos.z += p.vel.z * dt; animate(p, dt); }
+        // ball out: it runs on and the players jog on; a foul / offside: everybody stops for the whistle
+        var outK = m.setPiece >= 3 && m.setPiece <= 5;
+        var damp = outK ? 0.97 : 0.9;
+        for (i = 0; i < n; i++) { p = players[i]; p.vel.x *= damp; p.vel.z *= damp; p.pos.x += p.vel.x * dt; p.pos.z += p.vel.z * dt; animate(p, dt); }
+        if (outK) rollOut(dt);
+        refStep(dt);
         if (m.setPieceTimer <= 0) startSetPiece();
-        NS.Scene.followBall(dt, m.setX, m.setZ, settings.cameraMode);
+        if (outK) NS.Scene.followBall(dt, ball.pos.x, ball.pos.z, settings.cameraMode);
+        else NS.Scene.followBall(dt, m.setX, m.setZ, settings.cameraMode);
         return;
       }
+      if (walking) {
+        walkStep(dt);
+        refStep(dt);
+        NS.Scene.followBall(dt, ball.pos.x, ball.pos.z, settings.cameraMode);
+        return;
+      }
+      refStep(dt);
       if (m.protectT > 0) m.protectT -= dt;
       if (m.restart) {
         m.restartT += dt;

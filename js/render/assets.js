@@ -94,9 +94,10 @@
     var ctx = canvas.getContext('2d');
     var stripes = 18;
     var sw = (2 * HW) / stripes;
-    ctx.fillStyle = '#1f7234';
+    var grass = NS.stadium.grass;
+    ctx.fillStyle = grass[0];
     ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = '#26843d';
+    ctx.fillStyle = grass[1];
     for (var i = 1; withStripes && i < stripes; i += 2) ctx.fillRect(X(-HW + i * sw), 0, sw * sx + 0.5, H);
     ctx.strokeStyle = 'rgba(255,255,255,0.9)';
     ctx.lineWidth = 2.5;
@@ -113,16 +114,17 @@
     }
     rect(-HW, -HH, HW, HH);
     ctx.beginPath(); ctx.moveTo(X(0), Y(-HH)); ctx.lineTo(X(0), Y(HH)); ctx.stroke();
-    arc(0, 0, 9.15, 0, Math.PI * 2);
+    var R = NS.CIRCLE_R, P = NS.PEN_D;
+    arc(0, 0, R, 0, Math.PI * 2);
     arc(0, 0, 0.3, 0, Math.PI * 2, true);
-    var open = Math.acos((NS.BOX_D - 11) / 9.15); // the penalty arc: the part of the circle outside the box
+    var open = Math.acos((NS.BOX_D - P) / R); // the penalty arc: the part of the circle outside the box
     for (var e = -1; e <= 1; e += 2) {
       var gx = e * HW;
       rect(Math.min(gx, gx - e * NS.BOX_D), -NS.BOX_HW, Math.max(gx, gx - e * NS.BOX_D), NS.BOX_HW);
       rect(Math.min(gx, gx - e * NS.SIX_D), -NS.SIX_HW, Math.max(gx, gx - e * NS.SIX_D), NS.SIX_HW);
-      arc(gx - e * 11, 0, 0.3, 0, Math.PI * 2, true);
-      if (e < 0) arc(gx + 11, 0, 9.15, -open, open);
-      else arc(gx - 11, 0, 9.15, Math.PI - open, Math.PI + open);
+      arc(gx - e * P, 0, 0.3, 0, Math.PI * 2, true);
+      if (e < 0) arc(gx + P, 0, R, -open, open);
+      else arc(gx - P, 0, R, Math.PI - open, Math.PI + open);
       // corner arcs
       arc(gx, -HH, 1, e < 0 ? 0 : Math.PI / 2, e < 0 ? Math.PI / 2 : Math.PI);
       arc(gx, HH, 1, e < 0 ? -Math.PI / 2 : Math.PI, e < 0 ? 0 : Math.PI * 1.5);

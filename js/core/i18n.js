@@ -622,10 +622,10 @@
 
 
   // v1.11: bookings (warning shown as a green card for now, yellow, red)
-  Object.assign(D.en, { 'card.green': 'WARNING (green card)', 'card.yellow': 'YELLOW CARD', 'card.red': 'SECOND YELLOW: RED CARD' });
-  Object.assign(D.fr, { 'card.green': 'AVERTISSEMENT (carton vert)', 'card.yellow': 'CARTON JAUNE', 'card.red': 'DEUXIEME JAUNE : CARTON ROUGE' });
-  Object.assign(D.es, { 'card.green': 'AVISO (tarjeta verde)', 'card.yellow': 'TARJETA AMARILLA', 'card.red': 'SEGUNDA AMARILLA: ROJA' });
-  Object.assign(D.ar, { 'card.green': 'إنذار (بطاقة خضراء)', 'card.yellow': 'بطاقة صفراء', 'card.red': 'إنذار ثانٍ: بطاقة حمراء' });
+  Object.assign(D.en, { 'card.warn': 'WARNING: next foul is a yellow card', 'card.yellow': 'YELLOW CARD', 'card.red': 'SECOND YELLOW: RED CARD' });
+  Object.assign(D.fr, { 'card.warn': 'AVERTISSEMENT : prochaine faute = jaune', 'card.yellow': 'CARTON JAUNE', 'card.red': 'DEUXIEME JAUNE : CARTON ROUGE' });
+  Object.assign(D.es, { 'card.warn': 'AVISO: la próxima falta es amarilla', 'card.yellow': 'TARJETA AMARILLA', 'card.red': 'SEGUNDA AMARILLA: ROJA' });
+  Object.assign(D.ar, { 'card.warn': 'تحذير شفهي: الخطأ القادم بطاقة صفراء', 'card.yellow': 'بطاقة صفراء', 'card.red': 'إنذار ثانٍ: بطاقة حمراء' });
 
 
   // v1.12: player ratings
@@ -644,6 +644,25 @@
     'opt.t11': '11 c. 11', 'opt.t7': '7 c. 7', 'hud.offside': 'FUERA DE JUEGO', 'hud.corner': 'CÓRNER', 'hud.goalkick': 'SAQUE DE PUERTA', 'hud.throwin': 'SAQUE DE BANDA' });
   Object.assign(D.ar, { 'set.teamsize': 'عدد اللاعبين', 'set.teamsize.h': '11 لاعبًا في ملعب كامل، أو 7 (من المباراة القادمة)',
     'opt.t11': '11 ضد 11', 'opt.t7': '7 ضد 7', 'hud.offside': 'تسلل', 'hud.corner': 'ركنية', 'hud.goalkick': 'ركلة مرمى', 'hud.throwin': 'رمية تماس' });
+
+
+  // v1.15: stadiums, tactics, referee warning
+  Object.assign(D.en, { 'set.stadium': 'Stadium', 'set.stadium.h': 'Pitch size (from the next match)',
+    'opt.st.compact': 'Compact 100x64', 'opt.st.classic': 'Classic 110x72', 'opt.st.grand': 'Grand 120x78', 'opt.st.mega': 'Mega 130x86',
+    'tac.title': 'Tactics', 'tac.b0': 'Defence', 'tac.b1': 'Midfield', 'tac.b2': 'Attack',
+    'tac.m0': 'Defensive', 'tac.m1': 'Balanced', 'tac.m2': 'Attacking' });
+  Object.assign(D.fr, { 'set.stadium': 'Stade', 'set.stadium.h': 'Taille du terrain (des le prochain match)',
+    'opt.st.compact': 'Compact 100x64', 'opt.st.classic': 'Classique 110x72', 'opt.st.grand': 'Grand 120x78', 'opt.st.mega': 'Mega 130x86',
+    'tac.title': 'Tactique', 'tac.b0': 'Defense', 'tac.b1': 'Milieu', 'tac.b2': 'Attaque',
+    'tac.m0': 'Defensif', 'tac.m1': 'Equilibre', 'tac.m2': 'Offensif' });
+  Object.assign(D.es, { 'set.stadium': 'Estadio', 'set.stadium.h': 'Tamaño del campo (desde el próximo partido)',
+    'opt.st.compact': 'Compacto 100x64', 'opt.st.classic': 'Clásico 110x72', 'opt.st.grand': 'Grande 120x78', 'opt.st.mega': 'Mega 130x86',
+    'tac.title': 'Táctica', 'tac.b0': 'Defensa', 'tac.b1': 'Medio', 'tac.b2': 'Ataque',
+    'tac.m0': 'Defensivo', 'tac.m1': 'Equilibrado', 'tac.m2': 'Ofensivo' });
+  Object.assign(D.ar, { 'set.stadium': 'الملعب', 'set.stadium.h': 'حجم أرضية الملعب (من المباراة القادمة)',
+    'opt.st.compact': 'صغير 100x64', 'opt.st.classic': 'كلاسيكي 110x72', 'opt.st.grand': 'كبير 120x78', 'opt.st.mega': 'ضخم 130x86',
+    'tac.title': 'الخطة', 'tac.b0': 'الدفاع', 'tac.b1': 'الوسط', 'tac.b2': 'الهجوم',
+    'tac.m0': 'دفاعي', 'tac.m1': 'متوازن', 'tac.m2': 'هجومي' });
 
   var lang = 'en';
 

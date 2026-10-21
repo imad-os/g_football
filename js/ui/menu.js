@@ -608,8 +608,6 @@
 
   function buildTeams() {
     var wrap = screens.TEAMS;
-    refs.tabs = el('div', 'tabs');
-    wrap.appendChild(refs.tabs);
     var cols = el('div', 'two-cols');
     var hc = el('div', 'panel-card home');
     var hh = el('div', 'col-head');
@@ -623,6 +621,8 @@
     refs.homeStars = el('span', 'stars');
     hh.appendChild(refs.homeStars);
     hc.appendChild(hh);
+    refs.homeTabs = el('div', 'tabs');
+    hc.appendChild(refs.homeTabs);
     refs.homeList = el('div', 'team-list');
     hc.appendChild(refs.homeList);
 
@@ -638,6 +638,8 @@
     refs.awayStars = el('span', 'stars');
     ah.appendChild(refs.awayStars);
     ac.appendChild(ah);
+    refs.awayTabs = el('div', 'tabs');
+    ac.appendChild(refs.awayTabs);
     refs.awayList = el('div', 'team-list');
     ac.appendChild(refs.awayList);
     cols.appendChild(hc);
@@ -676,21 +678,20 @@
   function renderTeams(keepKey) {
     var s = World.session;
     var cats = NS.Teams.CATEGORIES;
-    clear(refs.tabs);
-    cats.forEach(function (cat) {
-      var b = btn('tab' + (s.activeCategory === cat.id ? ' sel' : ''), cat.label, 'c:' + cat.id, function () {
-        s.activeCategory = cat.id;
-        renderTeams('c:' + cat.id);
+    // each side has its own league / group tabs (a Spanish club against a French one, a club against a nation...)
+    [[refs.homeTabs, 'activeCategory', 'ch:'], [refs.awayTabs, 'awayCategory', 'ca:']].forEach(function (side) {
+      clear(side[0]);
+      cats.forEach(function (cat) {
+        side[0].appendChild(btn('tab' + (s[side[1]] === cat.id ? ' sel' : ''), cat.label, side[2] + cat.id, function () {
+          s[side[1]] = cat.id;
+          renderTeams(side[2] + cat.id);
+        }));
       });
-      refs.tabs.appendChild(b);
     });
     clear(refs.homeList);
     clear(refs.awayList);
-    var teams = NS.Teams.byCategory(s.activeCategory);
-    teams.forEach(function (t) {
-      refs.homeList.appendChild(teamButton(t, true));
-      refs.awayList.appendChild(teamButton(t, false));
-    });
+    NS.Teams.byCategory(s.activeCategory).forEach(function (t) { refs.homeList.appendChild(teamButton(t, true)); });
+    NS.Teams.byCategory(s.awayCategory).forEach(function (t) { refs.awayList.appendChild(teamButton(t, false)); });
     var hT = NS.Teams.byId(s.homeTeamId);
     var aT = NS.Teams.byId(s.awayTeamId);
     refs.homeTitle.textContent = hT.name + ' (' + hT.code + ')';
@@ -727,6 +728,20 @@
       forms.appendChild(b);
     });
     top.appendChild(forms);
+    // tactics: what each block (defence, midfield, attack) is told to do; confirm cycles defensive / balanced / attacking
+    var tac = el('div', 'row');
+    tac.appendChild(el('span', 'muted', T('tac.title')));
+    refs.tacBtns = [];
+    [0, 1, 2].forEach(function (b) {
+      var bt = btn('tac', '', 'tac:' + b, function () {
+        var row = World.session.tactics[World.session.editingSquadIdx];
+        row[b] = (row[b] + 1) % 3;
+        renderGamePlan('tac:' + b);
+      });
+      refs.tacBtns.push(bt);
+      tac.appendChild(bt);
+    });
+    top.appendChild(tac);
     wrap.appendChild(top);
 
     var mid = el('div', 'gp-mid');
@@ -791,8 +806,8 @@
     for (var i = 0; i < layout.length; i++) {
       var slot = layout[i];
       // kick-off positions are all in our half: spread them over the whole board (keeper left, forwards right)
-      var px = clamp01((slot.x + NS.PITCH_HALF_W) / NS.PITCH_HALF_W) * (w - 36) + 18;
-      var pz = ((slot.z + NS.PITCH_HALF_H) / (NS.PITCH_HALF_H * 2)) * (h - 36) + 18;
+      var px = clamp01((slot.x + 52.5) / 52.5) * (w - 36) + 18;
+      var pz = ((slot.z + 34) / 68) * (h - 36) + 18;
       gpCtx.fillStyle = s.selectedStarterIdx === i ? '#f59e0b' : NS.Assets.hexToCss(teamObj.c1);
       gpCtx.beginPath();
       gpCtx.arc(px, pz, 8, 0, Math.PI * 2);
@@ -806,8 +821,9 @@
     }
   }
 
-  // the six ratings of one player as bars (green = strong, amber, red = weak)
+  // the six ratings of one player on a hexagon, PES style: one corner per rating with its name and value
   var STAT_KEYS = [['spd', 'st.spd'], ['drb', 'st.drb'], ['sht', 'st.sht'], ['sta', 'st.sta'], ['hdr', 'st.hdr'], ['def', 'st.def']];
+  var hexCanvas = null;
   function showStats(teamObj, name) {
     var box = refs.gpStats;
     clear(box);
@@ -817,18 +833,61 @@
     head.appendChild(el('b', null, name));
     head.appendChild(el('span', 'chip', st.pos + '  ' + st.ovr));
     box.appendChild(head);
-    STAT_KEYS.forEach(function (k) {
-      var v = st[k[0]];
-      var row = el('div', 'gp-st-row');
-      row.appendChild(el('span', 'gp-st-name', T(k[1])));
-      var bar = el('span', 'gp-st-bar');
-      var fill = el('i', v >= 80 ? 'hi' : (v >= 65 ? 'mid' : 'lo'));
-      fill.style.width = v + '%';
-      bar.appendChild(fill);
-      row.appendChild(bar);
-      row.appendChild(el('span', 'gp-st-val', String(v)));
-      box.appendChild(row);
-    });
+    if (!hexCanvas) {
+      hexCanvas = document.createElement('canvas');
+      hexCanvas.width = 240;
+      hexCanvas.height = 196;
+      hexCanvas.className = 'hex-canvas';
+    }
+    box.appendChild(hexCanvas);
+    drawHex(hexCanvas, st, teamObj);
+  }
+
+  function drawHex(cv, st, teamObj) {
+    var g = cv.getContext('2d');
+    var w = cv.width, h = cv.height, cx = w / 2, cy = h / 2 + 2, R = 56;
+    var n = STAT_KEYS.length, i, k, a;
+    g.clearRect(0, 0, w, h);
+    function pt(idx, r) { a = -Math.PI / 2 + idx * Math.PI * 2 / n; return [cx + Math.cos(a) * r, cy + Math.sin(a) * r]; }
+    // the web: rings at 25 / 50 / 75 / 100, and the spokes
+    g.lineWidth = 1;
+    for (k = 1; k <= 4; k++) {
+      g.beginPath();
+      for (i = 0; i <= n; i++) { var q = pt(i % n, R * k / 4); if (i) g.lineTo(q[0], q[1]); else g.moveTo(q[0], q[1]); }
+      g.fillStyle = k % 2 ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.08)';
+      g.strokeStyle = 'rgba(255,255,255,' + (k === 4 ? 0.45 : 0.18) + ')';
+      if (k === 4) g.fill();
+      g.stroke();
+    }
+    for (i = 0; i < n; i++) { var s0 = pt(i, R); g.beginPath(); g.moveTo(cx, cy); g.lineTo(s0[0], s0[1]); g.stroke(); }
+    // the player's shape
+    g.beginPath();
+    for (i = 0; i <= n; i++) {
+      var v = st[STAT_KEYS[i % n][0]];
+      var p = pt(i % n, R * Math.max(0.05, (v - 30) / 69));
+      if (i) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]);
+    }
+    var col = NS.Assets.hexToCss(teamObj.c1);
+    g.fillStyle = 'rgba(56,189,248,0.38)';
+    g.fill();
+    g.strokeStyle = '#7dd3fc';
+    g.lineWidth = 2;
+    g.stroke();
+    // names and values at the corners
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    for (i = 0; i < n; i++) {
+      var val = st[STAT_KEYS[i][0]];
+      var l = pt(i, R + 24);
+      g.font = 'bold 12px sans-serif';
+      g.fillStyle = '#cbd5e1';
+      g.fillText(T(STAT_KEYS[i][1]).toUpperCase(), l[0], l[1] - 7);
+      g.font = 'bold 15px sans-serif';
+      g.fillStyle = val >= 80 ? '#4ade80' : (val >= 65 ? '#facc15' : '#f87171');
+      g.fillText(String(val), l[0], l[1] + 7);
+    }
+    g.fillStyle = col;
+    g.beginPath(); g.arc(cx, cy, 3, 0, Math.PI * 2); g.fill();
   }
 
   function renderGamePlan(keepKey) {
@@ -843,6 +902,11 @@
     var fb = screens.GAMEPLAN.querySelectorAll('[data-form]');
     for (var i = 0; i < fb.length; i++) fb[i].classList.toggle('sel', fb[i].getAttribute('data-form') === formKey);
     refs.gpTitle.textContent = teamObj.name + ' (' + formKey + ')';
+    var trow = s.tactics[idx];
+    for (var tb = 0; tb < 3; tb++) {
+      refs.tacBtns[tb].textContent = T('tac.b' + tb) + ': ' + T('tac.m' + trow[tb]);
+      for (var mk = 0; mk < 3; mk++) refs.tacBtns[tb].classList.toggle('m' + mk, trow[tb] === mk);
+    }
     clear(refs.gpStarters);
     clear(refs.gpSubs);
 

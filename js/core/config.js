@@ -2,17 +2,43 @@
 (function (NS) {
   'use strict';
 
-  NS.VERSION = '1.14.1';
+  NS.VERSION = '1.15.0';
 
-  // Pitch geometry (world units = metres; x = length, z = width, y = up): a real 105 x 68 pitch.
-  NS.PITCH_HALF_W = 52.5;
-  NS.PITCH_HALF_H = 34;
-  NS.PITCH_SCALE = NS.PITCH_HALF_W / 46; // the original 92 x 56 pitch (camera and stands are sized from it)
-  NS.BOX_D = 16.5;     // penalty area: depth and half width
-  NS.BOX_HW = 20.16;
-  NS.SIX_D = 5.5;      // goal area
-  NS.SIX_HW = 9.16;
+  // Pitch geometry (world units; x = length, z = width, y = up). The players and the goal are drawn ~1.5x real size,
+  // so the markings around the goal are the real ones scaled to the goal (BOX_K), not to the pitch: the boxes look
+  // like a real penalty area next to the players. The pitch size comes from the stadium (NS.usePitch).
   NS.GOAL_HALF_W = 5.6;
+  var BOX_K = 1.25;
+  NS.BOX_D = 16.5 * BOX_K;                  // penalty area: depth and half width
+  NS.BOX_HW = NS.GOAL_HALF_W + 16.5 * BOX_K;
+  NS.SIX_D = 5.5 * BOX_K;                   // goal area
+  NS.SIX_HW = NS.GOAL_HALF_W + 5.5 * BOX_K;
+  NS.PEN_D = 11 * BOX_K;                    // penalty spot
+  NS.CIRCLE_R = 9.15 * BOX_K;               // centre circle and penalty arc
+
+  // Stadiums: each one its own pitch size and grass (Settings > Stadium)
+  NS.STADIUMS = {
+    COMPACT: { w: 100, h: 64, grass: ['#1f7234', '#26843d'] },
+    CLASSIC: { w: 110, h: 72, grass: ['#1d6e32', '#25803b'] },
+    GRAND: { w: 120, h: 78, grass: ['#22763a', '#2a8a45'] },
+    MEGA: { w: 130, h: 86, grass: ['#1b6a30', '#237c3a'] }
+  };
+  NS.PITCH_HALF_W = 55;
+  NS.PITCH_HALF_H = 36;
+  NS.PITCH_SCALE = NS.PITCH_HALF_W / 46; // crowd spacing
+  NS.stadium = NS.STADIUMS.CLASSIC;
+  NS.stadiumId = 'CLASSIC';
+  // Modules keep their own copies of the pitch size: they register here and are told when it changes.
+  NS.pitchHooks = [];
+  NS.usePitch = function (id) {
+    var s = NS.STADIUMS[id] || NS.STADIUMS.CLASSIC;
+    NS.stadium = s;
+    NS.stadiumId = NS.STADIUMS[id] ? id : 'CLASSIC';
+    NS.PITCH_HALF_W = s.w / 2;
+    NS.PITCH_HALF_H = s.h / 2;
+    NS.PITCH_SCALE = NS.PITCH_HALF_W / 46;
+    for (var i = 0; i < NS.pitchHooks.length; i++) NS.pitchHooks[i]();
+  };
   NS.GOAL_DEPTH = 2.6;
   NS.GOAL_HEIGHT = 3.6;
   NS.BALL_R = 0.432; // 10% smaller than the original 0.48
@@ -28,6 +54,7 @@
     quality: 'AUTO',
     difficulty: 'NORMAL',
     teamSize: 11,
+    stadium: 'CLASSIC',
     durationMins: 3,
     gameSpeed: 1.0,
     gaugeTime: 0.5,
@@ -50,6 +77,9 @@
     // players per team (applies from the next match)
     { key: 'teamSize', group: 'game', label: 'set.teamsize', hint: 'set.teamsize.h',
       options: [[11, 'opt.t11'], [7, 'opt.t7']] },
+    // the stadium: pitch size (applies from the next match)
+    { key: 'stadium', group: 'game', label: 'set.stadium', hint: 'set.stadium.h',
+      options: [['COMPACT', 'opt.st.compact'], ['CLASSIC', 'opt.st.classic'], ['GRAND', 'opt.st.grand'], ['MEGA', 'opt.st.mega']] },
     { key: 'durationMins', group: 'game', label: 'set.duration', hint: 'set.duration.h',
       options: [[3, 'opt.min3'], [5, 'opt.min5'], [10, 'opt.min10']] },
     { key: 'gameSpeed', group: 'game', label: 'set.pace', hint: 'set.pace.h',
