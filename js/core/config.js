@@ -2,7 +2,7 @@
 (function (NS) {
   'use strict';
 
-  NS.VERSION = '1.14.0';
+  NS.VERSION = '1.14.1';
 
   // Pitch geometry (world units = metres; x = length, z = width, y = up): a real 105 x 68 pitch.
   NS.PITCH_HALF_W = 52.5;

@@ -865,6 +865,9 @@
       World.kickoffTeam = m.firstKick;
       m.celebrationTimer = 0;
       m.fullTimeTimer = 0;
+      breakKind = 0; // a restart from the pause menu during a goal / half-time break
+      scorer = null;
+      NS.HUD.hideGoalFx();
       lastSecond = -1;
       this.resetKickoff();
       m.running = true;
@@ -1128,7 +1131,7 @@
               if (ball.chip) chance *= 0.4;
               if (ball.pen) chance *= 0.55;
               if (Math.random() < chance) {
-                if (speed < (p.diveT > 0 ? 34 : 28)) { // a diving keeper holds on to harder shots
+                if (speed < (p.diveT > 0 ? 30 : 25) - (ball.pos.y > 2.3 ? 4 : 0)) { // a diving keeper holds on to harder shots; high ones are tipped
                   takeBall(p);
                   p.gkHands = true; // caught: held in the hands
                   p.catchT = 0.4;
@@ -1136,9 +1139,20 @@
                 } else {
                   NS.Audio.ooh();
                   Actions.touch(p);
-                  ball.vel.x = -ball.vel.x * 0.4;
-                  ball.vel.z += (Math.random() - 0.5) * 9;
-                  ball.vel.y = 3;
+                  ball.fromX = ball.pos.x; ball.fromZ = ball.pos.z; ball.age = 0; ball.headed = false;
+                  // parried: tipped round the post / over the bar (a corner) when it was heading for a corner of the
+                  // goal, otherwise pushed back out in front of him
+                  var wide = Math.abs(ball.pos.z) > 2.5 || ball.pos.y > 2.3;
+                  if (Math.random() < (wide ? 0.7 : 0.35)) {
+                    var side = ball.pos.z > 0.2 ? 1 : (ball.pos.z < -0.2 ? -1 : (Math.random() < 0.5 ? -1 : 1));
+                    ball.vel.x = (ball.vel.x > 0 ? 1 : -1) * (2.5 + Math.random() * 2); // slowly on, well wide of the post
+                    ball.vel.z = side * (8 + Math.random() * 4);
+                    ball.vel.y = ball.pos.y > 2.3 ? 7 : 2.5;
+                  } else {
+                    ball.vel.x = -ball.vel.x * 0.4;
+                    ball.vel.z += (Math.random() - 0.5) * 9;
+                    ball.vel.y = 3;
+                  }
                   ball.pickupCooldown = 0.2;
                   ball.lastTouchTeam = p.team;
                   NS.Audio.kick(false);
@@ -1146,7 +1160,8 @@
               }
               break;
             }
-          } else if (ball.pickupCooldown <= 0 && ball.pos.y < 1.9 && d2 < takerD) {
+          } else if (ball.pickupCooldown <= 0 && (ball.pos.y < 1.9 ? d2 < takerD : (ball.pos.y < 2.6 && d2 < Math.min(takerD, 0.6)))) {
+            // at his feet, or a ball at chest height that hits his body
             takerD = d2;
             taker = p;
           }
@@ -1163,25 +1178,26 @@
             var toGoal = Math.abs(att * HALF_W - p.pos.x) + Math.abs(p.pos.z) * 0.5;
             var shotOn = toGoal < 18 && p.role !== 'DEF';
             if (ball.lastTouchTeam === p.team && !shotOn) continue;
-            Actions.header(p, shotOn, ACT.PASS, att, 0);
+            var clear = ball.lastTouchTeam !== p.team && Math.abs(-att * HALF_W - p.pos.x) < 30;
+            var byLine = Math.abs(-att * HALF_W - p.pos.x) < 11;
+            if (clear && byLine && Math.random() < 0.45) {
+              // under pressure at his own goal line he can only get a touch on it: it goes behind (a corner)
+              if (Actions.knockOff(p, false)) return;
+              ball.vel.set(-att * (5 + Math.random() * 6), 3 + Math.random() * 3, (p.pos.z >= 0 ? 1 : -1) * (2 + Math.random() * 6));
+              p.headT = 0.55;
+            } else if (clear) Actions.header(p, false, ACT.LONG, att, p.pos.z >= 0 ? 0.9 : -0.9);
+            else Actions.header(p, shotOn, ACT.PASS, att, 0);
             gkActed = true;
             taker = null;
             break;
           }
         }
         if (!gkActed && taker) {
-          if (ball.hard && bs2 > 324) {
-            // a hard shot is not controlled by an outfield player: it hits him and deflects
-            ball.vel.x = -ball.vel.x * 0.25 + (Math.random() - 0.5) * 8;
-            ball.vel.z = ball.vel.z * 0.35 + (Math.random() - 0.5) * 10;
-            ball.vel.y = 1 + Math.random() * 4;
-            ball.hard = false;
-            ball.pickupCooldown = 0.2;
-            if (Actions.touch(taker)) return;
-            ball.lastTouchTeam = taker.team;
-            ball.kicker = taker;
-            ball.kickerT = 0.25;
-            NS.Audio.tackle();
+          // a hard shot is not controlled by an outfield player: it hits him and deflects; anything else is a first
+          // touch that can go wrong (Actions.controls)
+          var hardHit = ball.hard && bs2 > 324;
+          if (hardHit || !Actions.controls(taker)) {
+            if (Actions.knockOff(taker, hardHit)) return;
           } else {
             takeBall(taker);
           }

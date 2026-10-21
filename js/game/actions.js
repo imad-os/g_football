@@ -106,6 +106,7 @@
       ball.contester = null;
       ball.pen = false;
       ball.shotD = 0;
+      ball.fromX = ball.pos.x; ball.fromZ = ball.pos.z; ball.age = 0; ball.headed = false;
       p.dribbling = false;
       p.gkHands = false;
       p.kickT = p.throwT > 0 ? 0 : (type >= ACT.SHOOT ? 0.36 : 0.28); // kick animation (not on a throw-in)
@@ -290,6 +291,7 @@
       angle = Math.atan2(dx, dz);
       angle += (Math.random() - 0.5) * 0.05 * (accuracy || 1) * (d > 25 ? 1.6 : 1);
 
+      if (type === ACT.LONG && d > 18) d *= 1 + gaussR() * 0.06 * (accuracy || 1);
       if (p.throwT > 0.35) {
         // thrown from over the head: a flat lob that lands at the target (a long throw reaches ~24 m)
         if (d > 24) { dx *= 24 / d; dz *= 24 / d; d = 24; }
@@ -405,6 +407,7 @@
         ball.lastTouchTeam = p.team;
         ball.pickupCooldown = 0.08;
         ball.kicker = c; ball.kickerT = 0.35;
+        ball.fromX = ball.pos.x; ball.fromZ = ball.pos.z; ball.age = 0; ball.headed = false;
       }
       c.dribbling = false;
       c.stun = 0.3;
@@ -434,6 +437,11 @@
       var dx = ball.pos.x - p.pos.x, dz = ball.pos.z - p.pos.z;
       var d2 = dx * dx + dz * dz;
       if (d2 > 1.7 * (0.75 + p.st.hdr / 99 * 0.5)) return false; // his Header rating: how far he reaches
+      // no time to react: a ball played from close by (or a moment ago) cannot be headed on, it hits him; and nobody heads
+      // straight back a header from a few metres away (no head tennis)
+      var fx = p.pos.x - ball.fromX, fz = p.pos.z - ball.fromZ;
+      var from2 = fx * fx + fz * fz;
+      if (from2 < 100 || ball.age < 0.45 || (ball.headed && from2 < 324)) return false;
       var players = World.players;
       for (var i = 0; i < players.length; i++) {
         var q = players[i];
@@ -452,6 +460,7 @@
       var y0 = ball.pos.y;
       if (this.touch(p)) return;
       this.release(p, shot ? ACT.SHOOT : type);
+      ball.headed = true;
       p.kickT = 0;
       p.headT = 0.55; // header animation: the jump
       var tx, tz, speed, mate = null, ty = R0;
@@ -556,12 +565,25 @@
           if (carrier.dribbling) chance *= 0.75;
           chance = clamp(chance, 0.03, 0.92);
           if (Math.random() < chance) {
-            ball.owner = p;
             ball.receiver = null;
             ball.contester = null;
             ball.lastTouchTeam = p.team;
             ball.lastToucher = p.name;
-            ball.pickupCooldown = 0.12;
+            if (Math.random() < (p.tackleSlide ? 0.8 : 0.45)) {
+              // poked away: the ball runs on where his foot sent it, anybody's ball (it may go out)
+              var tl = Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z) || 1;
+              var pk = 5 + Math.random() * 7;
+              var pa = (Math.random() - 0.5) * 1.2;
+              var tx0 = p.vel.x / tl, tz0 = p.vel.z / tl;
+              ball.owner = null;
+              ball.vel.set((tx0 * Math.cos(pa) - tz0 * Math.sin(pa)) * pk, 0.5 + Math.random(), (tx0 * Math.sin(pa) + tz0 * Math.cos(pa)) * pk);
+              ball.pickupCooldown = 0.18;
+              ball.kicker = p; ball.kickerT = 0.25;
+              ball.fromX = ball.pos.x; ball.fromZ = ball.pos.z; ball.age = 0; ball.headed = false;
+            } else {
+              ball.owner = p;
+              ball.pickupCooldown = 0.12;
+            }
             this.touch(p);
             carrier.stun = 0.55;
             carrier.fallT = 0.55;
@@ -578,6 +600,56 @@
       }
       if (p.tackleT <= 0 && !p.tackleHit) p.stun = p.tackleSlide ? 0.6 : 0.3;
       if (p.tackleT <= 0) { p.vel.x *= 0.3; p.vel.z *= 0.3; }
+    },
+
+    // First touch: does p bring the loose ball under control? Harder when it comes fast, when it was played from close by
+    // (less time to see it and set his body), above the knee, and for a poor touch (Dribble); the player a pass was meant
+    // for is ready for it. Returns false for a bad touch (the caller knocks it off him).
+    controls: function (p) {
+      var ball = World.ball;
+      var vx = ball.vel.x - p.vel.x * 0.5, vz = ball.vel.z - p.vel.z * 0.5;
+      var s = Math.sqrt(vx * vx + vz * vz);
+      if (s < 7 && ball.pos.y < 0.9) return true;
+      var fx = p.pos.x - ball.fromX, fz = p.pos.z - ball.fromZ;
+      var react = Math.sqrt(fx * fx + fz * fz) / Math.max(s, 6); // seconds he saw it coming
+      var pace = Math.max(0, s - 10) / 25;
+      var quick = react < 0.4 ? (0.4 - react) / 0.4 : 0;
+      var skill = (p.role === 'GK' ? p.st.drb * 0.5 + 30 : p.st.drb) / 99;
+      var fail = (pace * 0.35 + quick * 0.5) * (1.35 - skill * 0.7);
+      if (ball.receiver === p) fail *= 0.45;
+      if (ball.pos.y > 1.9) fail += 0.18; else if (ball.pos.y > 0.9) fail += 0.07;
+      return Math.random() >= clamp(fail, 0, 0.85);
+    },
+
+    // A loose ball hits p and comes off him (a bad first touch, a block, a hard shot): it keeps part of its pace in a
+    // changed direction. He touched it last (an own goal line = a corner).
+    knockOff: function (p, hardShot) {
+      var ball = World.ball;
+      if (hardShot) {
+        // a block: back where it came from, or on its way at less pace (often behind for a corner)
+        ball.vel.x = (Math.random() < 0.5 ? 0.4 : -0.25) * ball.vel.x + (Math.random() - 0.5) * 8;
+        ball.vel.z = ball.vel.z * 0.35 + (Math.random() - 0.5) * 10;
+        ball.vel.y = 1 + Math.random() * 4;
+        NS.Audio.tackle();
+      } else {
+        var keep = 0.3 + Math.random() * 0.3;
+        var ang = (Math.random() - 0.5) * 1.8; // up to ~50 degrees off its line
+        var c = Math.cos(ang), s = Math.sin(ang);
+        var vx = ball.vel.x * c - ball.vel.z * s, vz = ball.vel.x * s + ball.vel.z * c;
+        ball.vel.set(vx * keep + p.vel.x * 0.3, Math.random() * 2.5, vz * keep + p.vel.z * 0.3);
+        NS.Audio.kick(false);
+      }
+      ball.hard = false;
+      ball.receiver = null;
+      ball.contester = null;
+      ball.pickupCooldown = 0.15;
+      ball.fromX = ball.pos.x; ball.fromZ = ball.pos.z; ball.age = 0; ball.headed = false;
+      if (this.touch(p)) return true;
+      ball.lastTouchTeam = p.team;
+      ball.lastToucher = p.name;
+      ball.kicker = p;
+      ball.kickerT = hardShot ? 0.25 : 0.35;
+      return false;
     },
 
     // Nearest outfield team-mate to the ball, skipping the excluded players.

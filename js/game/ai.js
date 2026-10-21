@@ -413,11 +413,17 @@
       if (sc > best) { best = sc; bType = -1; bx = dx; bz = dz; }
     }
 
+    // --- clearance: pressed near our own goal, the safe thing is to kick it long towards the touchline
+    if ((px - -a * HALF_W) * a < 30 && pressure < 3.2 && p.role !== 'FWD') {
+      sc = 0.32 + (pressure < 2 ? 0.28 : 0.12) + ((px - -a * HALF_W) * a < 18 ? 0.12 : 0) + (Math.random() - 0.5) * noise;
+      if (sc > best) { best = sc; bType = -2; }
+    }
+
     // --- shot
     var gdx = a * HALF_W - px;
     var gdist = Math.sqrt(gdx * gdx + pz * pz);
     if (gdist < 34) {
-      sc = shotQuality(px, pz, p.team) * 2.3 + prof.shootBias + T.urgency * 0.12 - T.caution * 0.05;
+      sc = shotQuality(px, pz, p.team) * 2.8 + prof.shootBias + T.urgency * 0.12 - T.caution * 0.05;
       // from range: worth a try when nobody blocks the way (more for a good finisher)
       if (gdist > 14 && gdist < 30) {
         var bl = Math.min(blockers(px, pz, a * HALF_W, 3.5, p.team), blockers(px, pz, a * HALF_W, -3.5, p.team));
@@ -508,7 +514,19 @@
       }
     }
 
-    if (bType === -1) {
+    if (bType === -2 && Math.abs(-a * HALF_W - px) < 8 && Math.abs(pz) > 8 && pressure < 1.6 && Math.random() < 0.35) {
+      // pinned on his own goal line: he hacks it behind for a corner rather than lose it there
+      Actions.release(p, ACT.LONG);
+      World.ball.vel.set(-a * (8 + Math.random() * 6), 2 + Math.random() * 3, (pz >= 0 ? 1 : -1) * (2 + Math.random() * 4));
+      p.drX = 0; p.drZ = 0;
+    } else if (bType === -2) {
+      // aimed at the touchline area (some go out for a throw-in)
+      Actions.release(p, ACT.LONG);
+      World.ball.spinY = 0;
+      Actions.launch(p, ACT.LONG, clamp(px + a * (26 + Math.random() * 14), -HALF_W + 4, HALF_W - 4),
+        (pz >= 0 ? 1 : -1) * (HALF_H - 10 + Math.random() * 12), null, prof.acc * 2, null);
+      p.drX = 0; p.drZ = 0;
+    } else if (bType === -1) {
       p.drX = bx; p.drZ = bz;
     } else if (bType === ACT.SHOOT) {
       shootNow(p, prof);

@@ -120,6 +120,13 @@ Player 2: the second controller or phone controller connected.
   only from the front).
 * **Headers**: the player jumps for it. A header only happens when a pass / shot button is pressed while the ball is in the
   air right next to him (a button pressed earlier while a long ball is on its way does nothing any more).
+* **First touch**: a loose ball is not glued to the first player it reaches. Whether he controls it depends on its pace, how
+  close it was played from (less time to react), its height and his Dribble rating; the player a pass was meant for is ready
+  for it. A bad touch knocks it off him in a new direction (he touched it last: over his own goal line it is a corner).
+  Won tackles often only poke the ball away. Keepers tip hard shots round the post or over the bar; defenders pinned on their
+  own goal line put it behind; clearances go long towards the touchline.
+* **No head tennis**: a ball played from less than about 10 m away (or a moment ago), or a header from less than about 18 m,
+  cannot be headed straight back; it hits the player instead.
 * **Shots from range** can go in, less often the further out they are struck (the keeper sees a long shot coming for longer).
 * Players have longer legs (about half their height) with shorts, socks and boots painted on, no extra polygons.
 

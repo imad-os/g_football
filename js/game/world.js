@@ -163,6 +163,9 @@
     contester: null, // the opponent nearest to that pass (he runs to it too)
     pen: false,      // a penalty kick in flight
     shotD: 0,        // distance to goal the last shot was struck from
+    fromX: 0, fromZ: 0, // where it was last played from (kick, header, deflection): the next player's reaction time
+    age: 0,          // seconds since then
+    headed: false,   // the last touch was a header
     offTeam: -1      // team whose last pass left some of its players offside (their p.offside flags), -1 none
   };
 
@@ -240,6 +243,7 @@
         return -1;
       }
 
+      ball.age += dt;
       loadState(S);
       if (integrate(S, dt)) { ball.hard = false; ball.chip = false; }
       var res = collide(S, true);
