@@ -106,7 +106,8 @@ teams (the pair picked on the Teams screen, with their tactics, or random teams 
 and length, then **Run** (Stop ends it early). The report goes into a text box with **Copy report**: results, key rates
 (possession, pass completion per type, shots on target, conversion, tackles, first touches, shoulder challenges), every
 counter per match for both teams (each kick type, every CPU decision, pass outcomes, shot outcomes by distance, keeper
-saves, headers, tackles, fouls and cards, restarts, off-the-ball runs, metres run...), the issues seen (ball stuck, a
+saves, headers, tackles, fouls and cards, restarts, off-the-ball runs, metres run, where each team loses the ball (own /
+middle / final third), completed passes going forward / square / backward...), the issues seen (ball stuck, a
 restart not taken, a player far off the pitch, header chains, ping-pong turnovers, code errors) and a log of every match
 with its goals and cards. The game reports its events through `NS.dbg` (js/game/debug.js), which is null otherwise.
 

@@ -84,7 +84,7 @@
         run.shot = { team: t, bucket: b, desc: KICK[type].replace('shot_', '') + ' ' + Math.round(d) + 'm', age: 0 };
         run.pass = null;
       } else {
-        run.pass = { team: t, type: KICK[type] || 'type' + type, age: 0 };
+        run.pass = { team: t, type: KICK[type] || 'type' + type, age: 0, x: p.pos.x };
       }
       run.lastKick = { team: t, x: p.pos.x };
       return r;
@@ -124,7 +124,8 @@
       add('possession_seconds', o.team, STEP);
       var a = o.team === 0 ? 1 : -1;
       var fx = o.pos.x * a; // from the half-way line towards the goal it attacks
-      add(fx > NS.PITCH_HALF_W / 3 ? 'ball_seconds_in_final_third' : (fx < -NS.PITCH_HALF_W / 3 ? 'ball_seconds_in_own_third' : 'ball_seconds_in_middle_third'), o.team, STEP);
+      run.ownerZone = fx > NS.PITCH_HALF_W / 3 ? 'final_third' : (fx < -NS.PITCH_HALF_W / 3 ? 'own_third' : 'middle_third');
+      add('ball_seconds_in_' + run.ownerZone, o.team, STEP);
       run.headChain = 0;
     }
     // turnovers and ping-pong (the ball changing teams again and again)
@@ -132,6 +133,7 @@
     if (ot >= 0 && ot !== run.lastOwnerTeam) {
       if (run.lastOwnerTeam >= 0) {
         add('ball_won_from_opponent', ot);
+        add('ball_lost_in_' + run.ownerZone, run.lastOwnerTeam); // where the team that had it lost it
         // four changes of team within two real seconds: nobody can keep it (ping-pong)
         run.flips.push(run.cur.steps);
         while (run.flips.length && run.flips[0] < run.cur.steps - 120) run.flips.shift();
@@ -145,6 +147,11 @@
       ps.age += STEP;
       if (o) {
         add('pass_' + ps.type + (o.team === ps.team ? '_completed' : '_intercepted'), ps.team);
+        if (o.team === ps.team) {
+          // how far up the pitch it moved the ball
+          var gain = (o.pos.x - ps.x) * (ps.team === 0 ? 1 : -1);
+          add(gain > 5 ? 'pass_completed_forward_5m_plus' : (gain < -3 ? 'pass_completed_backward' : 'pass_completed_square'), ps.team);
+        }
         if (o.team === ps.team && o.offside) add('pass_' + ps.type + '_to_offside_player', ps.team);
         run.pass = null;
       } else if (m.setPieceTimer > 0 || m.celebrationTimer > 0) {
@@ -212,7 +219,7 @@
       n: run.done + 1, names: [NS.Teams.byId(ids[0]).code, NS.Teams.byId(ids[1]).code],
       goals: [], cards: [], anoms: [], outside: [], steps: 0, ended: false
     };
-    run.lastOwnerTeam = -1; run.flips = []; run.pass = null; run.shot = null; run.headChain = 0;
+    run.lastOwnerTeam = -1; run.ownerZone = 'middle_third'; run.flips = []; run.pass = null; run.shot = null; run.headChain = 0;
     run.holder = null; run.holdT = 0; run.stillT = 0; run.stillX = 0; run.stillZ = 0;
   }
 

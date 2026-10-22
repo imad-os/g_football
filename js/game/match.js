@@ -1271,8 +1271,9 @@
               var place = reach <= 0.7 ? 0.15 : -(reach - 0.7) * 0.28;
               var keeper = gkSkill(p.team) * 0.5 + (0.4 + p.st.def / 99 * 0.5) * 0.5;
               // from range he has time to see it and get across: the further out it was struck, the likelier the save
-              var range = clamp(((ball.shotD || 0) - 13) * 0.026, 0, 0.42);
-              var chance = speed < 12 ? 1 : clamp(keeper + 0.1 + place + range - Math.max(0, speed - 36) * 0.009, 0.15, 0.97);
+              // (never quite certain: even a great keeper lets one in now and then)
+              var range = clamp(((ball.shotD || 0) - 13) * 0.026, 0, 0.4);
+              var chance = speed < 12 ? 1 : clamp(keeper + 0.1 + place + range - Math.max(0, speed - 36) * 0.009, 0.15, 0.93);
               if (ball.chip) chance *= 0.4;
               if (ball.pen) chance *= 0.55;
               if (Math.random() < chance) {

@@ -29,7 +29,7 @@
   // Difficulty = speed AND intelligence: reaction time, decision noise, pass accuracy, marking tightness, keeper.
   var PROFILES = {
     // (spread wide enough to feel: EASY is slow, late and loose; LEGEND is quick, sharp and has a great keeper)
-    EASY: { speedMul: 0.86, react: 0.6, noise: 0.34, tackle: 0.28, tackleRate: 1.1, gkSave: 0.58, gkReact: 0.32, acc: 2.6, tight: 0.55, press2: false, shootBias: -0.06, chasers: 1 },
+    EASY: { speedMul: 0.86, react: 0.6, noise: 0.34, tackle: 0.28, tackleRate: 1.1, gkSave: 0.66, gkReact: 0.24, acc: 2.6, tight: 0.55, press2: false, shootBias: -0.06, chasers: 1 },
     NORMAL: { speedMul: 1.0, react: 0.32, noise: 0.12, tackle: 0.5, tackleRate: 2.0, gkSave: 0.74, gkReact: 0.17, acc: 1.4, tight: 0.85, press2: false, shootBias: 0, chasers: 1 },
     HARD: { speedMul: 1.06, react: 0.22, noise: 0.07, tackle: 0.6, tackleRate: 2.6, gkSave: 0.82, gkReact: 0.11, acc: 1.05, tight: 0.95, press2: true, shootBias: 0.02, chasers: 2 },
     LEGEND: { speedMul: 1.12, react: 0.14, noise: 0.03, tackle: 0.7, tackleRate: 3.2, gkSave: 0.9, gkReact: 0.07, acc: 0.8, tight: 1.05, press2: true, shootBias: 0.04, chasers: 2 }
@@ -37,6 +37,7 @@
 
   var RUN_SPEED = 10.4;    // what the AI assumes a player covers per second when judging races to the ball
   var DRIBBLE_OFF = [0, 0.5, -0.5, 1.05, -1.05];
+  var THRU_LEAD = [5, 9, 14]; // through balls: metres ahead of the runner
   var SUPPORT_ANG = [0.55, -0.55, 1.25, -1.25, 2.3, -2.3];
 
   function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
@@ -148,8 +149,11 @@
       var perp = Math.abs(rx * uz - rz * ux);
       if (perp > 9) continue;
       var tBall = u / (speed * 0.82);
-      var tOpp = Math.max(0, perp - 1.35) / RUN_SPEED + 0.06;
+      // he has to see it, react and get going (not at full sprint from the first step)
+      var tOpp = Math.max(0, perp - 1.2) / (RUN_SPEED * 0.85) + 0.2;
       var r = 1 / (1 + Math.exp(-(tBall - tOpp) * 6));
+      // a marker at (or behind) the receiver: the receiver comes to meet it and gets there first more often than not
+      if (u > L - 2) r *= 0.55;
       if (r > risk) risk = r;
     }
     return risk;
@@ -294,7 +298,8 @@
           var cx = owner.pos.x - p.pos.x, cz = owner.pos.z - p.pos.z;
           dd = cx * cx + cz * cz;
         } else {
-          if (p === owner) continue;
+          // the forwards stay up on the last line (they are not the ones who come short to help)
+          if (p === owner || p.role === 'FWD') continue;
           var sx = owner.pos.x - p.pos.x, sz = owner.pos.z - p.pos.z;
           dd = sx * sx + sz * sz;
         }
@@ -406,15 +411,20 @@
     var best = -1e9, bType = -1, bMate = null, bx = 0, bz = 0;
     var k, sc;
 
-    // --- dribble: five directions around "forward"
+    // --- dribble: five directions around "forward" (straight up the pitch; near the box, towards the goal itself,
+    // not on to the goal line)
     var gdist0 = Math.sqrt((a * HALF_W - px) * (a * HALF_W - px) + pz * pz);
-    var fwd = Math.atan2(a, 0);
+    var near = clamp((40 - gdist0) / 16, 0, 1);
+    var fux = a * (1 - near) + (a * HALF_W - px) / (gdist0 || 1) * near;
+    var fuz = -pz / (gdist0 || 1) * near;
+    var fwd = Math.atan2(fux, fuz);
     for (k = 0; k < DRIBBLE_OFF.length; k++) {
       var f = fwd + DRIBBLE_OFF[k];
       var dx = Math.sin(f), dz = Math.cos(f);
       var tx = px + dx * 7, tz = pz + dz * 7;
       var space = Math.min(oppDist(tx, tz, p.team), 9) / 9;
-      sc = 0.12 + 0.22 * dx * a + 0.3 * space + (space > 0.75 && dx * a > 0.8 ? 0.12 : 0);
+      var ahead = (dx * fux + dz * fuz) / (Math.sqrt(fux * fux + fuz * fuz) || 1);
+      sc = 0.12 + 0.32 * ahead + 0.3 * space + (space > 0.75 && ahead > 0.8 ? 0.12 : 0);
       if (Math.abs(tz) > HALF_H - 3) sc -= 0.35;
       if (pressure < 2.4) sc -= 0.2;
       if (gdist0 < 30 && pressure < 4.5) sc -= 0.12;
@@ -440,6 +450,8 @@
         sc += ((bl === 0 ? 0.18 : 0.06) + p.st.sht / 99 * 0.16) * (gdist > 25 ? 0.55 : 1);
       }
       if (gdist > 28) sc -= 0.12;
+      // in and around the box a sight of goal is the thing to take (a forward does not dribble on past it)
+      if (gdist < 22) sc += (22 - gdist) / 22 * 0.45 + (p.role === 'FWD' ? 0.06 : 0);
       sc += (Math.random() - 0.5) * noise;
       if (sc > best) { best = sc; bType = ACT.SHOOT; }
     }
@@ -459,27 +471,36 @@
         var spd = clamp(md * NS.PHYS.ROLL_K + 12, 21, 40);
         var risk = laneRisk(px, pz, sx, sz, p.team, spd, false);
         var rspace = clamp((oppDist(sx, sz, p.team) - 1.5) / 7, 0, 1);
-        var val = 0.26 + 0.7 * (sx - px) * a / 35 + 0.32 * rspace + 0.5 * shotQuality(sx, sz, p.team);
+        var gain = (sx - px) * a;
+        var val = 0.26 + 1.2 * gain / 35 + 0.32 * rspace + 0.5 * shotQuality(sx, sz, p.team);
+        if (gain < -3 && pressure > 4) val -= 0.1; // nobody on him: no need to go back
         sc = (1 - risk) * val - risk * loss * 1.5 + (Math.random() - 0.5) * noise;
         if (sc > best) { best = sc; bType = ACT.PASS; bMate = mt; bx = sx; bz = sz; }
       }
 
       // through ball into the space ahead of a forward-moving team-mate
+      // (three depths, bent a little towards the goal: the one he wins the race to)
       if (mt.role !== 'DEF' && (mt.pos.x - px) * a > -3 && md < 40) {
-        var lx = mt.pos.x + a * 8 + mt.vel.x * 0.3;
-        var lz = clamp(mt.pos.z + mt.vel.z * 0.3, -HALF_H + 3, HALF_H - 3);
-        if (Math.abs(lx) < HALF_W - 4) {
+        for (var li = 0; li < THRU_LEAD.length; li++) {
+          var lead = THRU_LEAD[li];
+          var lx = mt.pos.x + a * lead + mt.vel.x * 0.3;
+          var lz = clamp(mt.pos.z * (1 - lead * 0.02) + mt.vel.z * 0.3, -HALF_H + 3, HALF_H - 3);
+          if (Math.abs(lx) > HALF_W - 4) continue;
           var ldx = lx - px, ldz = lz - pz;
           var ld = Math.sqrt(ldx * ldx + ldz * ldz);
           var tspd = clamp(ld * NS.PHYS.ROLL_K + 8, 18, 38);
           var trisk = laneRisk(px, pz, lx, lz, p.team, tspd, false);
-          var mateT = Math.max(0, Math.sqrt((lx - mt.pos.x) * (lx - mt.pos.x) + (lz - mt.pos.z) * (lz - mt.pos.z)) - 1) / 11;
-          if (mt.runT > 0.9) mateT *= 0.45; // he is already sprinting in behind, the defender has to turn
-          var race = 1 / (1 + Math.exp(-(mateT - oppArrival(lx, lz, p.team)) * 5));
+          var mgx = lx - mt.pos.x, mgz = lz - mt.pos.z;
+          var mgd = Math.sqrt(mgx * mgx + mgz * mgz) || 1;
+          // already running that way: he is there sooner (the defenders have to turn and start)
+          var mom = Math.max(0, (mt.vel.x * mgx + mt.vel.z * mgz) / mgd);
+          var mateT = Math.max(0, mgd - 1 - mom * 0.35) / 11;
+          if (mt.runT > 0.9) mateT *= 0.6;
+          var race = 1 / (1 + Math.exp(-(mateT - oppArrival(lx, lz, p.team) - 0.15) * 5));
           if (race > trisk) trisk = race;
-          var tval = 0.3 + 0.5 * (lx - px) * a / 35 + 0.6 * shotQuality(lx, lz, p.team) + ((lx - oppLine) * a > 0 ? 0.22 : 0) +
+          var tval = 0.32 + 0.5 * (lx - px) * a / 35 + 0.7 * shotQuality(lx, lz, p.team) + ((lx - oppLine) * a > 0 ? 0.25 : 0) +
             (mt.runT > 0.9 ? 0.15 : 0);
-          sc = (1 - trisk) * tval - trisk * loss * 1.5 - 0.03 + (Math.random() - 0.5) * noise;
+          sc = (1 - trisk) * tval - trisk * loss * 1.5 + (Math.random() - 0.5) * noise;
           if (sc > best) { best = sc; bType = ACT.THROUGH; bMate = mt; bx = lx; bz = lz; }
         }
       }
@@ -517,7 +538,7 @@
         var mT = Math.max(0, Math.sqrt((gx - mt.pos.x) * (gx - mt.pos.x)) - 1) / 11 + 0.2;
         var lrace = 1 / (1 + Math.exp(-(mT - oppArrival(gx, gz, p.team) - 0.5) * 4));
         if (lrace > lrisk) lrisk = lrace;
-        var gval = 0.24 + 0.6 * (gx - px) * a / 35 + 0.3 * clamp((oppDist(gx, gz, p.team) - 2) / 8, 0, 1) +
+        var gval = 0.24 + 0.85 * (gx - px) * a / 35 + 0.3 * clamp((oppDist(gx, gz, p.team) - 2) / 8, 0, 1) +
           0.4 * shotQuality(gx, gz, p.team) + (pressure < 3 ? 0.08 : 0);
         sc = (1 - lrisk) * gval - lrisk * loss * 1.5 - 0.16 + (Math.random() - 0.5) * noise;
         if (sc > best) { best = sc; bType = ACT.LONG; bMate = mt; bx = gx; bz = gz; }
@@ -747,7 +768,9 @@
       } else if ((p === T.sup1 || p === T.sup2) && supportNear(p, carrier)) {
         // offer a passing angle near the carrier (the nearest one short, the second one further)
         var bestS = -1e9, sx = p.pos.x, sz = p.pos.z;
-        for (var k = 0; k < SUPPORT_ANG.length; k++) {
+        // (the second one only ahead of the ball or level: one safe option behind is enough)
+        var nAng = p === T.sup1 ? SUPPORT_ANG.length : 4;
+        for (var k = 0; k < nAng; k++) {
           var th = SUPPORT_ANG[k];
           var r = p === T.sup1 ? 11 : 17;
           var x = clamp(carrier.pos.x + a * Math.cos(th) * r, -HALF_W + 3, HALF_W - 3);
@@ -764,8 +787,10 @@
       } else {
 // shape: the formation moved up with the ball, wide players wide, forwards on the offside line (never
         // beyond it), defenders a line behind the ball
-        var push = (p.role === 'FWD' ? 14 : (p.role === 'MID' ? 8 : 4)) + T.urgency * 5 - T.caution * 5 + mood(p) * 3;
-        var bx = p.homeX * 0.6 + ball.pos.x * 0.65 + a * push;
+        // (the whole team goes up with the ball: the midfield about level with it, the forwards ahead, so the carrier
+        // has someone to play forward to)
+        var push = (p.role === 'FWD' ? 15 : (p.role === 'MID' ? 9 : 3)) + T.urgency * 5 - T.caution * 5 + mood(p) * 3;
+        var bx = p.homeX * 0.45 + ball.pos.x * 0.85 + a * push;
         var bz = p.homeZ * 1.15 + ball.pos.z * 0.25;
         if (Math.abs(p.homeZ) > 15) bz = (p.homeZ > 0 ? 1 : -1) * Math.min(HALF_H - 3, Math.abs(p.homeZ) * 1.3);
         var line = offLine(p.team, ball);
@@ -775,7 +800,9 @@
         if (p.role === 'DEF' && bx * a > 12) bx = a * 12;
                 freeSpot(p, bx, bz);
         if ((p.tgtX - line) * a > -0.5) p.tgtX = line - a * 0.8; // the search for space never takes him offside
-        p.tgtS = 8.6;
+        // far from his place (we have just won it back): he sprints up to join in
+        var fdx = p.tgtX - p.pos.x, fdz = p.tgtZ - p.pos.z;
+        p.tgtS = fdx * fdx + fdz * fdz > 64 ? 10 : 8.6;
       }
     }
     moveToward(p, p.tgtX, p.tgtZ, p.tgtS * prof.speedMul, dt);
@@ -852,9 +879,10 @@
       var bxv = ball.pos.x - o.pos.x, bzv = ball.pos.z - o.pos.z;
       var bl = Math.sqrt(bxv * bxv + bzv * bzv) || 1;
       // a defensive block sits tighter on its man (less room to turn and shoot)
-      var tight = (3.4 - 2.0 * clamp(1 - ol / 45, 0, 1)) / prof.tight * (moodOf(p.team, 0) < 0 ? 0.75 : 1);
-      var mx = o.pos.x + ox / ol * tight + bxv / bl * 1.0 + o.vel.x * 0.2;
-      var mz = o.pos.z + oz / ol * tight + bzv / bl * 1.0 + o.vel.z * 0.2;
+      // (shaded only a little towards the ball: he cannot stand in every lane, a pass to feet can still get there)
+      var tight = (3.6 - 2.0 * clamp(1 - ol / 45, 0, 1)) / prof.tight * (moodOf(p.team, 0) < 0 ? 0.75 : 1);
+      var mx = o.pos.x + ox / ol * tight + bxv / bl * 0.45 + o.vel.x * 0.2;
+      var mz = o.pos.z + oz / ol * tight + bzv / bl * 0.45 + o.vel.z * 0.2;
       var fast = o.vel.x * o.vel.x + o.vel.z * o.vel.z > 60;
       moveToward(p, mx, mz, (fast ? 11 : 9.6) * prof.speedMul, dt);
       return;
