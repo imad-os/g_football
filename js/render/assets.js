@@ -79,11 +79,83 @@
     return tex;
   }
 
+  // The grass of a real pitch: a mowing pattern in the lighter green, the grain of the blades, worn goalmouths
+  function mow(ctx, design, light, HW, HH, X, Y, sx, sy, W, H) {
+    var i, j, n;
+    ctx.fillStyle = light;
+    if (design === 'CHECKS') {
+      // a chessboard: 18 bands along, 12 across
+      var cw = 2 * HW / 18, ch = 2 * HH / 12;
+      for (i = 0; i < 18; i++) for (j = 0; j < 12; j++) if ((i + j) % 2) ctx.fillRect(X(-HW + i * cw), Y(-HH + j * ch), cw * sx + 0.5, ch * sy + 0.5);
+    } else if (design === 'RINGS') {
+      // rings around the centre spot (every second one lighter), the rest in straight bands
+      var rw = 2 * HW / 18;
+      for (i = 1; i < 18; i += 2) ctx.fillRect(X(-HW + i * rw), 0, rw * sx + 0.5, H);
+      ctx.save();
+      ctx.translate(X(0), Y(0));
+      ctx.scale(sx, sy);
+      var step = NS.CIRCLE_R * 0.55;
+      for (n = 7; n >= 1; n--) {
+        ctx.beginPath();
+        ctx.arc(0, 0, n * step, 0, Math.PI * 2);
+        ctx.fillStyle = n % 2 ? light : NS.stadium.grass[0]; // from the outside in: light, dark, light...
+        ctx.fill();
+      }
+      ctx.restore();
+    } else if (design === 'DIAGONAL') {
+      // diagonal bands at 45 degrees (in metres, whatever the canvas scale)
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, W, H);
+      ctx.clip();
+      ctx.translate(X(0), Y(0));
+      ctx.scale(sx, sy);
+      ctx.rotate(Math.PI / 4);
+      var dw = 7, span = HW + HH + 20;
+      for (i = -Math.ceil(span / dw); i < span / dw; i += 2) ctx.fillRect(i * dw, -span, dw, span * 2);
+      ctx.restore();
+    } else if (design === 'PLAID') {
+      // wide bands both ways: where they cross it is lighter still
+      var pw = 2 * HW / 12, ph = 2 * HH / 8;
+      ctx.globalAlpha = 0.6;
+      for (i = 1; i < 12; i += 2) ctx.fillRect(X(-HW + i * pw), 0, pw * sx + 0.5, H);
+      for (j = 1; j < 8; j += 2) ctx.fillRect(0, Y(-HH + j * ph), W, ph * sy + 0.5);
+      ctx.globalAlpha = 1;
+    } else {
+      // classic stripes along the pitch
+      var sw = 2 * HW / 18;
+      for (i = 1; i < 18; i += 2) ctx.fillRect(X(-HW + i * sw), 0, sw * sx + 0.5, H);
+    }
+    // the grain: thousands of tiny light and dark marks
+    n = Math.round(W * H / 90);
+    for (i = 0; i < n; i++) {
+      ctx.fillStyle = Math.random() < 0.5 ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.05)';
+      ctx.fillRect(Math.random() * W, Math.random() * H, 1 + Math.random() * 2, 1);
+    }
+    // worn grass in both goalmouths and on the centre spot (brownish, soft edges)
+    function wear(x, z, r, a) {
+      ctx.save();
+      ctx.translate(X(x), Y(z));
+      ctx.scale(sx, sy);
+      var g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+      g.addColorStop(0, 'rgba(120,105,60,' + a + ')');
+      g.addColorStop(1, 'rgba(120,105,60,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    for (var e = -1; e <= 1; e += 2) { wear(e * (HW - 2), 0, 4.5, 0.35); wear(e * (HW - NS.PEN_D), 0, 2.5, 0.25); }
+    wear(0, 0, 3, 0.2);
+  }
+
   // The pitch: the lines sit exactly on the real 105 x 68 markings (the goal lines run through the posts), with a
   // strip of grass outside them for throw-ins and corners: the plane is PITCH_MARGIN bigger on every side.
   var PITCH_MARGIN = 4;
   function buildPitchTexture(withStripes) {
-    var W = 1024, H = 512;
+    var big = NS.PITCH_HALF_W > 70;
+    var W = big ? 2048 : 1024, H = big ? 1024 : 512;
     var HW = NS.PITCH_HALF_W, HH = NS.PITCH_HALF_H, M = PITCH_MARGIN;
     var sx = W / (2 * (HW + M)), sy = H / (2 * (HH + M));
     function X(x) { return (x + HW + M) * sx; }
@@ -92,15 +164,12 @@
     canvas.width = W;
     canvas.height = H;
     var ctx = canvas.getContext('2d');
-    var stripes = 18;
-    var sw = (2 * HW) / stripes;
     var grass = NS.stadium.grass;
     ctx.fillStyle = grass[0];
     ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = grass[1];
-    for (var i = 1; withStripes && i < stripes; i += 2) ctx.fillRect(X(-HW + i * sw), 0, sw * sx + 0.5, H);
+    if (withStripes) mow(ctx, NS.PITCH_DESIGNS[NS.pitchDesign] || 'STRIPES', grass[1], HW, HH, X, Y, sx, sy, W, H);
     ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 2.5 * W / 1024;
     function rect(x0, z0, x1, z1) { ctx.strokeRect(X(x0), Y(z0), X(x1) - X(x0), Y(z1) - Y(z0)); }
     // circles and arcs in metres (the canvas is not scaled the same way on both axes)
     function arc(cx, cz, r, a0, a1, fill) {

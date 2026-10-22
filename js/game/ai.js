@@ -29,10 +29,10 @@
   // Difficulty = speed AND intelligence: reaction time, decision noise, pass accuracy, marking tightness, keeper.
   var PROFILES = {
     // (spread wide enough to feel: EASY is slow, late and loose; LEGEND is quick, sharp and has a great keeper)
-    EASY: { speedMul: 0.86, react: 0.6, noise: 0.34, tackle: 0.28, tackleRate: 1.1, gkSave: 0.66, gkReact: 0.24, acc: 2.6, tight: 0.55, press2: false, shootBias: -0.06, chasers: 1 },
-    NORMAL: { speedMul: 1.0, react: 0.32, noise: 0.12, tackle: 0.5, tackleRate: 2.0, gkSave: 0.74, gkReact: 0.17, acc: 1.4, tight: 0.85, press2: false, shootBias: 0, chasers: 1 },
-    HARD: { speedMul: 1.06, react: 0.22, noise: 0.07, tackle: 0.6, tackleRate: 2.6, gkSave: 0.82, gkReact: 0.11, acc: 1.05, tight: 0.95, press2: true, shootBias: 0.02, chasers: 2 },
-    LEGEND: { speedMul: 1.12, react: 0.14, noise: 0.03, tackle: 0.7, tackleRate: 3.2, gkSave: 0.9, gkReact: 0.07, acc: 0.8, tight: 1.05, press2: true, shootBias: 0.04, chasers: 2 }
+    EASY: { speedMul: 0.86, react: 0.6, noise: 0.34, tackle: 0.28, tackleRate: 1.1, gkSave: 0.62, gkReact: 0.28, acc: 2.6, tight: 0.55, press2: false, shootBias: -0.06, chasers: 1 },
+    NORMAL: { speedMul: 1.0, react: 0.32, noise: 0.12, tackle: 0.5, tackleRate: 2.0, gkSave: 0.7, gkReact: 0.22, acc: 1.4, tight: 0.85, press2: false, shootBias: 0, chasers: 1 },
+    HARD: { speedMul: 1.06, react: 0.22, noise: 0.07, tackle: 0.6, tackleRate: 2.6, gkSave: 0.77, gkReact: 0.19, acc: 1.05, tight: 0.95, press2: true, shootBias: 0.02, chasers: 2 },
+    LEGEND: { speedMul: 1.12, react: 0.14, noise: 0.03, tackle: 0.7, tackleRate: 3.2, gkSave: 0.84, gkReact: 0.16, acc: 0.8, tight: 1.05, press2: true, shootBias: 0.04, chasers: 2 }
   };
 
   var RUN_SPEED = 10.4;    // what the AI assumes a player covers per second when judging races to the ball
@@ -976,7 +976,7 @@
           p.diveRoll = -dir * Math.sin(p.facing) > 0 ? -1.25 : 1.25;
           return;
         }
-        moveToward(p, lineX, clamp(cz, -limit - 0.8, limit + 0.8), 14, dt);
+        moveToward(p, lineX, clamp(cz, -limit - 0.8, limit + 0.8), 10.5, dt); // a keeper's side-steps, not a sprint
         return;
       }
     } else {

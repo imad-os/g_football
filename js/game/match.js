@@ -297,7 +297,7 @@
   }
 
   function gkSkill(team) {
-    return humanTeam(team) ? 0.8 : AI.profile(levelOf(team)).gkSave;
+    return humanTeam(team) ? 0.7 : AI.profile(levelOf(team)).gkSave;
   }
 
   // Moods for the breaks: 1 celebrate, 2 dejected walk, 3 on the knees, 4 the scorer's run, 5 walk off.
@@ -1016,6 +1016,7 @@
         NS.usePitch(World.settings.stadium);
         NS.Scene.rebuildStadium();
       }
+      if (!(NS.Debug && NS.Debug.running())) NS.Scene.newPitchDesign(); // a different grass pattern every match
       configureSlots();
       // ends: home on the left in the first half, or drawn at random (Gameplay setting); the teams swap them at half time
       m.dir[0] = World.settings.randomEnds && Math.random() < 0.5 ? -1 : 1; m.dir[1] = -m.dir[0];
@@ -1303,7 +1304,7 @@
           var d2 = ddx * ddx + ddz * ddz;
           if (p.role === 'GK' && ball.lastTouchTeam !== p.team && inOwnBox(p.team)) {
             // a diving keeper reaches much further (full stretch, hands up to the top corner)
-            var gkReach = p.diveT > 0 ? 7.3 : 4.4; // squared: ~2.1 standing, ~2.7 at full stretch
+            var gkReach = p.diveT > 0 ? 7.3 : 3.8; // squared: ~1.95 standing, ~2.7 at full stretch
             // the save is decided when the ball passes him (its closest point), or at once when it is on top of him
             var rv = -(ddx * ball.vel.x + ddz * ball.vel.z);
             var passing = d2 < 2.2 || rv <= bs2 * dt * 1.5; // rv > 0 while it still comes closer
@@ -1322,12 +1323,13 @@
               // placement matters most: at the keeper = nearly always kept out, the corners are hard
               // (a dive covers part of the distance); pace above 30 makes every save harder
               var reach = Math.sqrt(d2) - (p.diveT > 0 ? 1.0 : 0);
-              var place = reach <= 0.7 ? 0.15 : -(reach - 0.7) * 0.28;
+              var place = reach <= 0.65 ? 0.14 : -(reach - 0.65) * 0.34;
               var keeper = gkSkill(p.team) * 0.5 + (0.4 + p.st.def / 99 * 0.5) * 0.5;
               // from range he has time to see it and get across: the further out it was struck, the likelier the save
               // (never quite certain: even a great keeper lets one in now and then)
-              var range = clamp(((ball.shotD || 0) - 13) * 0.026, 0, 0.4);
-              var chance = speed < 12 ? 1 : clamp(keeper + 0.1 + place + range - Math.max(0, speed - 36) * 0.009, 0.15, 0.93);
+              var range = clamp(((ball.shotD || 0) - 13) * 0.02, 0, 0.25);
+              // (a human keeper: even a shot at him is not always kept out, a good one in the corner usually goes in)
+              var chance = speed < 12 ? 1 : clamp(keeper + 0.05 + place + range - Math.max(0, speed - 34) * 0.01, 0.12, 0.9);
               if (ball.chip) chance *= 0.4;
               if (ball.pen) chance *= 0.55;
               if (Math.random() < chance) {

@@ -2,7 +2,7 @@
 (function (NS) {
   'use strict';
 
-  NS.VERSION = '1.21.1';
+  NS.VERSION = '1.22.0';
 
   // Pitch geometry (world units; x = length, z = width, y = up). The players and the goal are drawn ~1.5x real size,
   // so the markings around the goal are the real ones scaled to the goal (BOX_K), not to the pitch: the boxes look
@@ -21,8 +21,12 @@
     COMPACT: { w: 100, h: 64, grass: ['#1f7234', '#26843d'] },
     CLASSIC: { w: 110, h: 72, grass: ['#1d6e32', '#25803b'] },
     GRAND: { w: 120, h: 78, grass: ['#22763a', '#2a8a45'] },
-    MEGA: { w: 130, h: 86, grass: ['#1b6a30', '#237c3a'] }
+    MEGA: { w: 130, h: 86, grass: ['#1b6a30', '#237c3a'] },
+    ULTRA: { w: 200, h: 130, grass: ['#1e6f33', '#27833e'] } // a real pitch's shape (105 x 68) at the players' size and more
   };
+  // Mowing patterns of the grass: one is drawn at random for every match (js/render/assets.js)
+  NS.PITCH_DESIGNS = ['STRIPES', 'CHECKS', 'RINGS', 'DIAGONAL', 'PLAID'];
+  NS.pitchDesign = 0;
   NS.PITCH_HALF_W = 55;
   NS.PITCH_HALF_H = 36;
   NS.PITCH_SCALE = NS.PITCH_HALF_W / 46; // crowd spacing
@@ -83,7 +87,7 @@
       options: [[11, 'opt.t11'], [7, 'opt.t7']] },
     // the stadium: pitch size (applies from the next match)
     { key: 'stadium', group: 'game', label: 'set.stadium', hint: 'set.stadium.h',
-      options: [['COMPACT', 'opt.st.compact'], ['CLASSIC', 'opt.st.classic'], ['GRAND', 'opt.st.grand'], ['MEGA', 'opt.st.mega']] },
+      options: [['COMPACT', 'opt.st.compact'], ['CLASSIC', 'opt.st.classic'], ['GRAND', 'opt.st.grand'], ['MEGA', 'opt.st.mega'], ['ULTRA', 'opt.st.ultra']] },
     { key: 'durationMins', group: 'game', label: 'set.duration', hint: 'set.duration.h',
       options: [[3, 'opt.min3'], [5, 'opt.min5'], [10, 'opt.min10']] },
     { key: 'gameSpeed', group: 'game', label: 'set.pace', hint: 'set.pace.h',

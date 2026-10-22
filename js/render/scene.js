@@ -224,6 +224,14 @@
       camera.lookAt(lookTarget);
     },
     render: function () { renderer.render(scene, camera); },
+    // A new match: another mowing pattern for the grass, drawn at random (the same pitch otherwise)
+    newPitchDesign: function () {
+      var n = NS.PITCH_DESIGNS.length, d = Math.floor(Math.random() * (n - 1));
+      NS.pitchDesign = d >= NS.pitchDesign ? d + 1 : d; // never the same one twice in a row
+      if (!pitchMesh) return;
+      pitchMesh.material.map = NS.Assets.pitchTexture(currentTier ? currentTier.pitchStripes : true);
+      pitchMesh.material.needsUpdate = true;
+    },
     // A new stadium (pitch size): the pitch, lines, goals, boards and stands are built again.
     rebuildStadium: function () {
       if (!scene || !stadium) return;

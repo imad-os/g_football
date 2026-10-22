@@ -900,6 +900,11 @@
   Object.assign(D.es, { 'set.ends': 'Campos', 'set.ends.h': '1a parte: local a la izquierda, o al azar. Los equipos cambian de campo en el descanso.',
     'opt.ends.home': 'LOCAL IZQUIERDA', 'opt.ends.random': 'AL AZAR', 'aima.k.punish': 'Castigos' });
 
+  // the biggest stadium
+  Object.assign(D.en, { 'opt.st.ultra': 'Ultra 200x130' });
+  Object.assign(D.fr, { 'opt.st.ultra': 'Ultra 200x130' });
+  Object.assign(D.es, { 'opt.st.ultra': 'Ultra 200x130' });
+
   var lang = 'en';
 
   NS.I18n = {

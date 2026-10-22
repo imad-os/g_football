@@ -1022,7 +1022,7 @@
     ['away', ['EASY', 'NORMAL', 'HARD', 'LEGEND', 'AIMA']],
     ['teams', ['SELECTED', 'RANDOM']],
     ['size', [11, 7]],
-    ['stadium', ['COMPACT', 'CLASSIC', 'GRAND', 'MEGA']],
+    ['stadium', ['COMPACT', 'CLASSIC', 'GRAND', 'MEGA', 'ULTRA']],
     ['length', [3, 5, 10]]
   ];
   var dbgSel = { matches: 1, home: 1, away: 1, teams: 0, size: 0, stadium: 1, length: 0 };
@@ -1138,7 +1138,7 @@
   var TR_OPTS = [
     ['matches', [5, 10, 20, 30, 50, 100, 200, 500, 1000, 0]], // 0 = continuous
     ['size', [11, 7]],
-    ['stadium', ['COMPACT', 'CLASSIC', 'GRAND', 'MEGA']],
+    ['stadium', ['COMPACT', 'CLASSIC', 'GRAND', 'MEGA', 'ULTRA']],
     ['length', [3, 5, 10]]
   ];
   var trSel = { matches: 1, size: 0, stadium: 1, length: 0, brain: '', opp: 'NORMAL' };
