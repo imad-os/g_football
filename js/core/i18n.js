@@ -772,6 +772,46 @@
     'aima.note.viewer': 'اختر مستوى checkoAI للعب ضده.'
   });
 
+  // checkoAI: sub-tabs, brains, training
+  Object.assign(D.en, {
+    'aima.sub.stats': 'Stats', 'aima.sub.settings': 'Settings', 'aima.sub.brains': 'Brains', 'aima.sub.train': 'Training',
+    'aima.settingsof': 'Settings of the active brain:', 'aima.k.name': 'Name', 'aima.k.trained': 'in training',
+    'aima.c.brains': 'BRAINS (★ = active: plays your matches, and everyone else gets it)', 'aima.c.history': 'HISTORY',
+    'aima.loading': 'Loading...', 'aima.newname': 'name (for clone / rename / new)', 'aima.use': 'Use this brain', 'aima.used': 'Active brain:',
+    'aima.clone': 'Clone', 'aima.cloned': 'Cloned:', 'aima.rename': 'Rename', 'aima.renamed': 'Renamed.', 'aima.needname': 'Type a name first.',
+    'aima.newbrain': 'New brain', 'aima.created': 'Created:', 'aima.delete': 'Delete', 'aima.deleted': 'Deleted.',
+    'aima.confirm.del': 'Press again to delete this brain for good.',
+    'aima.h.created': 'created', 'aima.h.cloned': 'cloned from', 'aima.h.renamed': 'renamed', 'aima.h.set': 'setting', 'aima.h.size': 'new brain size',
+    'aima.h.reset': 'started again from zero', 'aima.h.match': 'match', 'aima.h.vshuman': 'v a player', 'aima.h.vscpu': 'v the CPU', 'aima.h.train': 'training',
+    'aima.tr.brain': 'Brain', 'aima.tr.opp': 'Opponent', 'aima.tr.run': 'Train',
+    'aima.tr.hint': 'He plays full-speed matches and learns. The opponent may be the CPU at any level, or a brain (that one does not learn).',
+    'aima.tr.starting': 'Starting...', 'aima.tr.done': 'Done. Summary or full stats below.', 'aima.tr.busy': 'Not now: finish the match in progress first.',
+    'aima.tr.summary': 'Summary', 'aima.tr.full': 'Full stats', 'aima.tr.title': 'training', 'aima.tr.matches': 'matches', 'aima.tr.aside': 'a side',
+    'aima.tr.results': 'Results (W-D-L)', 'aima.tr.goals': 'goals', 'aima.tr.permatch': 'per match', 'aima.tr.hisplay': 'His play',
+    'aima.tr.shots': 'shots', 'aima.tr.goalsby': 'his goals', 'aima.tr.passes': 'passes', 'aima.tr.tackles': 'tackles', 'aima.tr.fouls': 'fouls',
+    'aima.tr.learning': 'Learning', 'aima.tr.reward': 'Reward (first half of the run -> second half)',
+    'aima.tr.better': 'improving', 'aima.tr.worse': 'getting worse', 'aima.tr.flat': 'about the same',
+    'aima.tr.brainstats': 'BRAIN COUNTERS (this run)', 'aima.tr.rewards': 'Reward per match'
+  });
+  Object.assign(D.fr, {
+    'aima.sub.stats': 'Stats', 'aima.sub.settings': 'Reglages', 'aima.sub.brains': 'Cerveaux', 'aima.sub.train': 'Entrainement',
+    'aima.c.history': 'HISTORIQUE', 'aima.use': 'Utiliser ce cerveau', 'aima.clone': 'Cloner', 'aima.rename': 'Renommer', 'aima.newbrain': 'Nouveau cerveau',
+    'aima.delete': 'Supprimer', 'aima.tr.brain': 'Cerveau', 'aima.tr.opp': 'Adversaire', 'aima.tr.run': 'Entrainer', 'aima.tr.summary': 'Resume',
+    'aima.tr.full': 'Stats completes'
+  });
+  Object.assign(D.es, {
+    'aima.sub.stats': 'Estadisticas', 'aima.sub.settings': 'Ajustes', 'aima.sub.brains': 'Cerebros', 'aima.sub.train': 'Entrenamiento',
+    'aima.c.history': 'HISTORIAL', 'aima.use': 'Usar este cerebro', 'aima.clone': 'Clonar', 'aima.rename': 'Renombrar', 'aima.newbrain': 'Cerebro nuevo',
+    'aima.delete': 'Borrar', 'aima.tr.brain': 'Cerebro', 'aima.tr.opp': 'Rival', 'aima.tr.run': 'Entrenar', 'aima.tr.summary': 'Resumen',
+    'aima.tr.full': 'Estadisticas completas'
+  });
+  Object.assign(D.ar, {
+    'aima.sub.stats': 'الإحصائيات', 'aima.sub.settings': 'الإعدادات', 'aima.sub.brains': 'الأدمغة', 'aima.sub.train': 'التدريب',
+    'aima.c.history': 'السجل', 'aima.use': 'استخدم هذا الدماغ', 'aima.clone': 'نسخ', 'aima.rename': 'إعادة تسمية', 'aima.newbrain': 'دماغ جديد',
+    'aima.delete': 'حذف', 'aima.tr.brain': 'الدماغ', 'aima.tr.opp': 'الخصم', 'aima.tr.run': 'تدريب', 'aima.tr.summary': 'ملخص',
+    'aima.tr.full': 'إحصائيات كاملة'
+  });
+
   var lang = 'en';
 
   NS.I18n = {

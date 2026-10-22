@@ -117,19 +117,23 @@ A learning player named after the owner's white rooster (js/game/aima.js). On a 
 selected player only (violet arrow), through a virtual controller with the same stick, sprint, buttons and hold times
 as a human; the other ten are the Legend CPU. A small box under the scoreboard shows what it is thinking.
 
-- **Model**: a neural network (64 inputs: the play around him and the whole match situation, time left, score, numbers,
-  cards, possession, shots; two hidden layers; heads for stick, sprint, button, power and a value). Brain sizes SMALL
-  64-48 (8.6k values), LARGE 256-128, HUGE 512-256 (PC).
-- **Learning** (the trainer's profile only): it copies the Legend CPU in spells it plays as the CPU (Auto: fewer as it
+- **Brains**: several networks, each with its own settings, stats and history (Settings > checkoAI > Brains: use, clone,
+  rename, new, delete). The active brain (★) plays the matches and is the one every other profile gets. Sizes SMALL
+  64-48 (8.6k values), LARGE 256-128, HUGE 512-256 (PC). 64 inputs: the play around him and the whole match situation
+  (time left, score, numbers, cards, possession, shots).
+- **Learning** (the trainer's profile only): it copies the Legend CPU in spells the CPU plays for it (Auto: fewer as it
   learns, never under 35%), copies the trainer's own play, and learns from rewards (actor-critic, 2 s returns): goals,
   shots, passes, ball won / lost, fouls, and the trainer's **claps** (Buttons screen > Clap, default ZL; hold it: a quick
   tap is ~25%, a full 1 s hold 100%). Restarts and penalties it takes are played by the Legend CPU.
-- **Trainer**: the My PC profile named "imad", signed in with his Google account (Settings > checkoAI > Sign in with
-  Google, once on a computer; if the popup is blocked inside My PC, open `aima-login.html` in a browser and paste the
-  code). The sign-in token is kept in the profile's My PC save, so his TV uses it too.
-- **Everyone else**: signs in anonymously and plays a fresh copy of the trainer's latest model (read only).
+- **Training** (Settings > checkoAI > Training): a brain plays full-speed matches against the CPU at any level or against
+  another brain (which plays but does not learn); then a summary or the full stats (brain counters + debug report).
+- **Trainer**: the My PC profile named "imad", signed in with his Google account (Settings > checkoAI > Settings > Sign
+  in with Google, once on a computer; if the popup is blocked inside My PC, open `aima-login.html` in a browser and paste
+  the code). The token is kept in the profile's My PC save, so his TV and other devices are signed in too.
+- **Everyone else**: signs in anonymously and plays a fresh copy of the active brain (read only).
 - **Store**: its own Firebase project (`js/data/aima-cloud.js`, public web config; the app config `aimaFirebase`
-  overrides it), through the REST APIs. The model is the Firestore document `aima/trainer`.
+  overrides it), through the REST APIs: `aima/index` (the list and the active brain) and `aima/b_<id>` per brain.
+- Testing in a plain browser (not My PC): `?aimatrainer=1` shows the trainer's screens (it cannot write the cloud).
 
 Firebase setup: Authentication > Sign-in method: enable **Google** and **Anonymous**; Authentication > Settings >
 Authorized domains: add `imad-os.github.io`. Firestore rules (put the trainer's Gmail address):
@@ -138,7 +142,7 @@ Authorized domains: add `imad-os.github.io`. Firestore rules (put the trainer's 
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /aima/trainer {
+    match /aima/{doc} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.token.email == 'YOUR_GMAIL@gmail.com'
                    && request.auth.token.email_verified == true;

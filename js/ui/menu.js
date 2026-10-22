@@ -192,6 +192,7 @@
   function back() {
     if (current === 'BUTTONS') { show('SETTINGS'); return; }
     if (current === 'DEBUG') { if (!NS.Debug.running()) show('SETTINGS'); return; }
+    if (current === 'SETTINGS' && NS.Aima && NS.Aima.training()) return; // a checkoAI training is running
     var running = matchRunning();
     if (running) {
       if (current === 'PAUSE') resumeMatch();
@@ -989,6 +990,7 @@
     refs.setTabs = el('div', 'tabs set-tabs');
     NS.SETTING_GROUPS.forEach(function (g, i) {
       var b = btn('tab', T(g[1]), 'sg:' + g[0], function () {
+        if (NS.Aima && NS.Aima.training()) return; // a checkoAI training is running
         settingsGroup = g[0];
         renderSettings('sg:' + g[0]);
       });
@@ -1009,6 +1011,7 @@
     refs.debugBtn = btn('', T('dbg.open'), 'dbgbtn', function () { show('DEBUG'); });
     foot.appendChild(refs.debugBtn);
     foot.appendChild(btn('primary', T('set.done'), 'done', function () {
+      if (NS.Aima && NS.Aima.training()) return;
       if (matchRunning()) show('PAUSE'); else show('MAIN');
     }));
     wrap.appendChild(foot);
@@ -1111,9 +1114,11 @@
     if (ok) refs.dbgStatus.textContent = T('dbg.copied');
   }
 
-  /* ------------------------------ checkoAI (Settings tab) ------------------------------ */
+  /* ------------------------------ checkoAI (Settings tab: Stats, Settings, Brains, Training) ------------------------------ */
 
-  // option rows: [cfg key, label, [[value, text key]...], trainer only]
+  var AIMA_SUBS = ['stats', 'settings', 'brains', 'train'];
+  var aimaSub = 'stats';
+  // option rows of the active brain: [cfg key, label, [[value, text key]...]]
   var AIMA_OPTS = [
     ['learn', 'aima.o.learn', [[true, 'opt.on'], [false, 'opt.off']]],
     ['mine', 'aima.o.mine', [[true, 'opt.on'], [false, 'opt.off']]],
@@ -1124,8 +1129,18 @@
     ['help', 'aima.o.help', [['AUTO', 'opt.auto'], ['H0', 'aima.h0'], ['H30', 'aima.h30'], ['H60', 'aima.h60']]],
     ['size', 'aima.o.size', [['SMALL', 'aima.sz.SMALL'], ['LARGE', 'aima.sz.LARGE'], ['HUGE', 'aima.sz.HUGE']]]
   ];
-  var aimaConfirm = '';   // a size change / reset waits for a second press
+  var aimaConfirm = '';   // a size change / reset / delete waits for a second press
   var aimaMsg = '';
+  var brainSel = '';      // the brain shown in Brains
+  // training options (cycled like the debug screen)
+  var TR_OPTS = [
+    ['matches', [5, 10, 20, 50, 100, 200]],
+    ['size', [11, 7]],
+    ['stadium', ['COMPACT', 'CLASSIC', 'GRAND', 'MEGA']],
+    ['length', [3, 5, 10]]
+  ];
+  var trSel = { matches: 1, size: 0, stadium: 1, length: 0, brain: '', opp: 'NORMAL' };
+  var trOut = null, trView = 'summary', trStatus = '';
 
   function kv(grid, label, value) {
     grid.appendChild(el('span', 'aima-k', label));
@@ -1141,32 +1156,40 @@
     return out + '  ' + a[a.length - 1];
   }
   function when(t) { return t ? new Date(t).toLocaleString() : '-'; }
+  function card(title) {
+    var c = el('div', 'panel-card');
+    c.appendChild(el('div', 'tag amber', title));
+    return c;
+  }
+  function again(key) { renderSettings(key); }
 
-  function renderAima(keepKey) {
-    var A = NS.Aima;
-    var list = refs.setList;
-    var s = A.stats(), md = A.meta(), cfg = A.cfg, trainer = A.isTrainer();
-    // head: the rooster, his name, who he plays for
-    var head = el('div', 'aima-head');
-    var ico = el('span', 'aima-rooster');
-    ico.innerHTML = NS.HUD.ROOSTER;
-    head.appendChild(ico);
-    var ht = el('div');
-    ht.appendChild(el('div', 'aima-name', 'checkoAI'));
-    ht.appendChild(el('div', 'set-hint', T(trainer ? 'aima.role.trainer' : 'aima.role.viewer')));
-    head.appendChild(ht);
-    list.appendChild(head);
+  // one line of a brain's history
+  function histText(h) {
+    var d = h.d || {};
+    switch (h.k) {
+      case 'created': return T('aima.h.created');
+      case 'cloned': return T('aima.h.cloned') + ' ' + d.from;
+      case 'renamed': return T('aima.h.renamed') + ' ' + d.from + ' -> ' + d.to;
+      case 'set': return T('aima.h.set') + ' ' + d.k + ' = ' + d.v;
+      case 'size': return T('aima.h.size') + ' ' + d.v;
+      case 'reset': return T('aima.h.reset');
+      case 'match': return T('aima.h.match') + ' ' + d.s + ' (' + T(d.vs === 'human' ? 'aima.h.vshuman' : 'aima.h.vscpu') + ')';
+      case 'train': return T('aima.h.train') + ' v ' + d.opp + ': ' + d.n + ' ' + T('aima.tr.matches') + ', ' + d.w + '-' + d.d + '-' + d.l +
+        ' (' + d.gf + '-' + d.ga + ')';
+      default: return h.k;
+    }
+  }
 
+  function statsCards(list, b) {
+    var A = NS.Aima, s = b.st;
     var cols = el('div', 'aima-cols');
-    // his stats
-    var c1 = el('div', 'panel-card');
-    c1.appendChild(el('div', 'tag amber', T('aima.c.stats')));
+    var c1 = card(T('aima.c.stats'));
     var g = el('div', 'aima-grid');
-    kv(g, T('aima.k.matches'), s.matches + '  (' + s.w + '-' + s.d + '-' + s.l + ')');
+    kv(g, T('aima.k.matches'), s.matches + '  (' + s.w + '-' + s.d + '-' + s.l + ')' + (s.trainMatches ? '  ' + T('aima.k.trained') + ' ' + s.trainMatches : ''));
     kv(g, T('aima.k.minutes'), String(Math.round(s.mins)));
     kv(g, T('aima.k.goals'), s.goals + '   (' + T('aima.k.team') + ' ' + s.gf + '-' + s.ga + ')');
     kv(g, T('aima.k.shots'), s.shots + '  (' + T('aima.k.ontarget') + ' ' + s.onTarget + ')');
-    kv(g, T('aima.k.passes'), s.passes + '  (' + (s.passes ? pct(s.passOk / s.passes) : '-') + ', ' + T('aima.k.fwd') + ' ' + s.fwdPass + ')');
+    kv(g, T('aima.k.passes'), s.passes + '  (' + (s.passes ? pct(Math.min(1, s.passOk / s.passes)) : '-') + ', ' + T('aima.k.fwd') + ' ' + s.fwdPass + ')');
     kv(g, T('aima.k.tackles'), String(s.tackles));
     kv(g, T('aima.k.wonlost'), s.won + ' / ' + s.lost);
     kv(g, T('aima.k.fouls'), String(s.fouls));
@@ -1176,46 +1199,55 @@
     c1.appendChild(g);
     cols.appendChild(c1);
 
-    // the model
-    var c2 = el('div', 'panel-card');
-    c2.appendChild(el('div', 'tag amber', T('aima.c.model')));
-    g = el('div', 'aima-grid');
-    kv(g, T('aima.k.alg'), A.ALG);
-    kv(g, T('aima.k.brain'), cfg.size + '  ' + A.F + '-' + A.H1 + '-' + A.H2 + '-' + A.NOUT);
-    kv(g, T('aima.k.params'), A.NP.toLocaleString() + '  (' + (A.sizeKB ? A.sizeKB + ' KB' : '-') + ')');
-    kv(g, T('aima.k.inputs'), T('aima.inputs'));
-    kv(g, T('aima.k.decisions'), s.decisions + '  (' + T('aima.k.own') + ' ' + (s.decisions ? pct(s.modelDec / s.decisions) : '-') + ')');
-    kv(g, T('aima.k.updates'), 'RL ' + s.rl + '  /  ' + T('aima.k.copy') + ' ' + s.im);
-    kv(g, T('aima.k.samples'), T('aima.k.you') + ' ' + s.humanSamples + '  /  Legend ' + s.cpuSamples + '  (' + A.memory() + ')');
-    kv(g, T('aima.k.help'), pct(A.help()));
-    kv(g, T('aima.k.from'), T('aima.from.' + (md && md.from ? md.from : 'new')));
-    kv(g, T('aima.k.created'), when(md && md.created));
-    kv(g, T('aima.k.saved'), when(md && md.saved));
-    kv(g, T('aima.k.cloud'), A.cloud + (A.account() ? '  (' + A.account() + ')' : ''));
-    c2.appendChild(g);
-    cols.appendChild(c2);
-
-    // his style (from what he chooses himself)
-    var c3 = el('div', 'panel-card');
-    c3.appendChild(el('div', 'tag amber', T('aima.c.style')));
-    var sy = A.style();
+    var c3 = card(T('aima.c.style'));
+    var sy = A.style(b);
     var bars = [['aima.y.pass', sy.pass], ['aima.y.shoot', sy.shoot], ['aima.y.fwd', sy.fwd], ['aima.y.sprint', sy.sprint], ['aima.y.carry', sy.carry],
       ['aima.y.pos', (sy.pos + 1) / 2]];
-    for (var b = 0; b < bars.length; b++) {
+    for (var i = 0; i < bars.length; i++) {
       var row = el('div', 'aima-bar');
-      row.appendChild(el('span', 'aima-k', T(bars[b][0])));
+      row.appendChild(el('span', 'aima-k', T(bars[i][0])));
       var tr = el('i');
       var fill = el('b');
-      fill.style.width = Math.round(Math.max(0, Math.min(1, bars[b][1])) * 100) + '%';
+      fill.style.width = Math.round(Math.max(0, Math.min(1, bars[i][1])) * 100) + '%';
       tr.appendChild(fill);
       row.appendChild(tr);
       c3.appendChild(row);
     }
     cols.appendChild(c3);
     list.appendChild(cols);
+  }
 
-    // options (the trainer only: everybody else plays his model as it is)
+  function modelCard(b) {
+    var A = NS.Aima, s = b.st;
+    var c2 = card(T('aima.c.model'));
+    var g = el('div', 'aima-grid');
+    kv(g, T('aima.k.name'), b.name);
+    kv(g, T('aima.k.alg'), A.ALG);
+    kv(g, T('aima.k.brain'), b.cfg.size + '  ' + A.F + '-' + b.H1 + '-' + b.H2 + '-' + A.NOUT);
+    kv(g, T('aima.k.params'), b.NP.toLocaleString() + '  (' + Math.round(b.NP * 2.75 / 102.4) / 10 + ' KB)');
+    kv(g, T('aima.k.inputs'), T('aima.inputs'));
+    kv(g, T('aima.k.decisions'), s.decisions + '  (' + T('aima.k.own') + ' ' + (s.decisions ? pct(s.modelDec / s.decisions) : '-') + ')');
+    kv(g, T('aima.k.updates'), 'RL ' + s.rl + '  /  ' + T('aima.k.copy') + ' ' + s.im);
+    kv(g, T('aima.k.samples'), T('aima.k.you') + ' ' + s.humanSamples + '  /  Legend ' + s.cpuSamples + '  (' + A.memory(b) + ')');
+    kv(g, T('aima.k.help'), pct(b.help()));
+    kv(g, T('aima.k.from'), T('aima.from.' + (b.from || 'new')));
+    kv(g, T('aima.k.created'), when(b.created));
+    kv(g, T('aima.k.saved'), when(b.saved));
+    c2.appendChild(g);
+    return c2;
+  }
+
+  function subStats(list) {
+    var A = NS.Aima, b = A.brain();
+    statsCards(list, b);
+  }
+
+  function subSettings(list) {
+    var A = NS.Aima, b = A.brain(), trainer = A.isTrainer();
     if (trainer) {
+      list.appendChild(el('div', 'set-hint', T('aima.settingsof') + ' ' + b.name));
+      var grid = el('div', 'aima-opts');
+      list.appendChild(grid);
       AIMA_OPTS.forEach(function (o) {
         var r = el('div', 'set-row');
         var lab = el('div', 'set-label');
@@ -1225,39 +1257,38 @@
         var opts = el('div', 'row');
         o[2].forEach(function (v) {
           var key = 'ai:' + o[0] + ':' + v[0];
-          var bt = btn('opt' + (cfg[o[0]] === v[0] ? ' sel' : ''), T(v[1]), key, function () {
+          opts.appendChild(btn('opt' + (b.cfg[o[0]] === v[0] ? ' sel' : ''), T(v[1]), key, function () {
             if (o[0] === 'size') {
-              if (v[0] === cfg.size) return;
-              if (v[0] !== 'SMALL' && !A.hasCloud()) { aimaMsg = T('aima.needcloud'); renderSettings(key); return; }
-              if (aimaConfirm !== key) { aimaConfirm = key; aimaMsg = T('aima.confirm.size'); renderSettings(key); return; }
+              if (v[0] === b.cfg.size) return;
+              if (v[0] !== 'SMALL' && !A.hasCloud()) { aimaMsg = T('aima.needcloud'); again(key); return; }
+              if (aimaConfirm !== key) { aimaConfirm = key; aimaMsg = T('aima.confirm.size'); again(key); return; }
               aimaConfirm = '';
               A.setSize(v[0]);
               aimaMsg = T('aima.done.size');
             } else {
               A.setCfg(o[0], v[0]);
             }
-            renderSettings(key);
-          });
-          opts.appendChild(bt);
+            again(key);
+          }));
         });
         r.appendChild(opts);
-        list.appendChild(r);
+        grid.appendChild(r);
       });
     }
-
-    // account and model actions
+    // the account (the imad profile): Google sign-in, kept in this profile's My PC save for all its devices
     var act = el('div', 'row aima-actions');
+    var acc = A.account();
+    list.appendChild(el('div', 'set-hint', T('aima.k.cloud') + ': ' + A.cloud + (acc ? '  -  ' + acc : '')));
     if (A.isImad() && A.hasCloud()) {
-      if (A.account()) {
-        act.appendChild(btn('', T('aima.signout'), 'ai:signout', function () { A.signOut(); aimaMsg = ''; renderSettings('ai:signout'); }));
+      if (acc) {
+        act.appendChild(btn('', T('aima.signout'), 'ai:signout', function () { A.signOut(); aimaMsg = ''; again('ai:signout'); }));
       } else {
         act.appendChild(btn('primary', T('aima.signin'), 'ai:signin', function () {
           aimaMsg = T('aima.signing');
-          renderSettings('ai:signin');
-          A.signIn().then(function (who) { aimaMsg = T('aima.signed') + ' ' + who; renderSettings('ai:signin'); },
-            function (e) { aimaMsg = T('aima.signfail') + ' ' + (e && e.message ? e.message : e); renderSettings('ai:signin'); });
+          again('ai:signin');
+          A.signIn().then(function (who) { aimaMsg = T('aima.signed') + ' ' + who; again('ai:signin'); },
+            function (e) { aimaMsg = T('aima.signfail') + ' ' + (e && e.message ? e.message : e); again('ai:signin'); });
         }));
-        // fallback: the code shown by aima-login.html (opened in a browser), pasted here
         var inp = document.createElement('input');
         inp.className = 'aima-code';
         inp.placeholder = T('aima.code');
@@ -1265,28 +1296,230 @@
         act.appendChild(inp);
         act.appendChild(btn('', T('aima.usecode'), 'ai:code', function () {
           if (!inp.value.trim()) return;
-          A.signInCode(inp.value.trim()).then(function (who) { aimaMsg = T('aima.signed') + ' ' + who; renderSettings('ai:code'); },
-            function (e) { aimaMsg = T('aima.signfail') + ' ' + (e && e.message ? e.message : e); renderSettings('ai:code'); });
+          A.signInCode(inp.value.trim()).then(function (who) { aimaMsg = T('aima.signed') + ' ' + who; again('ai:code'); },
+            function (e) { aimaMsg = T('aima.signfail') + ' ' + (e && e.message ? e.message : e); again('ai:code'); });
         }));
       }
     }
     if (trainer) {
-      act.appendChild(btn('', T('aima.save'), 'ai:save', function () { A.save(); aimaMsg = T('aima.saved'); renderSettings('ai:save'); }));
+      act.appendChild(btn('', T('aima.save'), 'ai:save', function () { A.save(); aimaMsg = T('aima.saved'); again('ai:save'); }));
       act.appendChild(btn('danger', T('aima.reset'), 'ai:reset', function () {
-        if (aimaConfirm !== 'reset') { aimaConfirm = 'reset'; aimaMsg = T('aima.confirm.reset'); renderSettings('ai:reset'); return; }
+        if (aimaConfirm !== 'reset') { aimaConfirm = 'reset'; aimaMsg = T('aima.confirm.reset'); again('ai:reset'); return; }
         aimaConfirm = '';
         A.reset();
         aimaMsg = T('aima.done.reset');
-        renderSettings('ai:reset');
+        again('ai:reset');
       }));
     }
     list.appendChild(act);
-    if (aimaMsg) list.appendChild(el('div', 'map-msg', aimaMsg));
     list.appendChild(el('div', 'set-hint aima-note', T(trainer ? 'aima.note.trainer' : (A.isImad() ? 'aima.note.signin' : 'aima.note.viewer'))));
+  }
+
+  function subBrains(list) {
+    var A = NS.Aima, trainer = A.isTrainer();
+    var brains = A.brains();
+    if (!brainSel || !brains.some(function (e) { return e.id === brainSel; })) brainSel = A.activeId();
+    // the list
+    var c = card(T('aima.c.brains'));
+    var stack = el('div', 'stack');
+    brains.forEach(function (e) {
+      var isAct = e.id === A.activeId();
+      var b = btn('map-row aima-brain' + (e.id === brainSel ? ' sel' : ''), '', 'br:' + e.id, function () {
+        brainSel = e.id;
+        A.getBrain(e.id).then(function () { again('br:' + e.id); }, function () { again('br:' + e.id); });
+        again('br:' + e.id);
+      });
+      b.appendChild(el('span', 'map-name', (isAct ? '★ ' : '') + e.name));
+      b.appendChild(el('span', 'map-val', e.size + '  ·  ' + (e.matches || 0) + ' ' + T('aima.tr.matches') + '  ·  ' + when(e.updated)));
+      stack.appendChild(b);
+    });
+    c.appendChild(stack);
+    list.appendChild(c);
+
+    // the selected brain: info, history, actions
+    var sb = A.loadedBrain(brainSel);
+    var cols = el('div', 'aima-cols two');
+    if (sb) {
+      cols.appendChild(modelCard(sb));
+      var hc = card(T('aima.c.history'));
+      var ul = el('ul', 'aima-hist');
+      var h = sb.hist.slice(-25).reverse();
+      if (!h.length) ul.appendChild(el('li', null, '-'));
+      h.forEach(function (x) {
+        var li = el('li');
+        li.appendChild(el('span', 'aima-k', new Date(x.t).toLocaleDateString() + ' ' + new Date(x.t).toLocaleTimeString().slice(0, 5) + '  '));
+        li.appendChild(document.createTextNode(histText(x)));
+        ul.appendChild(li);
+      });
+      hc.appendChild(ul);
+      cols.appendChild(hc);
+    } else {
+      cols.appendChild(el('div', 'set-hint', T('aima.loading')));
+    }
+    list.appendChild(cols);
+
+    if (!trainer) return;
+    var act = el('div', 'row aima-actions');
+    var name = document.createElement('input');
+    name.className = 'aima-code';
+    name.placeholder = T('aima.newname');
+    name.maxLength = 24;
+    act.appendChild(name);
+    function nm() { return name.value.trim().slice(0, 24); }
+    if (brainSel !== A.activeId()) {
+      act.appendChild(btn('primary', T('aima.use'), 'ai:use', function () {
+        A.use(brainSel).then(function (b) { aimaMsg = T('aima.used') + ' ' + b.name; again('ai:use'); });
+      }));
+    }
+    act.appendChild(btn('', T('aima.clone'), 'ai:clone', function () {
+      var src = A.loadedBrain(brainSel);
+      A.clone(brainSel, nm() || (src ? src.name + ' 2' : 'checkoAI 2')).then(function (b) {
+        brainSel = b.id; aimaMsg = T('aima.cloned') + ' ' + b.name; again('ai:clone');
+      });
+    }));
+    act.appendChild(btn('', T('aima.rename'), 'ai:rename', function () {
+      if (!nm()) { aimaMsg = T('aima.needname'); again('ai:rename'); return; }
+      A.rename(brainSel, nm()).then(function () { aimaMsg = T('aima.renamed'); again('ai:rename'); });
+    }));
+    act.appendChild(btn('', T('aima.newbrain'), 'ai:new', function () {
+      var b = A.create(nm() || 'checkoAI ' + (A.brains().length + 1));
+      brainSel = b.id; aimaMsg = T('aima.created') + ' ' + b.name; again('ai:new');
+    }));
+    if (brainSel !== A.activeId() && brains.length > 1) {
+      act.appendChild(btn('danger', T('aima.delete'), 'ai:del', function () {
+        if (aimaConfirm !== 'del:' + brainSel) { aimaConfirm = 'del:' + brainSel; aimaMsg = T('aima.confirm.del'); again('ai:del'); return; }
+        aimaConfirm = '';
+        A.remove(brainSel);
+        brainSel = A.activeId();
+        aimaMsg = T('aima.deleted');
+        again('ai:del');
+      }));
+    }
+    list.appendChild(act);
+  }
+
+  function trName(id) {
+    var bs = NS.Aima.brains();
+    for (var i = 0; i < bs.length; i++) if (bs[i].id === id) return bs[i].name;
+    return '?';
+  }
+
+  function subTrain(list) {
+    var A = NS.Aima;
+    if (!A.isTrainer()) { list.appendChild(el('div', 'set-hint', T('aima.note.signin'))); return; }
+    var busy = A.training();
+    var brains = A.brains();
+    if (!trSel.brain || !brains.some(function (e) { return e.id === trSel.brain; })) trSel.brain = A.activeId();
+    // the opponents: the CPU levels, then every brain
+    var opps = ['EASY', 'NORMAL', 'HARD', 'LEGEND'];
+    brains.forEach(function (e) { opps.push('B:' + e.id); });
+    if (opps.indexOf(trSel.opp) < 0) trSel.opp = 'NORMAL';
+    var opts = el('div', 'dbg-opts');
+    function cyc(key, label, value, next) {
+      var b = btn('opt dbg-opt', label + ': ' + value, 'tr:' + key, function () {
+        if (A.training()) return;
+        next();
+        again('tr:' + key);
+      });
+      if (busy) b.disabled = true;
+      opts.appendChild(b);
+    }
+    cyc('brain', T('aima.tr.brain'), trName(trSel.brain), function () {
+      var i = 0;
+      for (; i < brains.length; i++) if (brains[i].id === trSel.brain) break;
+      trSel.brain = brains[(i + 1) % brains.length].id;
+    });
+    cyc('opp', T('aima.tr.opp'), trSel.opp.indexOf('B:') === 0 ? 'checkoAI ' + trName(trSel.opp.slice(2)) : T('opt.' + trSel.opp.toLowerCase()), function () {
+      trSel.opp = opps[(opps.indexOf(trSel.opp) + 1) % opps.length];
+    });
+    TR_OPTS.forEach(function (o) {
+      cyc(o[0], T('dbg.' + o[0]), String(o[1][trSel[o[0]]]), function () { trSel[o[0]] = (trSel[o[0]] + 1) % o[1].length; });
+    });
+    list.appendChild(opts);
+    refs.trStatus = el('div', 'set-hint', trStatus || T('aima.tr.hint'));
+    list.appendChild(refs.trStatus);
+    var act = el('div', 'row aima-actions');
+    act.appendChild(btn(busy ? 'danger' : 'primary', T(busy ? 'dbg.stop' : 'aima.tr.run'), 'tr:run', function () {
+      if (A.training()) { A.stopTraining(); return; }
+      trOut = null;
+      trStatus = T('aima.tr.starting');
+      var ok = A.train({ brain: trSel.brain, opp: trSel.opp, matches: TR_OPTS[0][1][trSel.matches], teamSize: TR_OPTS[1][1][trSel.size],
+        stadium: TR_OPTS[2][1][trSel.stadium], duration: TR_OPTS[3][1][trSel.length] }, function (done, total, mins) {
+        trStatus = T('dbg.running').replace('%d', done + 1).replace('%t', total) + '  ' + Math.floor(mins) + "'";
+        if (refs.trStatus) refs.trStatus.textContent = trStatus;
+      }, function (res) {
+        trOut = res;
+        trStatus = T('aima.tr.done');
+        if (current === 'SETTINGS' && settingsGroup === 'aima' && aimaSub === 'train') again('tr:run');
+      });
+      if (!ok) trStatus = T('aima.tr.busy');
+      again('tr:run');
+    }));
+    if (trOut) {
+      act.appendChild(btn('opt' + (trView === 'summary' ? ' sel' : ''), T('aima.tr.summary'), 'tr:sum', function () { trView = 'summary'; again('tr:sum'); }));
+      act.appendChild(btn('opt' + (trView === 'full' ? ' sel' : ''), T('aima.tr.full'), 'tr:full', function () { trView = 'full'; again('tr:full'); }));
+      act.appendChild(btn('', T('dbg.copy'), 'tr:copy', function () {
+        var ta = refs.trText;
+        if (!ta) return;
+        ta.focus(); ta.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).catch(function () {});
+        trStatus = T('dbg.copied');
+        if (refs.trStatus) refs.trStatus.textContent = trStatus;
+      }));
+    }
+    list.appendChild(act);
+    if (trOut) {
+      var ta = document.createElement('textarea');
+      ta.className = 'dbg-text aima-out';
+      ta.readOnly = true;
+      ta.setAttribute('spellcheck', 'false');
+      ta.value = trView === 'full' ? trOut.full : trOut.summary;
+      list.appendChild(ta);
+      refs.trText = ta;
+    }
+  }
+
+  function renderAima() {
+    var A = NS.Aima;
+    var list = refs.setList;
+    var trainer = A.isTrainer();
+    var b = A.brain();
+    // head: the rooster, his name, the active brain
+    var head = el('div', 'aima-head');
+    var ico = el('span', 'aima-rooster');
+    ico.innerHTML = NS.HUD.ROOSTER;
+    head.appendChild(ico);
+    var ht = el('div');
+    ht.appendChild(el('div', 'aima-name', 'checkoAI  ·  ' + b.name));
+    ht.appendChild(el('div', 'set-hint', T(trainer ? 'aima.role.trainer' : 'aima.role.viewer')));
+    head.appendChild(ht);
+    list.appendChild(head);
+    // sub-tabs (only Stats for everyone but the trainer)
+    var subs = trainer ? AIMA_SUBS : ['stats', 'settings'];
+    if (subs.indexOf(aimaSub) < 0) aimaSub = 'stats';
+    var tabs = el('div', 'tabs aima-subs');
+    subs.forEach(function (s) {
+      var t = btn('tab' + (s === aimaSub ? ' sel' : ''), T('aima.sub.' + s), 'as:' + s, function () {
+        if (A.training()) return;
+        aimaSub = s; aimaMsg = ''; aimaConfirm = '';
+        again('as:' + s);
+        list.scrollTop = 0; // a new sub-tab starts at the top
+        if (list.parentNode) list.parentNode.scrollTop = 0;
+      });
+      tabs.appendChild(t);
+    });
+    list.appendChild(tabs);
+    if (aimaSub === 'stats') subStats(list);
+    else if (aimaSub === 'settings') subSettings(list);
+    else if (aimaSub === 'brains') subBrains(list);
+    else subTrain(list);
+    if (aimaMsg) list.appendChild(el('div', 'map-msg', aimaMsg));
   }
 
   function renderSettings(keepKey) {
     clear(refs.setList);
+    refs.setList.classList.toggle('aima-mode', settingsGroup === 'aima'); // one column, its own layout
     if (settingsGroup === 'aima') renderAima();
     else NS.SETTING_DEFS.forEach(function (def) {
       if (def.group !== settingsGroup) return;
