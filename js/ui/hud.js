@@ -138,7 +138,11 @@
 
     // AI.MA's status box (per frame: DOM writes only when something changed) and the trainer's clap gauge
     aima: function (on) {
-      if (last.aon !== on) { last.aon = on; el['aima-box'].classList.toggle('hidden', !on); }
+      if (last.aon !== on) {
+        last.aon = on;
+        el['aima-box'].classList.toggle('hidden', !on);
+        el.hud.classList.toggle('aima-on', on); // the FPS pill moves below the box
+      }
       if (!on || !NS.Aima) return;
       var t = NS.Aima.thought();
       if (last.ath !== t) {

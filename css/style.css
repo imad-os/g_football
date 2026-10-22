@@ -425,15 +425,15 @@ h1, h2, p { margin: 0; }
 .dbg-text { flex: 1; min-height: 0; width: 100%; box-sizing: border-box; resize: none; background: rgba(2, 6, 15, 0.85); color: #e2e8f0;
   border: 1px solid var(--line); border-radius: 0.6rem; padding: 0.5rem; font: 0.7rem/1.35 monospace; white-space: pre; overflow: auto; }
 
-/* AI.MA: status box under the scoreboard (top-left, small, translucent), clap gauge, clap */
-#aima-box { position: absolute; top: calc(2.2% + 3.4rem); left: 2.5%; display: flex; align-items: center; gap: 0.45rem;
+/* checkoAI: status box in the top-right corner (10px from the edges, small, translucent), clap gauge, clap */
+#aima-box { position: absolute; top: 10px; right: 10px; z-index: 2; display: flex; align-items: center; gap: 0.45rem;
   max-width: 30%; padding: 0.25rem 0.7rem; font-size: 0.85rem; font-weight: 700; color: #ede9fe; opacity: 0.9;
   border-color: rgba(192, 132, 252, 0.7); white-space: nowrap; overflow: hidden; }
 #aima-ico { font-size: 1.05rem; }
 #aima-txt { overflow: hidden; text-overflow: ellipsis; }
 #aima-gauge { position: relative; width: 4.2rem; height: 0.45rem; border-radius: 0.3rem; background: rgba(255, 255, 255, 0.15); visibility: hidden; overflow: hidden; }
 #aima-gauge b { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: linear-gradient(90deg, #a855f7, #f0abfc); }
-#clap-fx { position: absolute; top: calc(2.2% + 5.6rem); left: 3%; width: 6rem; pointer-events: none; transform-origin: 0 0; }
+#clap-fx { position: absolute; top: calc(10px + 2.6rem); right: 14px; width: 6rem; pointer-events: none; transform-origin: 100% 0; }
 #clap-fx svg { width: 100%; display: block; fill: #fcd34d; stroke: #92400e; stroke-width: 1.5; }
 #clap-fx .spark { stroke: #fde68a; stroke-width: 3; stroke-linecap: round; fill: none; opacity: 0; }
 #clap-fx b { display: block; text-align: center; font-size: 0.85rem; color: #f5d0fe; font-weight: 800; }
@@ -494,3 +494,4 @@ h1, h2, p { margin: 0; }
 
 .aima-chips { align-items: center; }
 .aima-chips .set-hint { margin-right: 0.3rem; }
+#hud.aima-on #hud-telemetry { margin-top: 2.9rem; }

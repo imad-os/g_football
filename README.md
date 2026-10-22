@@ -115,7 +115,7 @@ with its goals and cards. The game reports its events through `NS.dbg` (js/game/
 
 A learning player named after the owner's white rooster (js/game/aima.js). On a CPU team at level checkoAI it controls the
 selected player only (violet arrow), through a virtual controller with the same stick, sprint, buttons and hold times
-as a human; the other ten are the Legend CPU. A small box under the scoreboard shows what it is thinking.
+as a human; the other ten are the Legend CPU. A small box in the top-right corner shows what it is thinking.
 
 - **Brains**: several networks, each with its own settings, stats and history (Settings > checkoAI > Brains: use, clone,
   rename, new, delete). The active brain (★) plays the matches and is the one every other profile gets. Sizes SMALL
