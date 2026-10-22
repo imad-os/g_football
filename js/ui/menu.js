@@ -1156,7 +1156,7 @@
     return out + '  ' + a[a.length - 1];
   }
   function when(t) { return t ? new Date(t).toLocaleString() : '-'; }
-  function card(title) {
+  function aimaCard(title) {
     var c = el('div', 'panel-card');
     c.appendChild(el('div', 'tag amber', title));
     return c;
@@ -1183,7 +1183,7 @@
   function statsCards(list, b) {
     var A = NS.Aima, s = b.st;
     var cols = el('div', 'aima-cols');
-    var c1 = card(T('aima.c.stats'));
+    var c1 = aimaCard(T('aima.c.stats'));
     var g = el('div', 'aima-grid');
     kv(g, T('aima.k.matches'), s.matches + '  (' + s.w + '-' + s.d + '-' + s.l + ')' + (s.trainMatches ? '  ' + T('aima.k.trained') + ' ' + s.trainMatches : ''));
     kv(g, T('aima.k.minutes'), String(Math.round(s.mins)));
@@ -1199,7 +1199,7 @@
     c1.appendChild(g);
     cols.appendChild(c1);
 
-    var c3 = card(T('aima.c.style'));
+    var c3 = aimaCard(T('aima.c.style'));
     var sy = A.style(b);
     var bars = [['aima.y.pass', sy.pass], ['aima.y.shoot', sy.shoot], ['aima.y.fwd', sy.fwd], ['aima.y.sprint', sy.sprint], ['aima.y.carry', sy.carry],
       ['aima.y.pos', (sy.pos + 1) / 2]];
@@ -1219,7 +1219,7 @@
 
   function modelCard(b) {
     var A = NS.Aima, s = b.st;
-    var c2 = card(T('aima.c.model'));
+    var c2 = aimaCard(T('aima.c.model'));
     var g = el('div', 'aima-grid');
     kv(g, T('aima.k.name'), b.name);
     kv(g, T('aima.k.alg'), A.ALG);
@@ -1320,7 +1320,7 @@
     var brains = A.brains();
     if (!brainSel || !brains.some(function (e) { return e.id === brainSel; })) brainSel = A.activeId();
     // the list
-    var c = card(T('aima.c.brains'));
+    var c = aimaCard(T('aima.c.brains'));
     var stack = el('div', 'stack');
     brains.forEach(function (e) {
       var isAct = e.id === A.activeId();
@@ -1341,7 +1341,7 @@
     var cols = el('div', 'aima-cols two');
     if (sb) {
       cols.appendChild(modelCard(sb));
-      var hc = card(T('aima.c.history'));
+      var hc = aimaCard(T('aima.c.history'));
       var ul = el('ul', 'aima-hist');
       var h = sb.hist.slice(-25).reverse();
       if (!h.length) ul.appendChild(el('li', null, '-'));
