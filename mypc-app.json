@@ -19,6 +19,5 @@
     "gaugeTime": 0.5,
     "teamSize": 11,
     "stadium": "CLASSIC"
-  },
-  "touch": false
+  }
 }
