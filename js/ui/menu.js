@@ -9,7 +9,7 @@
 
   var root;
   var screens = {};
-  var order = ['MAIN', 'SIDES', 'TEAMS', 'GAMEPLAN', 'COMPPICK', 'COMPHUB', 'PAUSE', 'SETTINGS', 'HELP', 'BUTTONS'];
+  var order = ['MAIN', 'SIDES', 'TEAMS', 'GAMEPLAN', 'COMPPICK', 'COMPHUB', 'PAUSE', 'SETTINGS', 'HELP', 'BUTTONS', 'DEBUG'];
   var current = 'MAIN';
   var open = true;
   var focused = null;
@@ -165,6 +165,7 @@
     if (key === 'SETTINGS') renderSettings();
     if (key === 'HELP') renderHelp();
     if (key === 'BUTTONS') renderButtons();
+    if (key === 'DEBUG') renderDebug();
     if (key === 'PAUSE') updatePauseSummary();
     NS.UI.refreshStats();
     NS.Input.clearEdges();
@@ -190,6 +191,7 @@
 
   function back() {
     if (current === 'BUTTONS') { show('SETTINGS'); return; }
+    if (current === 'DEBUG') { if (!NS.Debug.running()) show('SETTINGS'); return; }
     var running = matchRunning();
     if (running) {
       if (current === 'PAUSE') resumeMatch();
@@ -1004,10 +1006,108 @@
       syncSettings();
     }));
     foot.appendChild(btn('', T('set.buttons'), 'mapbtn', function () { show('BUTTONS'); }));
+    refs.debugBtn = btn('', T('dbg.open'), 'dbgbtn', function () { show('DEBUG'); });
+    foot.appendChild(refs.debugBtn);
     foot.appendChild(btn('primary', T('set.done'), 'done', function () {
       if (matchRunning()) show('PAUSE'); else show('MAIN');
     }));
     wrap.appendChild(foot);
+  }
+
+  /* ------------------------------ DEBUG MATCHES ------------------------------ */
+
+  // CPU v CPU matches at full speed with every move counted (js/game/debug.js); the report goes into a text box to copy.
+  var DBG_OPTS = [
+    ['matches', [5, 10, 20, 50, 100]],
+    ['home', ['EASY', 'NORMAL', 'HARD', 'LEGEND']],
+    ['away', ['EASY', 'NORMAL', 'HARD', 'LEGEND']],
+    ['teams', ['SELECTED', 'RANDOM']],
+    ['size', [11, 7]],
+    ['stadium', ['COMPACT', 'CLASSIC', 'GRAND', 'MEGA']],
+    ['length', [3, 5, 10]]
+  ];
+  var dbgSel = { matches: 1, home: 1, away: 1, teams: 0, size: 0, stadium: 1, length: 0 };
+  var dbgReport = '';
+
+  function buildDebug() {
+    var wrap = screens.DEBUG;
+    refs.dbgOpts = el('div', 'dbg-opts');
+    wrap.appendChild(refs.dbgOpts);
+    refs.dbgStatus = el('div', 'muted dbg-status');
+    wrap.appendChild(refs.dbgStatus);
+    refs.dbgText = document.createElement('textarea');
+    refs.dbgText.className = 'dbg-text';
+    refs.dbgText.readOnly = true;
+    refs.dbgText.setAttribute('spellcheck', 'false');
+    wrap.appendChild(refs.dbgText);
+    var foot = el('div', 'foot');
+    refs.dbgBack = btn('', T('nav.back'), 'back', back);
+    foot.appendChild(refs.dbgBack);
+    var right = el('div', 'row');
+    refs.dbgCopy = btn('', T('dbg.copy'), 'dbgcopy', copyDebug);
+    refs.dbgRun = btn('primary', T('dbg.run'), 'dbgrun', function () {
+      if (NS.Debug.running()) { NS.Debug.stop(); return; }
+      startDebug();
+    });
+    refs.dbgRun.setAttribute('data-default', '1');
+    right.appendChild(refs.dbgCopy);
+    right.appendChild(refs.dbgRun);
+    foot.appendChild(right);
+    wrap.appendChild(foot);
+  }
+
+  function dbgVal(k) {
+    for (var i = 0; i < DBG_OPTS.length; i++) if (DBG_OPTS[i][0] === k) return DBG_OPTS[i][1][dbgSel[k]];
+    return null;
+  }
+
+  function renderDebug(keepKey) {
+    clear(refs.dbgOpts);
+    var busy = NS.Debug.running();
+    DBG_OPTS.forEach(function (o) {
+      var b = btn('opt dbg-opt', T('dbg.' + o[0]) + ': ' + o[1][dbgSel[o[0]]], 'dbg:' + o[0], function () {
+        if (NS.Debug.running()) return;
+        dbgSel[o[0]] = (dbgSel[o[0]] + 1) % o[1].length;
+        renderDebug('dbg:' + o[0]);
+      });
+      if (busy) b.disabled = true;
+      refs.dbgOpts.appendChild(b);
+    });
+    refs.dbgRun.textContent = busy ? T('dbg.stop') : T('dbg.run');
+    refs.dbgRun.classList.toggle('danger', busy);
+    refs.dbgBack.disabled = busy;
+    refs.dbgText.value = dbgReport;
+    if (!busy && !dbgReport) refs.dbgStatus.textContent = T('dbg.hint');
+    if (keepKey) { focused = null; if (!focusByKey(keepKey)) focusDefault(); }
+  }
+
+  function startDebug() {
+    dbgReport = '';
+    var cfg = {
+      matches: dbgVal('matches'), levels: [dbgVal('home'), dbgVal('away')], teams: dbgVal('teams'),
+      teamSize: dbgVal('size'), stadium: dbgVal('stadium'), duration: dbgVal('length')
+    };
+    NS.Debug.start(cfg, function (done, total, mins) {
+      refs.dbgStatus.textContent = T('dbg.running').replace('%d', done + 1).replace('%t', total) + '  ' + Math.floor(mins) + "'";
+    }, function (text) {
+      dbgReport = text;
+      refs.dbgStatus.textContent = T('dbg.done');
+      if (current === 'DEBUG') renderDebug('dbgcopy');
+    });
+    renderDebug('dbgrun');
+  }
+
+  function copyDebug() {
+    var ta = refs.dbgText;
+    if (!ta.value) return;
+    ta.focus();
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(ta.value).then(function () { refs.dbgStatus.textContent = T('dbg.copied'); }, function () {});
+    }
+    if (ok) refs.dbgStatus.textContent = T('dbg.copied');
   }
 
   function renderSettings(keepKey) {
@@ -1231,6 +1331,7 @@
       buildSettings();
       buildHelp();
       buildButtons();
+      buildDebug();
       NS.Match.syncRosters();
       updateSideSlots();
       lastFocusKey.TEAMS = 'h:' + World.session.homeTeamId;

@@ -524,6 +524,7 @@
       }
     }
 
+    if (NS.dbg) NS.dbg('cpu_decision', p.team, bType);
     if (bType === -2 && Math.abs(-a * HALF_W - px) < 8 && Math.abs(pz) > 8 && pressure < 1.6 && Math.random() < 0.35) {
       // pinned on his own goal line: he hacks it behind for a corner rather than lose it there
       Actions.release(p, ACT.LONG);
@@ -681,6 +682,7 @@
     if (p.role === 'DEF') {
       if (!wide || mo < 0 || (p.homeZ > 0) !== (carrier.pos.z > 0) || behind > -2 || cx < -18 || cx > HALF_W * 0.6) return;
       if (r > 0.12 + mo * 0.2 + bias * 0.5) return;
+      if (NS.dbg) NS.dbg('run_overlap', p.team);
       p.runT = 2.6; p.runCd = 7 - mo * 2;
       p.runX = clamp(carrier.pos.x + a * 16, -HALF_W + 5, HALF_W - 5);
       p.runZ = (p.homeZ > 0 ? 1 : -1) * (HALF_H - 4);
@@ -689,6 +691,7 @@
 
     // late run into the box: midfielders, once the ball is in the last third
     if (p.role === 'MID' && cx > HALF_W * 0.3 && behind < 6 && r < 0.18 + bias) {
+      if (NS.dbg) NS.dbg('run_late_into_box', p.team);
       p.runT = 2.2; p.runCd = 5 - mo;
       var gx = a * HALF_W;
       p.runX = gx - a * (NS.PEN_D + (Math.random() - 0.5) * 5);
@@ -709,6 +712,7 @@
       var sc = Math.min(oppDist(tx, z, p.team), 10) - Math.abs(z) * 0.06 + (k === 0 ? 0.6 : 0) + Math.random();
       if (sc > bs) { bs = sc; bz = z; }
     }
+    if (NS.dbg) NS.dbg('run_in_behind', p.team);
     p.runT = 2.0;
     p.runCd = 3.6 - mo * 0.8;
     p.runX = tx;

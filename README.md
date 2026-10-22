@@ -20,7 +20,7 @@ The **+** button (Start) presses the main button of each menu screen: next, kick
 
 Matches are played with **game controllers and phone controllers only** (a phone in My PC's Buttons mode is a real gamepad).
 Player 1 is the first controller connected, player 2 the second. Movement: the left stick (analog, any direction) or the
-D-pad. The TV remote and the keyboard only drive the menus; there is no on-screen touch pad (`"touch": false`).
+D-pad. The TV remote and the keyboard only drive the menus. On a phone or tablet My PC draws its own virtual pad (stick + A B, X Y can be added).
 
 Every move has **its own button** (or a two-button combination). **One map is shared by every controller and phone
 controller**, since they all use the same standard button positions (shown with your controller's own names: Xbox, PlayStation,
@@ -98,6 +98,17 @@ catching it at full stretch or pushing it away when it is too hard; shots straig
 corners are hard. The keeper catches (hands) shots and balls played by the opponents inside his penalty area; a pass from a
 team-mate must be played with the feet. A keeper may hold the ball 5 seconds at most: after that it is kicked long anyway.
 Player 2: the second controller or phone controller connected.
+
+## Debug matches (Settings > Debug matches)
+
+CPU v CPU matches at full speed to find problems in the gameplay: choose the number of matches, each team's CPU level, the
+teams (the pair picked on the Teams screen, with their tactics, or random teams each match), players per side, stadium
+and length, then **Run** (Stop ends it early). The report goes into a text box with **Copy report**: results, key rates
+(possession, pass completion per type, shots on target, conversion, tackles, first touches, shoulder challenges), every
+counter per match for both teams (each kick type, every CPU decision, pass outcomes, shot outcomes by distance, keeper
+saves, headers, tackles, fouls and cards, restarts, off-the-ball runs, metres run...), the issues seen (ball stuck, a
+restart not taken, a player far off the pitch, header chains, ping-pong turnovers, code errors) and a log of every match
+with its goals and cards. The game reports its events through `NS.dbg` (js/game/debug.js), which is null otherwise.
 
 ## 11-a-side, the rules of the game
 
@@ -248,7 +259,7 @@ js/main.js            My PC lifecycle (init / ready / start / pause / resume / d
 * The guide asks for play with the TV remote alone; this game is deliberately controller-only in matches (owner's choice), the menus still work with the remote.
 * Saves: `MyPC.save/load` (`stats`, `settings`, `bindings`). Score: `MyPC.submitScore` at full time of a match with a human player.
 * Owner config (`MyPC.app_config`, defaults in `mypc-app.json` `config`): `difficulty`, `durationMins`, `gameSpeed`, `switchMode`, `cameraMode`, `ballSkin`, `crowdChants`, `gaugeTime`, `quality`, `soundEnabled`, `showRadar`, `showFPS`.
-* Touch: no on-screen pad (`"touch": false`): phones are used as phone controllers (Buttons mode).
+* Touch: My PC's own virtual pad on phones and tablets (no `"touch"` entry in the manifest); phones can also be phone controllers.
 * Fixed 60 Hz step, no allocation in the update loop, DOM written only when a value changes, one `AudioContext` closed in `onDestroy`.
 
 ## Release

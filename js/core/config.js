@@ -2,7 +2,7 @@
 (function (NS) {
   'use strict';
 
-  NS.VERSION = '1.15.1';
+  NS.VERSION = '1.15.4';
 
   // Pitch geometry (world units; x = length, z = width, y = up). The players and the goal are drawn ~1.5x real size,
   // so the markings around the goal are the real ones scaled to the goal (BOX_K), not to the pitch: the boxes look
@@ -42,6 +42,9 @@
   NS.GOAL_DEPTH = 2.6;
   NS.GOAL_HEIGHT = 3.6;
   NS.BALL_R = 0.432; // 10% smaller than the original 0.48
+
+  // Debug matches (js/game/debug.js): the event counter, null outside a debug run
+  NS.dbg = null;
 
   // Fixed simulation step (the loop runs a 60 Hz accumulator)
   NS.STEP = 1 / 60;

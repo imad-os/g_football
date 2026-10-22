@@ -664,6 +664,25 @@
     'tac.title': 'الخطة', 'tac.b0': 'الدفاع', 'tac.b1': 'الوسط', 'tac.b2': 'الهجوم',
     'tac.m0': 'دفاعي', 'tac.m1': 'متوازن', 'tac.m2': 'هجومي' });
 
+
+  // debug matches (a developer tool: the report itself is in English)
+  Object.assign(D.en, { 'step.debug': 'DEBUG MATCHES', 'dbg.open': 'Debug matches', 'dbg.run': 'Run', 'dbg.stop': 'Stop', 'dbg.copy': 'Copy report',
+    'dbg.matches': 'Matches', 'dbg.home': 'Home CPU', 'dbg.away': 'Away CPU', 'dbg.teams': 'Teams', 'dbg.size': 'Players', 'dbg.stadium': 'Stadium',
+    'dbg.length': 'Minutes', 'dbg.hint': 'CPU v CPU at full speed. Teams SELECTED = the Teams screen pair (with their tactics). Press Run, then Copy report.',
+    'dbg.running': 'Playing match %d of %t...', 'dbg.done': 'Done. Copy the report below.', 'dbg.copied': 'Report copied.' });
+  Object.assign(D.fr, { 'step.debug': 'MATCHS DE TEST', 'dbg.open': 'Matchs de test', 'dbg.run': 'Lancer', 'dbg.stop': 'Arreter', 'dbg.copy': 'Copier le rapport',
+    'dbg.matches': 'Matchs', 'dbg.home': 'CPU domicile', 'dbg.away': 'CPU exterieur', 'dbg.teams': 'Equipes', 'dbg.size': 'Joueurs', 'dbg.stadium': 'Stade',
+    'dbg.length': 'Minutes', 'dbg.hint': 'CPU contre CPU a pleine vitesse. Lancer, puis Copier le rapport.',
+    'dbg.running': 'Match %d sur %t...', 'dbg.done': 'Termine. Copiez le rapport.', 'dbg.copied': 'Rapport copie.' });
+  Object.assign(D.es, { 'step.debug': 'PARTIDOS DE PRUEBA', 'dbg.open': 'Partidos de prueba', 'dbg.run': 'Iniciar', 'dbg.stop': 'Parar', 'dbg.copy': 'Copiar informe',
+    'dbg.matches': 'Partidos', 'dbg.home': 'CPU local', 'dbg.away': 'CPU visitante', 'dbg.teams': 'Equipos', 'dbg.size': 'Jugadores', 'dbg.stadium': 'Estadio',
+    'dbg.length': 'Minutos', 'dbg.hint': 'CPU contra CPU a toda velocidad. Iniciar y luego Copiar informe.',
+    'dbg.running': 'Partido %d de %t...', 'dbg.done': 'Hecho. Copia el informe.', 'dbg.copied': 'Informe copiado.' });
+  Object.assign(D.ar, { 'step.debug': 'مباريات الاختبار', 'dbg.open': 'مباريات الاختبار', 'dbg.run': 'تشغيل', 'dbg.stop': 'إيقاف', 'dbg.copy': 'نسخ التقرير',
+    'dbg.matches': 'المباريات', 'dbg.home': 'مستوى المضيف', 'dbg.away': 'مستوى الضيف', 'dbg.teams': 'الفرق', 'dbg.size': 'اللاعبون', 'dbg.stadium': 'الملعب',
+    'dbg.length': 'الدقائق', 'dbg.hint': 'الكمبيوتر ضد الكمبيوتر بأقصى سرعة. اضغط تشغيل ثم نسخ التقرير.',
+    'dbg.running': 'المباراة %d من %t...', 'dbg.done': 'انتهى. انسخ التقرير.', 'dbg.copied': 'تم نسخ التقرير.' });
+
   var lang = 'en';
 
   NS.I18n = {

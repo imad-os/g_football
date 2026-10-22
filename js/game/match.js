@@ -314,6 +314,7 @@
     NS.HUD.setScore(m.score[0], m.score[1]);
     var who = k ? k.name : ball.lastToucher;
     var mins = Math.min(90, Math.floor(m.timeSeconds / 60) + 1);
+    if (NS.dbg) NS.dbg('goal', team, { own: own, who: who, mins: mins, k: k });
     NS.HUD.goalFx(NS.I18n.t('hud.goalword'), (own ? NS.I18n.t('hud.owngoal') + ' ' : '') + who + '  ' + mins + "'", team);
     if (team === 0 && World.slots[0].active) NS.Storage.addResult(0, 1, 0);
     ball.owner = null;
@@ -434,10 +435,12 @@
     var ball = World.ball;
     if (m.setPieceTimer > 0 || m.penalty || breakKind) return;
     var card = book(tackler);
+    if (NS.dbg) NS.dbg('foul_committed', tackler.team, card, tackler.name);
     m.sendOff = card === 3 ? tackler : null;
     var ownGoalX = tackler.team === 0 ? -HALF_W : HALF_W;
     var inBox = Math.abs(victim.pos.x - ownGoalX) < NS.BOX_D && Math.abs(victim.pos.z) < NS.BOX_HW;
     m.setPiece = inBox ? 2 : 1;
+    if (NS.dbg) NS.dbg(inBox ? 'penalty_won' : 'free_kick_won', victim.team);
     m.setTeam = victim.team;
     m.setX = clamp(victim.pos.x, -HALF_W + 2, HALF_W - 2);
     m.setZ = clamp(victim.pos.z, -HALF_H + 2, HALF_H - 2);
@@ -534,6 +537,7 @@
     }
     if (!(takerIn && (done || walkT > 1.2)) && walkT < 3.2) return;
     // everybody in place: the restart is on
+    if (NS.dbg && walkT >= 3.2) NS.dbg('restart_walkup_timeout', World.match.setTeam);
     walking = false;
     for (i = 0; i < players.length; i++) {
       p = players[i];
@@ -570,6 +574,7 @@
       m.setTeam = 1 - last;
       m.setX = clamp(ball.pos.x, -HALF_W + 1, HALF_W - 1);
       m.setPieceTimer = 0.6;
+      if (NS.dbg) NS.dbg('throw_in_won', m.setTeam);
       return;
     }
     var gs = ball.pos.x > 0 ? 1 : -1;
@@ -579,12 +584,14 @@
       m.setPiece = 4;
       m.setTeam = 1 - defending;
       m.setPieceTimer = 0.8;
+      if (NS.dbg) NS.dbg('corner_won', m.setTeam);
       NS.Audio.whistle(0);
       NS.HUD.banner(NS.I18n.t('hud.corner'), '', 1.0);
     } else {
       m.setPiece = 5;
       m.setTeam = defending;
       m.setPieceTimer = 0.6;
+      if (NS.dbg) NS.dbg('goal_kick_won', m.setTeam);
     }
   }
 
@@ -593,6 +600,7 @@
     var m = World.match;
     if (m.setPieceTimer > 0 || breakKind || m.penalty) return;
     stopPlay();
+    if (NS.dbg) NS.dbg('offside_caught', q.team);
     World.ball.vel.set(0, 0, 0);
     m.setPiece = 6;
     m.setTeam = 1 - q.team;
@@ -1093,12 +1101,14 @@
           m.restart = 0;
           m.protectT = 0;
         } else if (m.restartT > 10) {
+          if (NS.dbg) NS.dbg('restart_auto_played_10s', m.setTaker.team, m.restart);
           Actions.kick(m.setTaker, m.restart === 5 ? ACT.LONG : ACT.PASS, 0.5, m.setTaker.team === 0 ? 1 : -1, 0, 1);
         }
       }
       // the penalty has been struck: the keeper has to guess, then everybody plays on
       if (m.penalty && ball.owner !== m.setTaker && (ball.owner === null || ball.owner.team !== m.setTeam)) {
         m.penalty = false;
+        if (NS.dbg) NS.dbg('penalty_taken', m.setTeam);
         if (!ball.owner) penaltyGuess(m.setTeam);
       }
 
@@ -1267,6 +1277,7 @@
               if (ball.pen) chance *= 0.55;
               if (Math.random() < chance) {
                 if (speed < (p.diveT > 0 ? 30 : 25) - (ball.pos.y > 2.3 ? 4 : 0)) { // a diving keeper holds on to harder shots; high ones are tipped
+                  if (NS.dbg) NS.dbg('gk_catch', p.team);
                   takeBall(p);
                   p.gkHands = true; // caught: held in the hands
                   p.catchT = 0.4;
@@ -1278,7 +1289,9 @@
                   // parried: tipped round the post / over the bar (a corner) when it was heading for a corner of the
                   // goal, otherwise pushed back out in front of him
                   var wide = Math.abs(ball.pos.z) > 2.5 || ball.pos.y > 2.3;
+                  if (NS.dbg) NS.dbg(Math.abs(ball.pos.z) > 2.5 || ball.pos.y > 2.3 ? 'gk_parry_wide_shot' : 'gk_parry_central_shot', p.team);
                   if (Math.random() < (wide ? 0.7 : 0.35)) {
+                    if (NS.dbg) NS.dbg('gk_tip_behind', p.team);
                     var side = ball.pos.z > 0.2 ? 1 : (ball.pos.z < -0.2 ? -1 : (Math.random() < 0.5 ? -1 : 1));
                     ball.vel.x = (ball.vel.x > 0 ? 1 : -1) * (2.5 + Math.random() * 2); // slowly on, well wide of the post
                     ball.vel.z = side * (8 + Math.random() * 4);
@@ -1292,7 +1305,7 @@
                   ball.lastTouchTeam = p.team;
                   NS.Audio.kick(false);
                 }
-              }
+              } else if (NS.dbg) NS.dbg('gk_beaten_in_reach', p.team);
               break;
             }
           } else if (ball.pickupCooldown <= 0 && (ball.pos.y < 1.9 ? d2 < takerD : (ball.pos.y < 2.6 && d2 < Math.min(takerD, 0.6)))) {
@@ -1318,10 +1331,16 @@
             if (clear && byLine && Math.random() < 0.45) {
               // under pressure at his own goal line he can only get a touch on it: it goes behind (a corner)
               if (Actions.knockOff(p, false)) return;
+              if (NS.dbg) NS.dbg('header_put_behind', p.team);
               ball.vel.set(-att * (5 + Math.random() * 6), 3 + Math.random() * 3, (p.pos.z >= 0 ? 1 : -1) * (2 + Math.random() * 6));
               p.headT = 0.55;
-            } else if (clear) Actions.header(p, false, ACT.LONG, att, p.pos.z >= 0 ? 0.9 : -0.9);
-            else Actions.header(p, shotOn, ACT.PASS, att, 0);
+            } else if (clear) {
+              if (NS.dbg) NS.dbg('cpu_header_clearance', p.team);
+              Actions.header(p, false, ACT.LONG, att, p.pos.z >= 0 ? 0.9 : -0.9);
+            } else {
+              if (NS.dbg) NS.dbg(shotOn ? 'cpu_header_at_goal' : 'cpu_header_pass', p.team);
+              Actions.header(p, shotOn, ACT.PASS, att, 0);
+            }
             gkActed = true;
             taker = null;
             break;
@@ -1331,6 +1350,7 @@
           // a hard shot is not controlled by an outfield player: it hits him and deflects; anything else is a first
           // touch that can go wrong (Actions.controls)
           var hardHit = ball.hard && bs2 > 324;
+          if (hardHit && NS.dbg) NS.dbg('shot_hit_outfield_player', taker.team);
           if (hardHit || !Actions.controls(taker)) {
             if (Actions.knockOff(taker, hardHit)) return;
           } else {

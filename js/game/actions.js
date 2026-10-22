@@ -409,11 +409,12 @@
       c.vel.x = c.vel.x * 0.8 + nx * 2.6; c.vel.z = c.vel.z * 0.8 + nz * 2.6;
       p.vel.x *= 0.85; p.vel.z *= 0.85;
       NS.Audio.tackle();
-      if (Math.random() >= clamp(chance, 0.03, 0.6)) return false;
+      if (Math.random() >= clamp(chance, 0.03, 0.6)) { if (NS.dbg) NS.dbg('shoulder_failed', p.team); return false; }
       ball.receiver = null;
       ball.contester = null;
       if (Math.random() < 0.5) {
         // he takes it off him
+        if (NS.dbg) NS.dbg('shoulder_took_ball', p.team);
         ball.owner = p;
         ball.lastTouchTeam = p.team;
         ball.lastToucher = p.name;
@@ -421,6 +422,7 @@
         this.touch(p);
       } else {
         // knocked loose: it runs on ahead, whoever is first gets it
+        if (NS.dbg) NS.dbg('shoulder_knocked_loose', p.team);
         ball.owner = null;
         ball.vel.set(c.vel.x * 0.9 - nz * 1.5 * p.shoulderDir, 0, c.vel.z * 0.9 + nx * 1.5 * p.shoulderDir);
         ball.lastTouchTeam = p.team;
@@ -574,6 +576,7 @@
             p.tackleT = 0;
             p.stun = 1.0;
             carrier.fallT = 0.55;
+            if (NS.dbg) NS.dbg('foul_from_behind', p.team);
             this.onFoul(p, carrier);
             return;
           }
@@ -586,11 +589,13 @@
           if (!onBall) chance *= 0.45; // into the man, not the ball
           chance = clamp(chance, 0.03, 0.92);
           if (Math.random() < chance) {
+            if (NS.dbg) { NS.dbg(p.tackleSlide ? 'slide_won' : 'tackle_won', p.team); if (!onBall) NS.dbg('tackle_won_via_body', p.team); }
             ball.receiver = null;
             ball.contester = null;
             ball.lastTouchTeam = p.team;
             ball.lastToucher = p.name;
             if (Math.random() < (p.tackleSlide ? 0.8 : 0.45)) {
+              if (NS.dbg) NS.dbg('tackle_poked_loose', p.team);
               // poked away: the ball runs on where his foot sent it, anybody's ball (it may go out)
               var tl = Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z) || 1;
               var pk = 5 + Math.random() * 7;
@@ -614,6 +619,7 @@
             p.vel.set(0, 0, 0);
             NS.Audio.kick(false);
           } else {
+            if (NS.dbg) NS.dbg(p.tackleSlide ? 'slide_contact_lost' : 'tackle_contact_lost', p.team);
             p.stun = (p.tackleSlide ? 0.9 : 0.5) + (front < -0.35 ? 0.3 : 0);
             p.tackleT = 0;
           }
