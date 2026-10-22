@@ -29,7 +29,7 @@
   var OLD_F = 64;
   // brain sizes (hidden layers)
   var SIZES = { TINY: [32, 24], MEDIUM: [64, 48], LARGE: [256, 128], HUGE: [512, 256] }; // MEDIUM = the old SMALL (same layers)
-  var LOCAL_SIZES = { TINY: 1, MEDIUM: 1 };   // small enough for My PC's save too (the others: the cloud only)
+  var LOCAL_SIZES = {};   // no model data in My PC's profile save: every brain lives in the cloud
   var NST = 9, NSP = 2, NBT = 13, NPW = 3;
   var O_ST = 0, O_SP = 9, O_BT = 11, O_PW = 24, O_V = 27, NOUT = 28;
   // per-brain options (index into these): decision speed, foresight, copied moves kept, weight of the trainer's play
@@ -860,7 +860,8 @@
     var c = (MyPC.app_config && MyPC.app_config.aimaFirebase) || NS.AIMA_CLOUD;
     return c && c.apiKey && c.projectId ? c : null;
   }
-  function saveAuth() { try { MyPC.save('aimaAuth', auth); } catch (e) {} }
+  // only a Google sign-in is kept in the profile; a guest login stays in memory (it must never replace the saved sign-in)
+  function saveAuth() { if (auth && auth.anon) return; try { MyPC.save('aimaAuth', auth); } catch (e) {} }
   function post(url, body, form) {
     return fetch(url, { method: 'POST', headers: { 'Content-Type': form ? 'application/x-www-form-urlencoded' : 'application/json' }, body: body })
       .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error((j.error && j.error.message) || 'HTTP ' + r.status); return j; }); });
@@ -939,9 +940,7 @@
   function saveIndex() {
     if (!trainer) return;
     cloudPut('index', { v: 2, brains: index.brains, active: index.active, updated: Date.now() });
-    var local = { v: 2, index: index, active: null };
-    if (active && LOCAL_SIZES[active.cfg.size]) local.active = toDoc(active);
-    try { MyPC.save(SAVE_KEY, local); } catch (e) {}
+    saveSelected();
     lastSave = performance.now();
   }
 
@@ -970,13 +969,18 @@
     for (var t = 0; t < 2; t++) if (!teamBrains[t]) World.aiSlots[t].brain = b;
   }
 
+  // My PC's profile save keeps only which brain is selected (its id and name), never any model data
+  var picked = '';
+  function saveSelected() {
+    try { MyPC.save(SAVE_KEY, { v: 3, id: index.active || '', name: active ? active.name : '' }); } catch (e) {}
+    lastSave = performance.now();
+  }
   function load() {
     var obj = null;
     try { obj = MyPC.load(SAVE_KEY, null); } catch (e) { obj = null; }
-    if (trainer && obj && obj.v === 2 && obj.index && obj.index.brains) {
-      index = obj.index;
-      var b = fromDoc(obj.active);
-      if (b) { loaded[b.id] = b; setActive(b); return; }
+    if (obj) {
+      picked = obj.v === 3 ? String(obj.id || '') : (obj.index && obj.index.active ? String(obj.index.active) : '');
+      if (obj.v !== 3) { try { MyPC.save(SAVE_KEY, { v: 3, id: picked, name: '' }); } catch (e) {} } // removes the old model data
     }
     // a first brain (or, for everyone else, until the cloud answers)
     var nb = newBrain('checkoAI');
@@ -997,8 +1001,10 @@
         return null;
       }
       index = { brains: ix.brains, active: ix.active };
-      if (!loaded[ix.active] || (trainer && loaded[ix.active].saved < (findEntry(ix.active) || {}).updated)) delete loaded[ix.active];
-      return getBrain(ix.active).then(function (b) {
+      if (trainer && picked && findEntry(picked)) index.active = picked; // this profile's own selection
+      var want = index.active;
+      if (!loaded[want] || (trainer && loaded[want].saved < (findEntry(want) || {}).updated)) delete loaded[want];
+      return getBrain(want).then(function (b) {
         if (!trainer) b.frozen = true;
         setActive(b);
         Aima.cloud = 'ok';
@@ -1243,6 +1249,7 @@
       var pr = info && info.profile ? info.profile : null;
       profile = { id: pr && pr.id ? String(pr.id) : '', name: pr && pr.name ? String(pr.name) : '' };
       try { auth = MyPC.load('aimaAuth', null); } catch (e) { auth = null; }
+      if (auth && (auth.anon || !auth.refresh)) { auth = null; try { MyPC.save('aimaAuth', null); } catch (e) {} } // old guest login
       // the trainer: the profile named "imad", signed in with his Google account (when the cloud store is set up)
       trainer = isImad() && (!cloudCfg() || !!(auth && auth.refresh && !auth.anon));
       // testing in a plain browser (not My PC): ?aimatrainer=1 shows the trainer's screens (it cannot write the cloud)
