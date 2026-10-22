@@ -991,7 +991,7 @@
         for (var k = 0; k < lines.length; k++) if (lines[k].indexOf('#1 ') === 0) S.log.push('#' + S.done + ' ' + lines[k].slice(3));
       }
       if (S.stopReq) S.state = 'stopped';
-      else if (S.done >= S.cfg.matches) S.state = 'done';
+      else if (S.done >= S.cfg.matches) { S.state = 'done'; if (NS.Audio.chime) NS.Audio.chime(); }
       if (S.state !== 'running') { S.ended = Date.now(); for (var id in S.runs) { trainProgress(S.runs[id]); saveBrain(S.runs[id].b); } }
       setActive(active);
       notify(S);

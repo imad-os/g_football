@@ -277,6 +277,27 @@
       if (!enabled && ctx && crowdBus) ramp(crowdBus.gain, 0, 0.2);
     },
     setChants: function (v) { chantsOn = !!v; },
+    // a short three-note chime (a checkoAI training finished): plays even with the match sounds off or the app hidden
+    chime: function () {
+      try {
+        if (!ctx) {
+          var AC = window.AudioContext || window.webkitAudioContext;
+          if (!AC) return;
+          ctx = new AC(); build();
+        }
+        if (ctx.state === 'suspended') ctx.resume().catch(function () {});
+        var t0 = ctx.currentTime + 0.05;
+        [784, 988, 1319].forEach(function (f, i) {
+          var o = ctx.createOscillator(), g = ctx.createGain(), t = t0 + i * 0.14;
+          o.type = 'sine'; o.frequency.value = f;
+          g.gain.setValueAtTime(0, t);
+          g.gain.linearRampToValueAtTime(0.35, t + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.001, t + (i === 2 ? 0.9 : 0.35));
+          o.connect(g); g.connect(master);
+          o.start(t); o.stop(t + 1);
+        });
+      } catch (e) {}
+    },
     setVolume: function (v) {
       sfxVolume = v >= 0 && v <= 1 ? v : 0.8;
       if (master) master.gain.value = sfxVolume;
