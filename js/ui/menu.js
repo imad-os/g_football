@@ -1357,24 +1357,7 @@
 
   function subBrains(list) {
     var A = NS.Aima, trainer = A.isTrainer();
-    var brains = A.brains();
-    var brainSel = aimaSel;
-    // the list
-    var c = aimaCard(T('aima.c.brains'));
-    var stack = el('div', 'stack');
-    brains.forEach(function (e) {
-      var isAct = e.id === A.activeId();
-      var b = btn('map-row aima-brain' + (e.id === brainSel ? ' sel' : ''), '', 'br:' + e.id, function () {
-        selectBrain(e.id);
-        again('br:' + e.id);
-      });
-      b.appendChild(el('span', 'map-name', (isAct ? '★ ' : '') + e.name));
-      b.appendChild(el('span', 'map-val', e.size + '  ·  ' + (e.matches || 0) + ' ' + T('aima.tr.matches') + '  ·  ' + when(e.updated)));
-      stack.appendChild(b);
-    });
-    c.appendChild(stack);
-    list.appendChild(c);
-
+    var brainSel = aimaSel; // (picked with the brain picker at the top)
     // the selected brain: info, history, actions
     var sb = A.loadedBrain(brainSel);
     var cols = el('div', 'aima-cols two');
@@ -1428,7 +1411,7 @@
       var b = A.create(nm() || 'checkoAI ' + (A.brains().length + 1));
       selectBrain(b.id); aimaMsg = T('aima.created') + ' ' + b.name; again('ai:new');
     }));
-    if (brainSel !== A.activeId() && brains.length > 1) {
+    if (brainSel !== A.activeId() && A.brains().length > 1) {
       act.appendChild(btn('danger', T('aima.delete'), 'ai:del', function () {
         if (aimaConfirm !== 'del:' + brainSel) { aimaConfirm = 'del:' + brainSel; aimaMsg = T('aima.confirm.del'); again('ai:del'); return; }
         aimaConfirm = '';
