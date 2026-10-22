@@ -932,6 +932,7 @@
   //              runs: { id: run }, order, log: [match lines], stopReq, curDone }
   //   run (one brain in one session): { b, help0, h (its history line), rew, opps, acc (its stats, this session), snap }
   var sessions = [], sesSeq = 0, rr = 0;
+  var LOG_KEEP = 300, REW_KEEP = 400; // matches: 0 = continuous (until stopped), so a session's lists keep only the latest
   var training = null;  // the session whose match is being played right now
 
   function statDelta(a, b) {
@@ -989,9 +990,10 @@
         // its line of the match log ("#1 ..." of this one-match run)
         var lines = report.split('\n');
         for (var k = 0; k < lines.length; k++) if (lines[k].indexOf('#1 ') === 0) S.log.push('#' + S.done + ' ' + lines[k].slice(3));
+        if (S.log.length > LOG_KEEP) S.log.splice(0, S.log.length - LOG_KEEP); // (a continuous session keeps the latest)
       }
       if (S.stopReq) S.state = 'stopped';
-      else if (S.done >= S.cfg.matches) { S.state = 'done'; if (NS.Audio.chime) NS.Audio.chime(); }
+      else if (S.cfg.matches > 0 && S.done >= S.cfg.matches) { S.state = 'done'; if (NS.Audio.chime) NS.Audio.chime(); }
       if (S.state !== 'running') { S.ended = Date.now(); for (var id in S.runs) { trainProgress(S.runs[id]); saveBrain(S.runs[id].b); } }
       setActive(active);
       notify(S);
@@ -1028,7 +1030,7 @@
 
   function trainSummary(S) {
     var T = NS.I18n.t, c = S.cfg;
-    var L = ['checkoAI ' + T('aima.tr.title') + ' #' + S.id + ': ' + S.b.name + '  v  ' + S.oppLabel + '   (' + S.done + ' / ' + c.matches + ' ' +
+    var L = ['checkoAI ' + T('aima.tr.title') + ' #' + S.id + ': ' + S.b.name + '  v  ' + S.oppLabel + '   (' + S.done + ' / ' + (c.matches || '∞') + ' ' +
       T('aima.tr.matches') + ', ' + c.teamSize + ' ' + T('aima.tr.aside') + ', ' + c.stadium + ', ' + c.duration + ' min)  ' + T('aima.ss.' + S.state)];
     for (var i = 0; i < S.order.length; i++) {
       var run = S.runs[S.order[i]];
@@ -1209,7 +1211,7 @@
         if (my > th) b.st.w++; else if (my < th) b.st.l++; else b.st.d++;
         b.st.hist.push(Math.round(matchReward[t] * 100) / 100);
         if (b.st.hist.length > 40) b.st.hist.shift();
-        if (training) { b.st.trainMatches++; if (training.runs[b.id]) training.runs[b.id].rew.push(matchReward[t]); }
+        if (training) { b.st.trainMatches++; var rw = training.runs[b.id]; if (rw) { rw.rew.push(matchReward[t]); if (rw.rew.length > REW_KEEP) rw.rew.shift(); } }
         else b.log('match', { s: my + '-' + th, vs: World.slots[0].active || World.slots[1].active ? 'human' : 'cpu' });
       }
       matchOn = false;

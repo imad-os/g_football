@@ -1144,7 +1144,7 @@
   var aimaMsg = '';
   // training options (cycled like the debug screen)
   var TR_OPTS = [
-    ['matches', [5, 10, 20, 50, 100, 200]],
+    ['matches', [5, 10, 20, 30, 50, 100, 200, 500, 1000, 0]], // 0 = continuous
     ['size', [11, 7]],
     ['stadium', ['COMPACT', 'CLASSIC', 'GRAND', 'MEGA']],
     ['length', [3, 5, 10]]
@@ -1450,11 +1450,12 @@
   // live progress of a session card (no re-render; a new state redraws the tab)
   function sesProgress(S) {
     var played = S.done + (NS.Aima.playing() === S ? Math.min(1, S.mins / 90) : 0);
-    return Math.min(1, played / (S.cfg.matches || 1));
+    if (!S.cfg.matches) return played - S.done; // continuous: the match being played
+    return Math.min(1, played / S.cfg.matches);
   }
   function sesInfo(S) {
     var d = S.b && S.runs[S.b.id] ? S.runs[S.b.id].acc : {};
-    var txt = T('aima.ss.' + S.state) + '  \u00b7  ' + S.done + ' / ' + S.cfg.matches + ' ' + T('aima.tr.matches') +
+    var txt = T('aima.ss.' + S.state) + '  \u00b7  ' + S.done + ' / ' + (S.cfg.matches || '∞') + ' ' + T('aima.tr.matches') +
       '  \u00b7  ' + (d.w || 0) + '-' + (d.d || 0) + '-' + (d.l || 0) + '  (' + (d.gf || 0) + '-' + (d.ga || 0) + ')';
     if (NS.Aima.playing() === S) txt += '  \u00b7  ' + T('aima.ss.now') + ' ' + Math.floor(S.mins) + "'";
     if (S.error) txt += '  \u00b7  ' + S.error;
@@ -1495,7 +1496,8 @@
       trSel.opp = opps[(opps.indexOf(trSel.opp) + 1) % opps.length];
     });
     TR_OPTS.forEach(function (o) {
-      cyc(o[0], T('dbg.' + o[0]), String(o[1][trSel[o[0]]]), function () { trSel[o[0]] = (trSel[o[0]] + 1) % o[1].length; });
+      var v = o[1][trSel[o[0]]];
+      cyc(o[0], T('dbg.' + o[0]), o[0] === 'matches' && !v ? T('aima.tr.forever') : String(v), function () { trSel[o[0]] = (trSel[o[0]] + 1) % o[1].length; });
     });
     form.appendChild(opts);
     var row = el('div', 'row aima-actions');

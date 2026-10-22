@@ -2,7 +2,7 @@
 (function (NS) {
   'use strict';
 
-  NS.VERSION = '1.19.2';
+  NS.VERSION = '1.19.3';
 
   // Pitch geometry (world units; x = length, z = width, y = up). The players and the goal are drawn ~1.5x real size,
   // so the markings around the goal are the real ones scaled to the goal (BOX_K), not to the pitch: the boxes look
