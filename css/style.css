@@ -491,3 +491,6 @@ h1, h2, p { margin: 0; }
 .aima-tab { display: inline-flex; align-items: center; gap: 0.35rem; }
 .aima-tabico { display: inline-block; width: 1.35em; height: 1.35em; flex-shrink: 0; }
 .aima-tabico svg { width: 100%; height: 100%; display: block; }
+
+.aima-chips { align-items: center; }
+.aima-chips .set-hint { margin-right: 0.3rem; }

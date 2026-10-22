@@ -1449,9 +1449,28 @@
     if (!A.isTrainer()) { list.appendChild(el('div', 'set-hint', T('aima.note.signin'))); return; }
     var busy = A.training();
     var brains = A.brains();
-    trSel.brain = aimaSel || A.activeId();
-    // the opponents: the CPU levels, then every brain
+    // the brains to train (several at once): the one picked at the top of the tab, plus any ticked here
+    var ids = brains.map(function (e) { return e.id; });
+    trSel.brains = (trSel.brains || []).filter(function (id) { return ids.indexOf(id) >= 0; });
+    if (!trSel.brains.length) trSel.brains = [aimaSel || A.activeId()];
+    var chips = el('div', 'dbg-opts aima-chips');
+    chips.appendChild(el('span', 'set-hint', T('aima.tr.which')));
+    brains.forEach(function (e) {
+      var on = trSel.brains.indexOf(e.id) >= 0;
+      var c = btn('opt dbg-opt' + (on ? ' sel' : ''), (on ? '\u2611 ' : '\u2610 ') + e.name, 'tr:b:' + e.id, function () {
+        if (A.training()) return;
+        var k = trSel.brains.indexOf(e.id);
+        if (k >= 0) { if (trSel.brains.length > 1) trSel.brains.splice(k, 1); }
+        else trSel.brains.push(e.id);
+        again('tr:b:' + e.id);
+      });
+      if (busy) c.disabled = true;
+      chips.appendChild(c);
+    });
+    list.appendChild(chips);
+    // the opponents: the CPU levels, the ticked brains against each other, then every brain (it learns too)
     var opps = ['EASY', 'NORMAL', 'HARD', 'LEGEND'];
+    if (trSel.brains.length > 1) opps.push('EACH');
     brains.forEach(function (e) { opps.push('B:' + e.id); });
     if (opps.indexOf(trSel.opp) < 0) trSel.opp = 'NORMAL';
     var opts = el('div', 'dbg-opts');
@@ -1464,12 +1483,12 @@
       if (busy) b.disabled = true;
       opts.appendChild(b);
     }
-    // (the brain trained is the one picked at the top of the checkoAI tab)
-    cyc('opp', T('aima.tr.opp'), trSel.opp.indexOf('B:') === 0 ? 'checkoAI ' + trName(trSel.opp.slice(2)) : T('opt.' + trSel.opp.toLowerCase()), function () {
+    cyc('opp', T('aima.tr.opp'), trSel.opp === 'EACH' ? T('aima.tr.each') :
+      (trSel.opp.indexOf('B:') === 0 ? 'checkoAI ' + trName(trSel.opp.slice(2)) : T('opt.' + trSel.opp.toLowerCase())), function () {
       trSel.opp = opps[(opps.indexOf(trSel.opp) + 1) % opps.length];
     });
     TR_OPTS.forEach(function (o) {
-      cyc(o[0], T('dbg.' + o[0]), String(o[1][trSel[o[0]]]), function () { trSel[o[0]] = (trSel[o[0]] + 1) % o[1].length; });
+      cyc(o[0], T(o[0] === 'matches' ? 'aima.tr.perbrain' : 'dbg.' + o[0]), String(o[1][trSel[o[0]]]), function () { trSel[o[0]] = (trSel[o[0]] + 1) % o[1].length; });
     });
     list.appendChild(opts);
     refs.trStatus = el('div', 'set-hint', trStatus || T('aima.tr.hint'));
@@ -1490,7 +1509,7 @@
       trProg = 0;
       trLive = false;
       trStatus = T('aima.tr.starting');
-      var ok = A.train({ brain: trSel.brain, opp: trSel.opp, matches: TR_OPTS[0][1][trSel.matches], teamSize: TR_OPTS[1][1][trSel.size],
+      var ok = A.train({ brains: trSel.brains.slice(), opp: trSel.opp, matches: TR_OPTS[0][1][trSel.matches], teamSize: TR_OPTS[1][1][trSel.size],
         stadium: TR_OPTS[2][1][trSel.stadium], duration: TR_OPTS[3][1][trSel.length] }, function (done, total, mins) {
         trStatus = T('dbg.running').replace('%d', done + 1).replace('%t', total) + '  ' + Math.floor(mins) + "'  ·  " + T('aima.tr.saved');
         trProg = Math.min(1, (done + Math.min(1, mins / 90)) / total);

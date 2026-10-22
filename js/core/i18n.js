@@ -851,6 +851,13 @@
     'aima.w.measured': 'Medido', 'aima.w.expected': 'Previsto', 'aima.w.play': 'juego', 'aima.w.learn': 'aprendizaje', 'aima.w.memory': 'Memoria' });
   Object.assign(D.ar, { 'aima.w.title': '\u0627\u0644\u0639\u0645\u0644', 'aima.w.persec': 'ops / s' });
 
+  // checkoAI: several brains in one training
+  Object.assign(D.en, { 'aima.tr.which': 'Brains to train:', 'aima.tr.each': 'Each other', 'aima.tr.perbrain': 'Matches per brain',
+    'aima.tr.brains': 'brains',
+    'aima.tr.hint': 'Tick the brains to train: their matches take turns, so they all progress together. Opponent: the CPU at any level, the ticked brains against each other, or one brain. Every brain that plays learns and is saved after each of its matches.' });
+  Object.assign(D.fr, { 'aima.tr.which': 'Cerveaux a entrainer :', 'aima.tr.each': 'Entre eux', 'aima.tr.perbrain': 'Matchs par cerveau', 'aima.tr.brains': 'cerveaux' });
+  Object.assign(D.es, { 'aima.tr.which': 'Cerebros a entrenar:', 'aima.tr.each': 'Entre ellos', 'aima.tr.perbrain': 'Partidos por cerebro', 'aima.tr.brains': 'cerebros' });
+
   var lang = 'en';
 
   NS.I18n = {
