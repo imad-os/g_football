@@ -413,14 +413,15 @@
       // a pass is on its way to this player: he goes to meet it (a lofted ball: where it comes down, or at head
       // height when a header was asked for). The stick is ignored until somebody has the ball.
       if (!has && receiving(p)) {
-        World.intercept(p, sprint ? 12.5 : 11, slot.evActive && slot.evCtx === 3 ? 3.1 : 1.9);
+        var chase = slot.knockT > 0 ? 14.4 : 0; // his own knock-on: flat out after it
+        World.intercept(p, chase || (sprint ? 12.5 : 11), slot.evActive && slot.evCtx === 3 ? 3.1 : 1.9);
         var ix = World.icX - p.pos.x;
         var iz = World.icZ - p.pos.z;
         var il = Math.sqrt(ix * ix + iz * iz);
         if (il > 0.45) {
           mx = ix / il; mz = iz / il; len = 1;
           var arrive = 2 + il * 4; // slow down on arrival instead of overshooting
-          speed = Math.min(sprint ? 13.4 : 11.6, arrive);
+          speed = Math.min(chase || (sprint ? 13.4 : 11.6), arrive);
         } else {
           len = 0;
           p.facing = Math.atan2(ball.pos.x - p.pos.x, ball.pos.z - p.pos.z);

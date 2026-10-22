@@ -116,7 +116,7 @@
       ball.kicker = p;
       ball.kickerT = 0.35; // not straight back on his own foot
       ball.gkTried = 0; ball.hard = false; ball.chip = false; ball.pen = false; ball.shotD = 0;
-      ball.receiver = null;
+      ball.receiver = p; // he chases it by himself, like a pass to him (the arrow flashes)
       ball.contester = null;
       ball.fromX = ball.pos.x; ball.fromZ = ball.pos.z; ball.age = 0; ball.headed = false;
       var sp = Math.min(22, Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z) + 10); // 2 to 3 m ahead of him

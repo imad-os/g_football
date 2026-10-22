@@ -52,7 +52,7 @@ Nintendo by position). There are no tap / hold gestures: **holding a button neve
 | **Team press** | Y (hold) |
 | **Switch player** | LB |
 | Sprint burst | double-tap a direction |
-| Knock-on (push the ball ahead and run onto it) | tap sprint again and again while dribbling: every second tap |
+| Knock-on (push the ball ahead and run onto it) | tap sprint again and again while dribbling: every second tap (he chases it by himself) |
 | Game menu | Start (+ on a phone controller) |
 
 **Settings > Button mapping**: pick a move and press the button (or two together) on any controller; the map is saved per My PC
