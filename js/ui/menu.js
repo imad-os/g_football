@@ -152,6 +152,7 @@
     current = key;
     open = true;
     root.classList.remove('hidden');
+    NS.Gamepad.touchPad(false); // (a menu: My PC's own pad serves it)
     if (matchRunning()) { World.match.paused = true; NS.Audio.crowd(false); }
     for (var i = 0; i < order.length; i++) screens[order[i]].classList.toggle('hidden', order[i] !== key);
     refs.badge.textContent = T('step.' + key.toLowerCase());
@@ -177,6 +178,7 @@
   function hide() {
     open = false;
     root.classList.add('hidden');
+    NS.Gamepad.touchPad(true); // (the match: the game's own touch pad, on a phone)
     NS.Input.clearEdges();
     NS.Input.block(350);
     focused = null;

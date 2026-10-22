@@ -322,3 +322,13 @@ Bump `version` in `mypc-app.json` **and** every `?v=` in `index.html`, push, wai
 App Store Manager (`https://imad-os.github.io/g/installer/`).
 
 > Club and player names are real; check the licensing before publishing widely.
+
+## Playing on a phone or tablet (touch)
+
+My PC's own touch pad only sends menu actions (left / right / up / down, confirm, run, cancel), so it cannot play a match.
+During a match on a touch device with no controller connected the game asks My PC for a pad of its own (`MyPC.pad`,
+js/core/gamepad.js): the stick (four directions, diagonals by two) and the eight buttons of a controller with Nintendo names
+and places (A right, B bottom, X top, Y left, plus L, R, ZL, ZR), feeding player 1 like a real pad, so the same button map
+(Settings > Button mapping) applies: pass, shoot, through ball... and combinations by pressing two buttons. The pad's gear
+button lets the player show / hide buttons, resize and move them. The pad's + opens the game's pause menu; in any menu
+My PC's own pad is back. A connected controller or phone controller is used instead of the touch pad.

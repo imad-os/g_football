@@ -4,6 +4,9 @@
  * does, standalone too). Menus keep using My PC's actions (onInput), which every controller also sends.
  *
  * Player 1 is the first connected controller, player 2 the second (pads, then phones, in My PC's order).
+ * A phone or tablet running the game itself has no controller: My PC's own touch pad only sends menu actions, so during
+ * a match the game asks My PC for a pad of its own (MyPC.pad): the same eight buttons as a controller (Nintendo names and
+ * places) and the stick as four directions, feeding player 1 like a real pad (touchPad, called by the menu).
  * Event-driven (no polling); the handlers only update numbers, no allocation of our own.
  */
 (function (NS) {
@@ -19,6 +22,14 @@
     generic: ['A', 'B', 'X', 'Y', 'L', 'R', 'ZL', 'ZR', 'Select', 'Start', 'L3', 'R3']
   };
   var DEAD = 0.22; // stick dead zone
+  // the touch pad: [action, label, standard button index, place] (Nintendo: A right, B bottom, X top, Y left)
+  var TOUCH = [['b0', 'B', 0, 'bottom'], ['b1', 'A', 1, 'right'], ['b2', 'Y', 2, 'left'], ['b3', 'X', 3, 'top'],
+    ['b4', 'L', 4], ['b5', 'R', 5], ['b6', 'ZL', 6], ['b7', 'ZR', 7]];
+  var TOUCH_DIR = { up: 0, down: 1, left: 2, right: 3 };
+  var touchOn = false;
+  function touchDevice() {
+    return (navigator.maxTouchPoints || 0) > 0 || 'ontouchstart' in window || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+  }
 
   var order = [];        // connected devices in player order ('pad0', 'pad101'...)
   var kind = 'generic';
@@ -58,6 +69,17 @@
     NS.Input.button(n, bit, pressed);
   }
 
+  // an action of the game's own touch pad (player 1)
+  function onTouch(action, down) {
+    if (action in TOUCH_DIR) { dpad[0][TOUCH_DIR[action]] = down ? 1 : 0; push(0); return; }
+    if (action === 'pause') { if (down && NS.App) NS.App.input('menu', true, false); return; }
+    var i = action.charAt(0) === 'b' ? +action.slice(1) : -1;
+    var bit = i >= 0 && i < BIT.length ? BIT[i] : 0;
+    if (!bit) return;
+    if (NS.Mapper && NS.Mapper.active()) { NS.Mapper.button(bit, down); return; }
+    NS.Input.button(0, bit, down);
+  }
+
   function onAxes(axes, dev) {
     var n = playerOf(dev);
     if (n < 0) return;
@@ -71,7 +93,7 @@
   function onPads(list) {
     order.length = 0;
     for (var i = 0; i < list.length; i++) order.push(list[i].dev);
-    kind = list.length ? (list[0].standard ? kindOf(list[0].name) : 'generic') : 'generic';
+    kind = list.length ? (list[0].standard ? kindOf(list[0].name) : 'generic') : (touchDevice() ? 'nintendo' : 'generic');
     if (NS.UI && NS.UI.padsChanged) NS.UI.padsChanged();
   }
 
@@ -83,6 +105,28 @@
       g.on('axes', onAxes);
       g.on('pads', onPads);
       onPads(g.pads());
+    },
+    // the touch pad for a match (on = the match is on screen; off = a menu is: My PC's own pad is back). Only on a touch
+    // device with no controller connected.
+    touchPad: function (on) {
+      var P = window.MyPC && MyPC.pad;
+      if (!P || !P.init) return;
+      try {
+        if (!on) {
+          if (touchOn) { touchOn = false; P.hide(); NS.Gamepad.reset(); NS.Input.releaseAll(); }
+          return;
+        }
+        if (touchOn || order.length) return; // (My PC draws it only on a touch device)
+        var all = [];
+        for (var k = 0; k < TOUCH.length; k++) {
+          var t = TOUCH[k];
+          var b = { label: t[1], action: t[0] };
+          if (t[3]) b.place = t[3];
+          all.push(b);
+        }
+        P.init({ id: 'rs6-match', buttons: all.slice(0, 6), catalog: all, scale: { stick: 1.2, btn: 1.1 }, floating: true, onAction: onTouch });
+        touchOn = !!(P.active ? P.active() : true);
+      } catch (e) { touchOn = false; }
     },
     // a controller (or phone controller) is connected
     live: function () { return order.length > 0; },
