@@ -482,3 +482,6 @@ h1, h2, p { margin: 0; }
 .aima-prog.hidden { display: none; }
 .aima-prog b { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: linear-gradient(90deg, #7c3aed, #c084fc, #f0abfc); }
 .aima-prog span { position: relative; display: block; text-align: center; font-size: 0.75rem; font-weight: 800; line-height: 1.1rem; color: #fff; }
+
+.aima-headtxt { flex: 1; min-width: 0; }
+.aima-pick { flex-shrink: 0; border-color: #c084fc; }

@@ -834,6 +834,9 @@
     'aima.sz.TINY': 'صغير جدا', 'aima.sz.MEDIUM': 'متوسط', 'aima.sz.LARGE': 'كبير',
     'aima.sz.HUGE': 'ضخم (PC)', 'aima.settingsof': 'إعدادات:' });
 
+  Object.assign(D.en, { 'aima.loadfail': 'That brain could not be loaded (cloud). Showing the active one.' });
+  Object.assign(D.fr, { 'aima.tr.brain': 'Cerveau' });
+
   var lang = 'en';
 
   NS.I18n = {

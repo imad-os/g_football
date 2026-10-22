@@ -1133,10 +1133,10 @@
     ['mem', 'aima.o.mem', [[0, '3 000'], [1, '6 000'], [2, '12 000']]],
     ['size', 'aima.o.size', [['TINY', 'aima.sz.TINY'], ['MEDIUM', 'aima.sz.MEDIUM'], ['LARGE', 'aima.sz.LARGE'], ['HUGE', 'aima.sz.HUGE']]]
   ];
-  var setSel = '';        // the brain whose settings are shown (default: the active one)
+  var aimaSel = '';       // the brain every sub-tab shows (default: the active one)
+  var selLoading = '';
   var aimaConfirm = '';   // a size change / reset / delete waits for a second press
   var aimaMsg = '';
-  var brainSel = '';      // the brain shown in Brains
   // training options (cycled like the debug screen)
   var TR_OPTS = [
     ['matches', [5, 10, 20, 50, 100, 200]],
@@ -1242,31 +1242,29 @@
     return c2;
   }
 
-  function subStats(list) {
-    var A = NS.Aima, b = A.brain();
+  // the selected brain (loaded), or null while it loads from the cloud
+  function selBrain() {
+    var A = NS.Aima, brains = A.brains();
+    if (!A.isTrainer()) return A.brain();
+    if (!aimaSel || !brains.some(function (e) { return e.id === aimaSel; })) aimaSel = A.activeId();
+    var b = A.loadedBrain(aimaSel);
+    if (b) return b;
+    if (selLoading !== aimaSel) {
+      selLoading = aimaSel;
+      A.getBrain(aimaSel).then(function () { selLoading = ''; again('ai:pick'); },
+        function () { selLoading = ''; aimaMsg = T('aima.loadfail'); aimaSel = A.activeId(); again('ai:pick'); });
+    }
+    return null;
+  }
+  function selectBrain(id) { aimaSel = id; aimaConfirm = ''; aimaMsg = ''; }
+
+  function subStats(list, b) {
     statsCards(list, b);
   }
 
-  function subSettings(list) {
+  function subSettings(list, b) {
     var A = NS.Aima, trainer = A.isTrainer();
-    var brains = A.brains();
-    if (!setSel || !brains.some(function (e) { return e.id === setSel; })) setSel = A.activeId();
-    var b = A.loadedBrain(setSel);
-    if (!b) { // not in memory yet: load it, show the active one meanwhile
-      A.getBrain(setSel).then(function () { again('ai:setsel'); }, function () { setSel = A.activeId(); again('ai:setsel'); });
-      b = A.brain();
-    }
     if (trainer) {
-      // which brain: every brain has its own settings
-      var pick = el('div', 'dbg-opts');
-      pick.appendChild(btn('opt dbg-opt', T('aima.settingsof') + ' ' + (b.id === A.activeId() ? '★ ' : '') + b.name, 'ai:setsel', function () {
-        var i = 0;
-        for (; i < brains.length; i++) if (brains[i].id === setSel) break;
-        setSel = brains[(i + 1) % brains.length].id;
-        aimaConfirm = ''; aimaMsg = '';
-        again('ai:setsel');
-      }));
-      list.appendChild(pick);
       var grid = el('div', 'aima-opts');
       list.appendChild(grid);
       AIMA_OPTS.forEach(function (o) {
@@ -1339,15 +1337,14 @@
   function subBrains(list) {
     var A = NS.Aima, trainer = A.isTrainer();
     var brains = A.brains();
-    if (!brainSel || !brains.some(function (e) { return e.id === brainSel; })) brainSel = A.activeId();
+    var brainSel = aimaSel;
     // the list
     var c = aimaCard(T('aima.c.brains'));
     var stack = el('div', 'stack');
     brains.forEach(function (e) {
       var isAct = e.id === A.activeId();
       var b = btn('map-row aima-brain' + (e.id === brainSel ? ' sel' : ''), '', 'br:' + e.id, function () {
-        brainSel = e.id;
-        A.getBrain(e.id).then(function () { again('br:' + e.id); }, function () { again('br:' + e.id); });
+        selectBrain(e.id);
         again('br:' + e.id);
       });
       b.appendChild(el('span', 'map-name', (isAct ? '★ ' : '') + e.name));
@@ -1393,13 +1390,13 @@
       }));
     }
     act.appendChild(btn('', T('aima.sub.settings'), 'ai:brset', function () {
-      setSel = brainSel; aimaSub = 'settings'; aimaMsg = ''; aimaConfirm = '';
-      again('ai:setsel');
+      aimaSub = 'settings'; aimaMsg = ''; aimaConfirm = '';
+      again('as:settings');
     }));
     act.appendChild(btn('', T('aima.clone'), 'ai:clone', function () {
       var src = A.loadedBrain(brainSel);
       A.clone(brainSel, nm() || (src ? src.name + ' 2' : 'checkoAI 2')).then(function (b) {
-        brainSel = b.id; aimaMsg = T('aima.cloned') + ' ' + b.name; again('ai:clone');
+        selectBrain(b.id); aimaMsg = T('aima.cloned') + ' ' + b.name; again('ai:clone');
       });
     }));
     act.appendChild(btn('', T('aima.rename'), 'ai:rename', function () {
@@ -1408,14 +1405,14 @@
     }));
     act.appendChild(btn('', T('aima.newbrain'), 'ai:new', function () {
       var b = A.create(nm() || 'checkoAI ' + (A.brains().length + 1));
-      brainSel = b.id; aimaMsg = T('aima.created') + ' ' + b.name; again('ai:new');
+      selectBrain(b.id); aimaMsg = T('aima.created') + ' ' + b.name; again('ai:new');
     }));
     if (brainSel !== A.activeId() && brains.length > 1) {
       act.appendChild(btn('danger', T('aima.delete'), 'ai:del', function () {
         if (aimaConfirm !== 'del:' + brainSel) { aimaConfirm = 'del:' + brainSel; aimaMsg = T('aima.confirm.del'); again('ai:del'); return; }
         aimaConfirm = '';
         A.remove(brainSel);
-        brainSel = A.activeId();
+        aimaSel = A.activeId();
         aimaMsg = T('aima.deleted');
         again('ai:del');
       }));
@@ -1434,7 +1431,7 @@
     if (!A.isTrainer()) { list.appendChild(el('div', 'set-hint', T('aima.note.signin'))); return; }
     var busy = A.training();
     var brains = A.brains();
-    if (!trSel.brain || !brains.some(function (e) { return e.id === trSel.brain; })) trSel.brain = A.activeId();
+    trSel.brain = aimaSel || A.activeId();
     // the opponents: the CPU levels, then every brain
     var opps = ['EASY', 'NORMAL', 'HARD', 'LEGEND'];
     brains.forEach(function (e) { opps.push('B:' + e.id); });
@@ -1453,6 +1450,7 @@
       var i = 0;
       for (; i < brains.length; i++) if (brains[i].id === trSel.brain) break;
       trSel.brain = brains[(i + 1) % brains.length].id;
+      selectBrain(trSel.brain); // the same brain in every sub-tab
     });
     cyc('opp', T('aima.tr.opp'), trSel.opp.indexOf('B:') === 0 ? 'checkoAI ' + trName(trSel.opp.slice(2)) : T('opt.' + trSel.opp.toLowerCase()), function () {
       trSel.opp = opps[(opps.indexOf(trSel.opp) + 1) % opps.length];
@@ -1530,16 +1528,33 @@
     var A = NS.Aima;
     var list = refs.setList;
     var trainer = A.isTrainer();
-    var b = A.brain();
-    // head: the rooster, his name, the active brain
+    var b = selBrain();
+    var brains = A.brains();
+    var shown = b ? b : null;
+    var selName = '?';
+    for (var i = 0; i < brains.length; i++) if (brains[i].id === aimaSel) selName = brains[i].name;
+    if (shown) selName = shown.name;
+    // head: the rooster, his name, and the brain every sub-tab shows (the trainer picks it)
     var head = el('div', 'aima-head');
     var ico = el('span', 'aima-rooster');
     ico.innerHTML = NS.HUD.ROOSTER;
     head.appendChild(ico);
-    var ht = el('div');
-    ht.appendChild(el('div', 'aima-name', 'checkoAI  ·  ' + b.name));
+    var ht = el('div', 'aima-headtxt');
+    ht.appendChild(el('div', 'aima-name', 'checkoAI  ·  ' + selName));
     ht.appendChild(el('div', 'set-hint', T(trainer ? 'aima.role.trainer' : 'aima.role.viewer')));
     head.appendChild(ht);
+    if (trainer) {
+      var isAct = (shown ? shown.id : aimaSel) === A.activeId();
+      var pk = btn('opt aima-pick', T('aima.tr.brain') + ': ' + (isAct ? '★ ' : '') + selName + '  ▸', 'ai:pick', function () {
+        if (A.training()) return;
+        var j = 0;
+        for (; j < brains.length; j++) if (brains[j].id === aimaSel) break;
+        selectBrain(brains[(j + 1) % brains.length].id);
+        again('ai:pick');
+      });
+      if (A.training()) pk.disabled = true;
+      head.appendChild(pk);
+    }
     list.appendChild(head);
     // sub-tabs (only Stats for everyone but the trainer)
     var subs = trainer ? AIMA_SUBS : ['stats', 'settings'];
@@ -1556,8 +1571,9 @@
       tabs.appendChild(t);
     });
     list.appendChild(tabs);
-    if (aimaSub === 'stats') subStats(list);
-    else if (aimaSub === 'settings') subSettings(list);
+    if (!shown) list.appendChild(el('div', 'set-hint', T('aima.loading')));
+    else if (aimaSub === 'stats') subStats(list, shown);
+    else if (aimaSub === 'settings') subSettings(list, shown);
     else if (aimaSub === 'brains') subBrains(list);
     else subTrain(list);
     if (aimaMsg) list.appendChild(el('div', 'map-msg', aimaMsg));
