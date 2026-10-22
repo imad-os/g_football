@@ -222,6 +222,7 @@
         // a lock waits for the pass he made: over as soon as that ball is no longer coming to him
         if (s.lockT > 0 && (o || ball.receiver !== cur)) s.lockT = 0;
         if (s.lockT > 0 || (s.evActive && s.evCtx !== 2)) continue; // never in the middle of a pass / shot gesture
+        if (s.knockT > 0 && !o) continue; // running onto his own knock-on: he keeps the ball's chase
         // after a switch by button: nothing changes until something happens (the ball changes hands, a pass, a shot)
         if (s.manual) {
           if (o && o === s.manualOwner) continue;
@@ -351,6 +352,24 @@
       if (pad.burst) { pad.burst = false; if (p.stamina > 20) slot.burstT = 0.8; }
       if (slot.burstT > 0) slot.burstT -= dt;
 
+      // knock-on (FIFA / PES): sprint tapped again and again on the ball: every second tap he pushes it a few metres
+      // ahead (where the stick points) and runs onto it, faster than dribbling
+      var sDown = B.sprintDown(pad.cur);
+      if (sDown && !slot.sprPrev) {
+        slot.sprTaps = slot.sprTapT < 0.45 ? slot.sprTaps + 1 : 1;
+        slot.sprTapT = 0;
+        if (has && slot.sprTaps >= 2 && p.stamina > 15 && pad.x * pad.x + pad.y * pad.y > 0.1 && !World.match.restart) {
+          slot.sprTaps = 0;
+          Actions.knockOn(p, pad.x, pad.y);
+          slot.knockT = 1.3;
+          has = false;
+        }
+      }
+      slot.sprPrev = sDown;
+      if (slot.sprTapT < 9) slot.sprTapT += dt;
+      if (has) slot.knockT = 0;
+      else if (slot.knockT > 0) slot.knockT -= dt;
+
       var mx = pad.x;
       var mz = pad.y;
       var len = Math.sqrt(mx * mx + mz * mz);
@@ -367,6 +386,7 @@
         if (charging) speed *= 0.6;
       } else {
         if (slot.pressing) speed = 12.4;
+        else if (slot.knockT > 0) { speed = 14.4; drain = 10; } // running onto his knock-on
         else if (sprint) { speed = 13.4; drain = 14; }
         else if (burst) { speed = 13.0; drain = 9; }
         else speed = 10.8;

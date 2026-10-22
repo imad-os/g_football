@@ -104,6 +104,31 @@
       return best;
     },
 
+    // A knock-on: the dribbler pushes the ball a few metres ahead ((dx, dz): the stick) and runs onto it.
+    knockOn: function (p, dx, dz) {
+      var ball = World.ball;
+      var l = Math.sqrt(dx * dx + dz * dz) || 1;
+      dx /= l; dz /= l;
+      ball.owner = null;
+      ball.pickupCooldown = 0.1;
+      ball.lastTouchTeam = p.team;
+      ball.lastToucher = p.name;
+      ball.kicker = p;
+      ball.kickerT = 0.35; // not straight back on his own foot
+      ball.gkTried = 0; ball.hard = false; ball.chip = false; ball.pen = false; ball.shotD = 0;
+      ball.receiver = null;
+      ball.contester = null;
+      ball.fromX = ball.pos.x; ball.fromZ = ball.pos.z; ball.age = 0; ball.headed = false;
+      var sp = Math.min(22, Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z) + 10); // 2 to 3 m ahead of him
+      ball.pos.y = NS.BALL_R;
+      ball.vel.set(dx * sp, 0, dz * sp);
+      p.dribbling = false;
+      p.facing = Math.atan2(dx, dz);
+      p.kickT = 0.18;
+      p.kickHard = false;
+      NS.Audio.kick(false);
+    },
+
     // type: ACT.PASS | THROUGH | LONG | SHOOT, power 0..1, (ax, az) aim input.
     // The ball leaves the player's foot (shared by every kick).
     release: function (p, type) {
