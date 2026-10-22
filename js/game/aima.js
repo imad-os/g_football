@@ -995,7 +995,7 @@
       if (S.state !== 'running') { S.ended = Date.now(); for (var id in S.runs) { trainProgress(S.runs[id]); saveBrain(S.runs[id].b); } }
       setActive(active);
       notify(S);
-      setTimeout(pump, 30);
+      NS.Debug.later(pump, 30);
     });
   }
   function r1(v) { return Math.round(v * 10) / 10; }

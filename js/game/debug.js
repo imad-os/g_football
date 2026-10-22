@@ -17,6 +17,20 @@
 
   var run = null; // the run in progress
 
+  // The next slice: a browser throttles setTimeout in a hidden or minimised tab (once a second, then once a minute),
+  // so a tiny worker keeps the beat instead (a worker's timers and its messages are not throttled).
+  var ticker = null, tickFns = {}, tickSeq = 0;
+  try {
+    ticker = new Worker(URL.createObjectURL(new Blob(
+      ['onmessage=function(e){setTimeout(function(){postMessage(e.data[0])},e.data[1])}'], { type: 'text/javascript' })));
+    ticker.onmessage = function (e) { var f = tickFns[e.data]; delete tickFns[e.data]; if (f) f(); };
+  } catch (e) { ticker = null; }
+  function later(fn, ms) {
+    if (!ticker) { setTimeout(fn, ms || 0); return; }
+    tickFns[++tickSeq] = fn;
+    ticker.postMessage([tickSeq, ms || 0]);
+  }
+
   function minute() { return Math.min(90, Math.floor(World.match.timeSeconds / 60) + 1); }
   function add(key, team, n) {
     var c = run.C[key];
@@ -267,7 +281,7 @@
       }
     }
     if (run.onProgress) run.onProgress(run.done, run.cfg.matches, m.timeSeconds / 60);
-    setTimeout(slice, 0);
+    later(slice);
   }
 
   function pct(a, b) { return b > 0 ? (100 * a / b).toFixed(0) + '%' : '-'; }
@@ -380,8 +394,9 @@
       NS.Match.applySides();
       NS.Match.exitToMenu = function () { World.match.running = false; if (run && run.cur) run.cur.ended = true; };
       wrap();
-      setTimeout(slice, 0);
+      later(slice);
     },
-    stop: function () { if (run) run.stop = true; }
+    stop: function () { if (run) run.stop = true; },
+    later: later
   };
 })(window.RS6 = window.RS6 || {});
