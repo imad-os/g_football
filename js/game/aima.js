@@ -26,14 +26,17 @@
   var TRAINER = 'imad';
   var F = 64;
   // brain sizes (hidden layers)
-  var SIZES = { SMALL: [64, 48], LARGE: [256, 128], HUGE: [512, 256] };
+  var SIZES = { TINY: [32, 24], MEDIUM: [64, 48], LARGE: [256, 128], HUGE: [512, 256] }; // MEDIUM = the old SMALL (same layers)
+  var LOCAL_SIZES = { TINY: 1, MEDIUM: 1 };   // small enough for My PC's save too (the others: the cloud only)
   var NST = 9, NSP = 2, NBT = 13, NPW = 3;
   var O_ST = 0, O_SP = 9, O_BT = 11, O_PW = 24, O_V = 27, NOUT = 28;
-  var TICK = 0.1;           // a decision every 0.1 s of play
-  var NSTEP = 20;           // n-step returns: 2 s
-  var GAMMA = 0.97;
+  // per-brain options (index into these): decision speed, foresight, copied moves kept, weight of the trainer's play
+  var TICKS = [0.08, 0.1, 0.15];
+  var GAMMAS = [0.94, 0.97, 0.99];
+  var MEMS = [3000, 6000, 12000];
+  var MINEW = [1.5, 3, 6];
+  var NSTEP = 20;           // n-step returns: 20 decisions
   var TRAJ = 32;
-  var MEM = 6000;           // copied samples kept for replay (per brain)
   var CLAP_FULL = 1.0;      // seconds of hold for a 100% clap
   var HOLD_PASS = [0.12, 0.5, 1.0];   // x power bar time
   var HOLD_CONT = [0.3, 0.8, 1.5];    // press / team press, seconds
@@ -49,7 +52,8 @@
     PLAYMAKER: [1, 0.8, 2, 2.2, 1, 1.4, 0.6],
     DEFENDER: [1, 0.6, 1, 0.8, 2.2, 1.5, 0.6]
   };
-  var CFG_DEF = { learn: true, mine: true, lr: 1, explore: 1, clap: 1, help: 'AUTO', style: 'BALANCED', size: 'SMALL' };
+  var CFG_DEF = { learn: true, mine: true, lr: 1, explore: 1, clap: 1, help: 'AUTO', style: 'BALANCED', size: 'MEDIUM',
+    tick: 1, look: 1, mem: 1, mineW: 1 };
 
   function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
@@ -79,10 +83,10 @@
     this.hist = [];
     this.frozen = false;  // an opponent in training: plays, does not learn
     this.dirty = false;
-    this.build(size || 'SMALL');
+    this.build(size || 'MEDIUM');
   }
   Brain.prototype.build = function (size) {
-    if (!SIZES[size]) size = 'SMALL';
+    if (!SIZES[size]) size = 'MEDIUM';
     this.cfg.size = size;
     var H1 = this.H1 = SIZES[size][0], H2 = this.H2 = SIZES[size][1];
     this.OW1 = 0; this.OB1 = H1 * F; this.OW2 = this.OB1 + H1; this.OB2 = this.OW2 + H2 * H1; this.OW3 = this.OB2 + H2;
@@ -335,7 +339,11 @@
   /* ------------------------------------------------------------------ copying (imitation) */
 
   function remember(b, x, stk, spr, btn, pw, ctx, w) {
-    if (!b.memX) { b.memX = new Float32Array(MEM * F); b.memA = new Int8Array(MEM * 5); b.memW = new Float32Array(MEM); }
+    var MEM = MEMS[b.cfg.mem] || MEMS[1];
+    if (!b.memX || b.memCap !== MEM) {
+      b.memCap = MEM; b.memN = 0; b.memI = 0;
+      b.memX = new Float32Array(MEM * F); b.memA = new Int8Array(MEM * 5); b.memW = new Float32Array(MEM);
+    }
     var o = b.memI * F;
     for (var j = 0; j < F; j++) b.memX[o + j] = x[j];
     o = b.memI * 5;
@@ -407,7 +415,8 @@
     if (!n) return;
     var i0 = c.th;
     var R = 0, g = 1;
-    for (var k = 0; k < n; k++) { R += g * c.tr[(i0 + k) % TRAJ]; g *= GAMMA; }
+    var gamma = b ? GAMMAS[b.cfg.look] || GAMMAS[1] : GAMMAS[1];
+    for (var k = 0; k < n; k++) { R += g * c.tr[(i0 + k) % TRAJ]; g *= gamma; }
     if (boot) R += g * c.tv[(i0 + n - 1) % TRAJ];
     if (b && b.learns()) {
       var o = i0 * F;
@@ -688,12 +697,12 @@
   }
   function fromDoc(d) {
     if (!d || d.v !== 2 || !d.m) return null;
-    var b = new Brain(d.id, d.name || 'checkoAI', (d.cfg && d.cfg.size) || 'SMALL');
+    var b = new Brain(d.id, d.name || 'checkoAI', (d.cfg && d.cfg.size) || 'MEDIUM');
     if (!unpackWeights(b, d.m)) return null;
     b.created = d.created || Date.now(); b.saved = d.saved || 0; b.parent = d.parent || ''; b.from = d.from || 'save';
     var k;
     if (d.cfg) for (k in d.cfg) if (Object.prototype.hasOwnProperty.call(CFG_DEF, k)) b.cfg[k] = d.cfg[k];
-    b.cfg.size = b.H1 === SIZES.LARGE[0] ? 'LARGE' : (b.H1 === SIZES.HUGE[0] ? 'HUGE' : 'SMALL');
+    for (k in SIZES) if (SIZES[k][0] === b.H1 && SIZES[k][1] === b.H2) b.cfg.size = k;
     if (d.st) for (k in d.st) if (Object.prototype.hasOwnProperty.call(b.st, k)) b.st[k] = d.st[k];
     b.hist = d.hist || [];
     return b;
@@ -777,7 +786,7 @@
     token().then(function (t) { return fetch(docUrl(id), { method: 'DELETE', headers: { Authorization: 'Bearer ' + t } }); }).catch(function () {});
   }
 
-  // saves one brain (cloud) and the list; the active SMALL brain also goes to My PC's save (works offline)
+  // saves one brain (cloud) and the list; the active brain also goes to My PC's save when small enough (works offline)
   function saveBrain(b) {
     if (!trainer || !b) return;
     b.saved = Date.now();
@@ -792,7 +801,7 @@
     if (!trainer) return;
     cloudPut('index', { v: 2, brains: index.brains, active: index.active, updated: Date.now() });
     var local = { v: 2, index: index, active: null };
-    if (active && active.cfg.size === 'SMALL') local.active = toDoc(active);
+    if (active && LOCAL_SIZES[active.cfg.size]) local.active = toDoc(active);
     try { MyPC.save(SAVE_KEY, local); } catch (e) {}
     lastSave = performance.now();
   }
@@ -809,7 +818,7 @@
   }
 
   function newBrain(name) {
-    var b = new Brain(newId(), name, 'SMALL');
+    var b = new Brain(newId(), name, 'MEDIUM'); // a new brain: the default settings
     b.log('created');
     loaded[b.id] = b;
     syncEntry(b);
@@ -914,6 +923,13 @@
     return d;
   }
   function pct(n, d) { return d ? Math.round(n * 100 / d) + '%' : '-'; }
+  // the training's line in the brain's history, kept up to date after every match
+  function trainProgress(t) {
+    var d = statDelta(t.st0, t.brain.st);
+    var h = t.h.d;
+    h.n = d.matches; h.w = d.w; h.d = d.d; h.l = d.l; h.gf = d.gf; h.ga = d.ga;
+    return d;
+  }
   function r1(v) { return Math.round(v * 10) / 10; }
 
   function trainSummary(t, d, rew) {
@@ -1018,25 +1034,28 @@
     },
     create: function (name) { var b = newBrain(name || 'checkoAI'); saveBrain(b); return b; },
 
-    // ---- settings of the active brain
-    setCfg: function (k, v) {
-      var b = active;
+    // ---- settings of a brain (b: a loaded brain, default the active one)
+    setCfg: function (k, v, b) {
+      b = b || active;
       if (b.cfg[k] === v) return;
       b.cfg[k] = v;
+      if (k === 'mem') { b.memX = null; b.memN = 0; b.memI = 0; } // a new memory size starts empty
       b.log('set', { k: k, v: v });
       saveBrain(b);
     },
-    setSize: function (size) {
-      var b = active;
-      if (!SIZES[size] || (size !== 'SMALL' && !cloudCfg())) return false;
+    // a new brain size: a new network (it starts again from zero, its settings and history stay)
+    setSize: function (size, b) {
+      b = b || active;
+      if (!SIZES[size] || (!LOCAL_SIZES[size] && !cloudCfg())) return false;
       b.build(size);
       b.st = freshStats();
       b.log('size', { v: size });
       saveBrain(b);
       return true;
     },
-    reset: function () {
-      var b = active;
+    sizeNeedsCloud: function (size) { return !LOCAL_SIZES[size]; },
+    reset: function (b) {
+      b = b || active;
       b.init();
       b.st = freshStats();
       b.memN = 0; b.memI = 0;
@@ -1044,6 +1063,7 @@
       saveBrain(b);
     },
     save: function () { if (active) saveBrain(active); },
+    saveBrain: function (b) { saveBrain(b || active); },
 
     makeSlot: makeCtl,
 
@@ -1069,11 +1089,16 @@
         if (my > th) b.st.w++; else if (my < th) b.st.l++; else b.st.d++;
         b.st.hist.push(Math.round(matchReward[t] * 100) / 100);
         if (b.st.hist.length > 40) b.st.hist.shift();
-        if (training) { b.st.trainMatches++; if (training.rew && b === training.brain) training.rew.push(matchReward[t]); }
+        if (training) { b.st.trainMatches++; if (b === training.brain) training.rew.push(matchReward[t]); }
         else b.log('match', { s: my + '-' + th, vs: World.slots[0].active || World.slots[1].active ? 'human' : 'cpu' });
       }
       matchOn = false;
-      if (training) return; // saved at the end of the training
+      if (training) {
+        // saved after every match: a training stopped (or closed) half way keeps what was learnt
+        trainProgress(training);
+        saveBrain(training.brain);
+        return;
+      }
       if (performance.now() - lastSave > (NS.Debug && NS.Debug.running() ? 20000 : 0)) {
         for (var k in loaded) if (loaded[k].dirty && trainer) saveBrain(loaded[k]);
       }
@@ -1110,6 +1135,7 @@
         if (happyT > 0) happyT -= dt;
       }
       if (tick) {
+        var TICK = TICKS[b.cfg.tick] || TICKS[1];
         c.t = TICK;
         b.st.decisions++;
         b.st.playT += TICK;
@@ -1144,7 +1170,7 @@
       if (!trainer || !b || !b.cfg.mine || !b.learns() || !slot.player) return;
       slot.obsT = (slot.obsT || 0) - dt;
       if (slot.obsT > 0) return;
-      slot.obsT = TICK;
+      slot.obsT = TICKS[b.cfg.tick] || TICKS[1];
       var p = slot.player, pad = NS.Input.pads[slot.idx];
       features(p, xs);
       var ctx = ctxOf(p);
@@ -1153,7 +1179,7 @@
       slot.obsPressing = slot.pressing;
       setMask(ctx);
       if (!bmask[btn]) btn = 0;
-      remember(b, xs, stickClass(pad.x, pad.y, p.team === 0 ? 1 : -1), B.sprintDown(pad.cur) ? 1 : 0, btn, btn ? 1 : -1, ctx, 1.5);
+      remember(b, xs, stickClass(pad.x, pad.y, p.team === 0 ? 1 : -1), B.sprintDown(pad.cur) ? 1 : 0, btn, btn ? 1 : -1, ctx, (MINEW[b.cfg.mineW] || 3) / 2);
       b.st.humanSamples++;
       imitateOne(b);
     },
@@ -1166,7 +1192,7 @@
       var f = mv.kind === 2 ? holdT / 1.5 : holdT / full;
       var p = slot.player, pad = NS.Input.pads[slot.idx];
       features(p, xs);
-      remember(b, xs, stickClass(pad.x, pad.y, p.team === 0 ? 1 : -1), B.sprintDown(pad.cur) ? 1 : 0, mi + 1, f < 0.3 ? 0 : (f < 0.75 ? 1 : 2), mv.ctx, 3);
+      remember(b, xs, stickClass(pad.x, pad.y, p.team === 0 ? 1 : -1), B.sprintDown(pad.cur) ? 1 : 0, mi + 1, f < 0.3 ? 0 : (f < 0.75 ? 1 : 2), mv.ctx, MINEW[b.cfg.mineW] || 3);
       b.st.humanSamples++;
     },
 
@@ -1204,14 +1230,16 @@
         teamBrains[0] = b; teamBrains[1] = ob;
         var oppName = ob ? 'checkoAI ' + ob.name : cfg.opp;
         training = { cfg: cfg, brain: b, opp: ob, oppName: oppName, st0: JSON.parse(JSON.stringify(b.st)), help0: b.help(), rew: [] };
+        b.log('train', { opp: oppName, n: 0, of: cfg.matches, w: 0, d: 0, l: 0, gf: 0, ga: 0 });
+        training.h = b.hist[b.hist.length - 1];
+        saveBrain(b);
         NS.Debug.start({ matches: cfg.matches, levels: ['AIMA', ob ? 'AIMA' : cfg.opp], teams: 'RANDOM', teamSize: cfg.teamSize,
           stadium: cfg.stadium, duration: cfg.duration }, onProgress, function (report) {
           var t = training;
           training = null;
           teamBrains[0] = teamBrains[1] = null;
           if (ob && ob !== b) ob.frozen = !trainer;
-          var d = statDelta(t.st0, b.st);
-          b.log('train', { opp: t.oppName, n: d.matches, w: d.w, d: d.d, l: d.l, gf: d.gf, ga: d.ga });
+          var d = trainProgress(t);
           saveBrain(b);
           setActive(active);
           onDone({ summary: trainSummary(t, d, t.rew), full: trainFull(t, d, t.rew, report) });

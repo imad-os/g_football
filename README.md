@@ -119,14 +119,16 @@ as a human; the other ten are the Legend CPU. A small box under the scoreboard s
 
 - **Brains**: several networks, each with its own settings, stats and history (Settings > checkoAI > Brains: use, clone,
   rename, new, delete). The active brain (★) plays the matches and is the one every other profile gets. Sizes SMALL
-  64-48 (8.6k values), LARGE 256-128, HUGE 512-256 (PC). 64 inputs: the play around him and the whole match situation
+  TINY 32-24, MEDIUM 64-48 (8.6k values), LARGE 256-128, HUGE 512-256 (PC); each brain has its own settings (style, speed,
+  foresight, memory, weight of the trainer's play, learning, exploring...); a clone copies them, a new brain has the defaults. 64 inputs: the play around him and the whole match situation
   (time left, score, numbers, cards, possession, shots).
 - **Learning** (the trainer's profile only): it copies the Legend CPU in spells the CPU plays for it (Auto: fewer as it
   learns, never under 35%), copies the trainer's own play, and learns from rewards (actor-critic, 2 s returns): goals,
   shots, passes, ball won / lost, fouls, and the trainer's **claps** (Buttons screen > Clap, default ZL; hold it: a quick
   tap is ~25%, a full 1 s hold 100%). Restarts and penalties it takes are played by the Legend CPU.
 - **Training** (Settings > checkoAI > Training): a brain plays full-speed matches against the CPU at any level or against
-  another brain (which plays but does not learn); then a summary or the full stats (brain counters + debug report).
+  another brain (which plays but does not learn), with a progress bar; saved after every match (a stopped training keeps
+  what it learnt); then a summary or the full stats (brain counters + debug report).
 - **Trainer**: the My PC profile named "imad", signed in with his Google account (Settings > checkoAI > Settings > Sign
   in with Google, once on a computer; if the popup is blocked inside My PC, open `aima-login.html` in a browser and paste
   the code). The token is kept in the profile's My PC save, so his TV and other devices are signed in too.

@@ -1127,8 +1127,13 @@
     ['explore', 'aima.o.explore', [[0, 'opt.low'], [1, 'opt.normal'], [2, 'opt.high']]],
     ['clap', 'aima.o.clap', [[0, 'opt.low'], [1, 'opt.normal'], [2, 'opt.high']]],
     ['help', 'aima.o.help', [['AUTO', 'opt.auto'], ['H0', 'aima.h0'], ['H30', 'aima.h30'], ['H60', 'aima.h60']]],
-    ['size', 'aima.o.size', [['SMALL', 'aima.sz.SMALL'], ['LARGE', 'aima.sz.LARGE'], ['HUGE', 'aima.sz.HUGE']]]
+    ['tick', 'aima.o.tick', [[0, 'aima.fast'], [1, 'opt.normal'], [2, 'aima.slow']]],
+    ['look', 'aima.o.look', [[0, 'aima.short'], [1, 'opt.normal'], [2, 'aima.long']]],
+    ['mineW', 'aima.o.mineW', [[0, 'opt.low'], [1, 'opt.normal'], [2, 'opt.high']]],
+    ['mem', 'aima.o.mem', [[0, '3 000'], [1, '6 000'], [2, '12 000']]],
+    ['size', 'aima.o.size', [['TINY', 'aima.sz.TINY'], ['MEDIUM', 'aima.sz.MEDIUM'], ['LARGE', 'aima.sz.LARGE'], ['HUGE', 'aima.sz.HUGE']]]
   ];
+  var setSel = '';        // the brain whose settings are shown (default: the active one)
   var aimaConfirm = '';   // a size change / reset / delete waits for a second press
   var aimaMsg = '';
   var brainSel = '';      // the brain shown in Brains
@@ -1140,7 +1145,7 @@
     ['length', [3, 5, 10]]
   ];
   var trSel = { matches: 1, size: 0, stadium: 1, length: 0, brain: '', opp: 'NORMAL' };
-  var trOut = null, trView = 'summary', trStatus = '';
+  var trOut = null, trView = 'summary', trStatus = '', trProg = 0, trLive = false;
 
   function kv(grid, label, value) {
     grid.appendChild(el('span', 'aima-k', label));
@@ -1174,7 +1179,7 @@
       case 'size': return T('aima.h.size') + ' ' + d.v;
       case 'reset': return T('aima.h.reset');
       case 'match': return T('aima.h.match') + ' ' + d.s + ' (' + T(d.vs === 'human' ? 'aima.h.vshuman' : 'aima.h.vscpu') + ')';
-      case 'train': return T('aima.h.train') + ' v ' + d.opp + ': ' + d.n + ' ' + T('aima.tr.matches') + ', ' + d.w + '-' + d.d + '-' + d.l +
+      case 'train': return T('aima.h.train') + ' v ' + d.opp + ': ' + d.n + (d.of && d.n < d.of ? '/' + d.of : '') + ' ' + T('aima.tr.matches') + ', ' + d.w + '-' + d.d + '-' + d.l +
         ' (' + d.gf + '-' + d.ga + ')';
       default: return h.k;
     }
@@ -1243,9 +1248,25 @@
   }
 
   function subSettings(list) {
-    var A = NS.Aima, b = A.brain(), trainer = A.isTrainer();
+    var A = NS.Aima, trainer = A.isTrainer();
+    var brains = A.brains();
+    if (!setSel || !brains.some(function (e) { return e.id === setSel; })) setSel = A.activeId();
+    var b = A.loadedBrain(setSel);
+    if (!b) { // not in memory yet: load it, show the active one meanwhile
+      A.getBrain(setSel).then(function () { again('ai:setsel'); }, function () { setSel = A.activeId(); again('ai:setsel'); });
+      b = A.brain();
+    }
     if (trainer) {
-      list.appendChild(el('div', 'set-hint', T('aima.settingsof') + ' ' + b.name));
+      // which brain: every brain has its own settings
+      var pick = el('div', 'dbg-opts');
+      pick.appendChild(btn('opt dbg-opt', T('aima.settingsof') + ' ' + (b.id === A.activeId() ? '★ ' : '') + b.name, 'ai:setsel', function () {
+        var i = 0;
+        for (; i < brains.length; i++) if (brains[i].id === setSel) break;
+        setSel = brains[(i + 1) % brains.length].id;
+        aimaConfirm = ''; aimaMsg = '';
+        again('ai:setsel');
+      }));
+      list.appendChild(pick);
       var grid = el('div', 'aima-opts');
       list.appendChild(grid);
       AIMA_OPTS.forEach(function (o) {
@@ -1260,13 +1281,13 @@
           opts.appendChild(btn('opt' + (b.cfg[o[0]] === v[0] ? ' sel' : ''), T(v[1]), key, function () {
             if (o[0] === 'size') {
               if (v[0] === b.cfg.size) return;
-              if (v[0] !== 'SMALL' && !A.hasCloud()) { aimaMsg = T('aima.needcloud'); again(key); return; }
+              if (A.sizeNeedsCloud(v[0]) && !A.hasCloud()) { aimaMsg = T('aima.needcloud'); again(key); return; }
               if (aimaConfirm !== key) { aimaConfirm = key; aimaMsg = T('aima.confirm.size'); again(key); return; }
               aimaConfirm = '';
-              A.setSize(v[0]);
+              A.setSize(v[0], b);
               aimaMsg = T('aima.done.size');
             } else {
-              A.setCfg(o[0], v[0]);
+              A.setCfg(o[0], v[0], b);
             }
             again(key);
           }));
@@ -1302,11 +1323,11 @@
       }
     }
     if (trainer) {
-      act.appendChild(btn('', T('aima.save'), 'ai:save', function () { A.save(); aimaMsg = T('aima.saved'); again('ai:save'); }));
+      act.appendChild(btn('', T('aima.save'), 'ai:save', function () { A.saveBrain(b); aimaMsg = T('aima.saved'); again('ai:save'); }));
       act.appendChild(btn('danger', T('aima.reset'), 'ai:reset', function () {
         if (aimaConfirm !== 'reset') { aimaConfirm = 'reset'; aimaMsg = T('aima.confirm.reset'); again('ai:reset'); return; }
         aimaConfirm = '';
-        A.reset();
+        A.reset(b);
         aimaMsg = T('aima.done.reset');
         again('ai:reset');
       }));
@@ -1371,6 +1392,10 @@
         A.use(brainSel).then(function (b) { aimaMsg = T('aima.used') + ' ' + b.name; again('ai:use'); });
       }));
     }
+    act.appendChild(btn('', T('aima.sub.settings'), 'ai:brset', function () {
+      setSel = brainSel; aimaSub = 'settings'; aimaMsg = ''; aimaConfirm = '';
+      again('ai:setsel');
+    }));
     act.appendChild(btn('', T('aima.clone'), 'ai:clone', function () {
       var src = A.loadedBrain(brainSel);
       A.clone(brainSel, nm() || (src ? src.name + ' 2' : 'checkoAI 2')).then(function (b) {
@@ -1438,17 +1463,38 @@
     list.appendChild(opts);
     refs.trStatus = el('div', 'set-hint', trStatus || T('aima.tr.hint'));
     list.appendChild(refs.trStatus);
+    // progress: matches played + the minute of the one being played
+    var bar = el('div', 'aima-prog' + (busy || trProg > 0 ? '' : ' hidden'));
+    refs.trFill = el('b');
+    refs.trFill.style.width = Math.round(trProg * 100) + '%';
+    refs.trPct = el('span', null, Math.round(trProg * 100) + '%');
+    bar.appendChild(refs.trFill);
+    bar.appendChild(refs.trPct);
+    refs.trBar = bar;
+    list.appendChild(bar);
     var act = el('div', 'row aima-actions');
     act.appendChild(btn(busy ? 'danger' : 'primary', T(busy ? 'dbg.stop' : 'aima.tr.run'), 'tr:run', function () {
       if (A.training()) { A.stopTraining(); return; }
       trOut = null;
+      trProg = 0;
+      trLive = false;
       trStatus = T('aima.tr.starting');
       var ok = A.train({ brain: trSel.brain, opp: trSel.opp, matches: TR_OPTS[0][1][trSel.matches], teamSize: TR_OPTS[1][1][trSel.size],
         stadium: TR_OPTS[2][1][trSel.stadium], duration: TR_OPTS[3][1][trSel.length] }, function (done, total, mins) {
-        trStatus = T('dbg.running').replace('%d', done + 1).replace('%t', total) + '  ' + Math.floor(mins) + "'";
+        trStatus = T('dbg.running').replace('%d', done + 1).replace('%t', total) + '  ' + Math.floor(mins) + "'  ·  " + T('aima.tr.saved');
+        trProg = Math.min(1, (done + Math.min(1, mins / 90)) / total);
+        // the run has really started now (it loads the brains first): the Train button becomes Stop
+        if (!trLive) { trLive = true; if (current === 'SETTINGS' && settingsGroup === 'aima' && aimaSub === 'train') again('tr:run'); }
         if (refs.trStatus) refs.trStatus.textContent = trStatus;
+        if (refs.trFill) {
+          refs.trBar.classList.remove('hidden');
+          refs.trFill.style.width = Math.round(trProg * 1000) / 10 + '%';
+          refs.trPct.textContent = Math.round(trProg * 100) + '%';
+        }
       }, function (res) {
         trOut = res;
+        trLive = false;
+        trProg = 1;
         trStatus = T('aima.tr.done');
         if (current === 'SETTINGS' && settingsGroup === 'aima' && aimaSub === 'train') again('tr:run');
       });

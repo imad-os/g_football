@@ -812,6 +812,28 @@
     'aima.tr.full': 'إحصائيات كاملة'
   });
 
+  // checkoAI: per-brain options, sizes, training progress
+  Object.assign(D.en, {
+    'aima.o.tick': 'Decision speed', 'aima.o.tick.h': 'How often he decides (fast reacts sooner, slow is steadier)',
+    'aima.o.look': 'Foresight', 'aima.o.look.h': 'How far ahead rewards count (long: he plays for later, not only now)',
+    'aima.o.mineW': 'Weight of my play', 'aima.o.mineW.h': 'How much your own play counts when he copies (against the Legend CPU)',
+    'aima.o.mem': 'Memory', 'aima.o.mem.h': 'Copied moves he keeps to learn from (changing it empties it)',
+    'aima.fast': 'Fast', 'aima.slow': 'Slow', 'aima.short': 'Short', 'aima.long': 'Long',
+    'aima.sz.TINY': 'Tiny', 'aima.sz.MEDIUM': 'Medium', 'aima.sz.LARGE': 'Large', 'aima.sz.HUGE': 'Huge (PC)',
+    'aima.o.size.h': 'Tiny 32-24, Medium 64-48, Large 256-128, Huge 512-256. Bigger learns more but slower; changing it starts a new brain',
+    'aima.settingsof': 'Settings of:', 'aima.tr.saved': 'saved after every match'
+  });
+  Object.assign(D.fr, { 'aima.o.tick': 'Vitesse de decision', 'aima.o.look': 'Anticipation', 'aima.o.mineW': 'Poids de mon jeu', 'aima.o.mem': 'Memoire',
+    'aima.fast': 'Rapide', 'aima.slow': 'Lent', 'aima.short': 'Courte', 'aima.long': 'Longue',
+    'aima.sz.TINY': 'Mini', 'aima.sz.MEDIUM': 'Moyen', 'aima.sz.LARGE': 'Grand', 'aima.sz.HUGE': 'Enorme (PC)', 'aima.settingsof': 'Reglages de :' });
+  Object.assign(D.es, { 'aima.o.tick': 'Velocidad de decision', 'aima.o.look': 'Prevision', 'aima.o.mineW': 'Peso de mi juego', 'aima.o.mem': 'Memoria',
+    'aima.fast': 'Rapida', 'aima.slow': 'Lenta', 'aima.short': 'Corta', 'aima.long': 'Larga',
+    'aima.sz.TINY': 'Mini', 'aima.sz.MEDIUM': 'Medio', 'aima.sz.LARGE': 'Grande', 'aima.sz.HUGE': 'Enorme (PC)', 'aima.settingsof': 'Ajustes de:' });
+  Object.assign(D.ar, { 'aima.o.tick': 'سرعة القرار', 'aima.o.look': 'التوقع',
+    'aima.o.mineW': 'وزن لعبي', 'aima.o.mem': 'الذاكرة',
+    'aima.sz.TINY': 'صغير جدا', 'aima.sz.MEDIUM': 'متوسط', 'aima.sz.LARGE': 'كبير',
+    'aima.sz.HUGE': 'ضخم (PC)', 'aima.settingsof': 'إعدادات:' });
+
   var lang = 'en';
 
   NS.I18n = {
