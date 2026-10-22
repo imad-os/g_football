@@ -485,3 +485,9 @@ h1, h2, p { margin: 0; }
 
 .aima-headtxt { flex: 1; min-width: 0; }
 .aima-pick { flex-shrink: 0; border-color: #c084fc; }
+
+.aima-subs { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+.aima-subs .aima-pick { margin-left: auto; }
+.aima-tab { display: inline-flex; align-items: center; gap: 0.35rem; }
+.aima-tabico { display: inline-block; width: 1.35em; height: 1.35em; flex-shrink: 0; }
+.aima-tabico svg { width: 100%; height: 100%; display: block; }

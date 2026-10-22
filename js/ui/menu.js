@@ -989,12 +989,17 @@
     var wrap = screens.SETTINGS;
     refs.setTabs = el('div', 'tabs set-tabs');
     NS.SETTING_GROUPS.forEach(function (g, i) {
-      var b = btn('tab', T(g[1]), 'sg:' + g[0], function () {
+      var b = btn('tab' + (g[0] === 'aima' ? ' aima-tab' : ''), T(g[1]), 'sg:' + g[0], function () {
         if (NS.Aima && NS.Aima.training()) return; // a checkoAI training is running
         settingsGroup = g[0];
         renderSettings('sg:' + g[0]);
       });
       b.setAttribute('data-group', g[0]);
+      if (g[0] === 'aima') { // checkoAI: the white rooster before its name
+        var ic = el('span', 'aima-tabico');
+        ic.innerHTML = NS.HUD.ROOSTER;
+        b.insertBefore(ic, b.firstChild);
+      }
       if (i === 0) b.setAttribute('data-default', '1');
       refs.setTabs.appendChild(b);
     });
@@ -1259,7 +1264,6 @@
   // the selected brain (loaded), or null while it loads from the cloud
   function selBrain() {
     var A = NS.Aima, brains = A.brains();
-    if (!A.isTrainer()) return A.brain();
     if (!aimaSel || !brains.some(function (e) { return e.id === aimaSel; })) aimaSel = A.activeId();
     var b = A.loadedBrain(aimaSel);
     if (b) return b;
@@ -1542,35 +1546,12 @@
     var A = NS.Aima;
     var list = refs.setList;
     var trainer = A.isTrainer();
-    var b = selBrain();
+    var shown = selBrain();
     var brains = A.brains();
-    var shown = b ? b : null;
     var selName = '?';
     for (var i = 0; i < brains.length; i++) if (brains[i].id === aimaSel) selName = brains[i].name;
     if (shown) selName = shown.name;
-    // head: the rooster, his name, and the brain every sub-tab shows (the trainer picks it)
-    var head = el('div', 'aima-head');
-    var ico = el('span', 'aima-rooster');
-    ico.innerHTML = NS.HUD.ROOSTER;
-    head.appendChild(ico);
-    var ht = el('div', 'aima-headtxt');
-    ht.appendChild(el('div', 'aima-name', 'checkoAI  ·  ' + selName));
-    ht.appendChild(el('div', 'set-hint', T(trainer ? 'aima.role.trainer' : 'aima.role.viewer')));
-    head.appendChild(ht);
-    if (trainer) {
-      var isAct = (shown ? shown.id : aimaSel) === A.activeId();
-      var pk = btn('opt aima-pick', T('aima.tr.brain') + ': ' + (isAct ? '★ ' : '') + selName + '  ▸', 'ai:pick', function () {
-        if (A.training()) return;
-        var j = 0;
-        for (; j < brains.length; j++) if (brains[j].id === aimaSel) break;
-        selectBrain(brains[(j + 1) % brains.length].id);
-        again('ai:pick');
-      });
-      if (A.training()) pk.disabled = true;
-      head.appendChild(pk);
-    }
-    list.appendChild(head);
-    // sub-tabs (only Stats for everyone but the trainer)
+    // sub-tabs (Stats and Settings for everyone; Brains and Training for the trainer), then the brain they all show
     var subs = trainer ? AIMA_SUBS : ['stats', 'settings'];
     if (subs.indexOf(aimaSub) < 0) aimaSub = 'stats';
     var tabs = el('div', 'tabs aima-subs');
@@ -1584,6 +1565,18 @@
       });
       tabs.appendChild(t);
     });
+    if (brains.length > 1 || trainer) {
+      var isAct = (shown ? shown.id : aimaSel) === A.activeId();
+      var pk = btn('opt aima-pick', T('aima.tr.brain') + ': ' + (isAct ? '\u2605 ' : '') + selName + '  \u25b8', 'ai:pick', function () {
+        if (A.training() || brains.length < 2) return;
+        var j = 0;
+        for (; j < brains.length; j++) if (brains[j].id === aimaSel) break;
+        selectBrain(brains[(j + 1) % brains.length].id);
+        again('ai:pick');
+      });
+      if (A.training()) pk.disabled = true;
+      tabs.appendChild(pk);
+    }
     list.appendChild(tabs);
     if (!shown) list.appendChild(el('div', 'set-hint', T('aima.loading')));
     else if (aimaSub === 'stats') subStats(list, shown);
