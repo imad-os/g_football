@@ -1464,12 +1464,7 @@
       if (busy) b.disabled = true;
       opts.appendChild(b);
     }
-    cyc('brain', T('aima.tr.brain'), trName(trSel.brain), function () {
-      var i = 0;
-      for (; i < brains.length; i++) if (brains[i].id === trSel.brain) break;
-      trSel.brain = brains[(i + 1) % brains.length].id;
-      selectBrain(trSel.brain); // the same brain in every sub-tab
-    });
+    // (the brain trained is the one picked at the top of the checkoAI tab)
     cyc('opp', T('aima.tr.opp'), trSel.opp.indexOf('B:') === 0 ? 'checkoAI ' + trName(trSel.opp.slice(2)) : T('opt.' + trSel.opp.toLowerCase()), function () {
       trSel.opp = opps[(opps.indexOf(trSel.opp) + 1) % opps.length];
     });
