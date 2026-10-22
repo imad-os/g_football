@@ -62,6 +62,7 @@
       matches: 0, mins: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, goals: 0, shots: 0, onTarget: 0, passes: 0, passOk: 0,
       fwdPass: 0, tackles: 0, won: 0, lost: 0, fouls: 0, claps: 0, clapSum: 0, reward: 0, decisions: 0, modelDec: 0,
       rl: 0, im: 0, humanSamples: 0, cpuSamples: 0, carryT: 0, sprintT: 0, playT: 0, xSum: 0, xN: 0, trainMatches: 0,
+      opsP: 0, opsL: 0, opsT: 0, // arithmetic operations, and the seconds of play they were counted over: playing (its decisions) and learning (the same count on every device)
       btn: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], hist: []
     };
   }
@@ -92,6 +93,11 @@
     this.OW1 = 0; this.OB1 = H1 * F; this.OW2 = this.OB1 + H1; this.OB2 = this.OW2 + H2 * H1; this.OW3 = this.OB2 + H2;
     this.OB3 = this.OW3 + NOUT * H2;
     this.NP = this.OB3 + NOUT;
+    // work (operations) of one decision and of one learning step: a multiply-add counts 2, tanh ~20, the optimizer
+    // ~14 per value (gradient reset, norm, Adam). Exact for the layers, the same on every device.
+    this.MAC = F * H1 + H1 * H2 + NOUT * H2;
+    this.fwdOps = 2 * this.MAC + 20 * (H1 + H2) + 12 * NOUT;
+    this.stepOps = this.fwdOps + 4 * this.MAC + 3 * (H1 + H2) + 14 * this.NP;
     this.TENS = [[this.OW1, H1 * F], [this.OB1, H1], [this.OW2, H2 * H1], [this.OB2, H2], [this.OW3, NOUT * H2], [this.OB3, NOUT]];
     this.P = new Float32Array(this.NP); this.G = new Float32Array(this.NP);
     this.AM = new Float32Array(this.NP); this.AV = new Float32Array(this.NP);
@@ -370,6 +376,7 @@
     if (btn && pw >= 0) headGrad(O_PW, NPW, null, pw, w, 0);
     backward(b, rx);
     b.st.im++;
+    b.st.opsL += b.stepOps;
   }
 
   // stick (world) -> one of 9 classes in the team's frame (0 = none)
@@ -435,6 +442,7 @@
       }
       backward(b, ux);
       b.st.rl++;
+      b.st.opsL += b.stepOps;
     }
     c.th = (c.th + 1) % TRAJ;
     c.tn--;
@@ -495,6 +503,7 @@
     c.tn++;
     if (c.tn > NSTEP) learnOldest(b, c, true);
     b.st.modelDec++;
+    b.st.opsP += b.fwdOps;
   }
 
   // the CPU played this tick: copy what it did (moves are copied at the moment they happen, see the hooks)
@@ -932,6 +941,32 @@
   }
   function r1(v) { return Math.round(v * 10) / 10; }
 
+  // 1234567 -> "1.23 M"
+  function fmtOps(n) {
+    var u = ['', ' K', ' M', ' G', ' T', ' P'], i = 0;
+    while (n >= 1000 && i < u.length - 1) { n /= 1000; i++; }
+    return (n >= 100 || i === 0 ? Math.round(n) : (Math.round(n * (n >= 10 ? 10 : 100)) / (n >= 10 ? 10 : 100))) + u[i];
+  }
+
+  // a brain's work: measured (per second of play) and expected from its settings; memory it holds
+  function work(b) {
+    var st = b.st, T = st.opsT || 0;
+    var tick = TICKS[b.cfg.tick] || TICKS[1];
+    var own = 1 - b.help();                       // share of decisions it makes itself
+    var learnSteps = own + 3;                     // per decision: one reward step (its own play) + 3 copied moves
+    var playExp = own * b.fwdOps / tick;
+    var learnExp = learnSteps * b.stepOps / tick;
+    var memBytes = b.NP * 4 * 4 + (b.memX ? b.memCap * (F * 4 + 9) : (MEMS[b.cfg.mem] || MEMS[1]) * (F * 4 + 9));
+    return {
+      measured: T > 0, perSec: T > 0 ? (st.opsP + st.opsL) / T : 0, playPerSec: T > 0 ? st.opsP / T : 0,
+      learnPerSec: T > 0 ? st.opsL / T : 0,
+      perDecision: b.fwdOps, perStep: b.stepOps,
+      expOn: playExp + learnExp, expOff: playExp,   // learning on / off
+      total: st.opsP + st.opsL, memBytes: memBytes,
+      fmt: fmtOps
+    };
+  }
+
   function trainSummary(t, d, rew) {
     var T = NS.I18n.t;
     var c = t.cfg, b = t.brain;
@@ -950,6 +985,8 @@
     L.push(T('aima.tr.hisplay') + ': ' + d.shots + ' ' + T('aima.tr.shots') + ' (' + d.onTarget + ' ' + T('aima.k.ontarget') + ', ' + d.goals + ' ' +
       T('aima.tr.goalsby') + '), ' + d.passes + ' ' + T('aima.tr.passes') + ' (' + pct(d.passOk, d.passes) + ', ' + d.fwdPass + ' ' + T('aima.k.fwd') + '), ' +
       T('aima.k.wonlost') + ' ' + d.won + ' / ' + d.lost + ', ' + d.tackles + ' ' + T('aima.tr.tackles') + ', ' + d.fouls + ' ' + T('aima.tr.fouls'));
+    if (d.opsT > 0) L.push(T('aima.w.title') + ': ' + fmtOps((d.opsP + d.opsL) / d.opsT) + ' ' + T('aima.w.persec') + '  (' +
+      T('aima.w.play') + ' ' + fmtOps(d.opsP / d.opsT) + ', ' + T('aima.w.learn') + ' ' + fmtOps(d.opsL / d.opsT) + ')');
     L.push(T('aima.tr.learning') + ': ' + d.rl + ' RL + ' + d.im + ' ' + T('aima.k.copy') + '   ' + T('aima.k.own') + ' ' + pct(d.modelDec, d.decisions) +
       '   ' + T('aima.k.help') + ' ' + Math.round(t.help0 * 100) + '% -> ' + Math.round(b.help() * 100) + '%');
     L.push(T('aima.tr.reward') + ': ' + r1(a1) + ' -> ' + r1(a2) + ' ' + T('aima.tr.permatch') + '   ' + trend);
@@ -1139,6 +1176,7 @@
         c.t = TICK;
         b.st.decisions++;
         b.st.playT += TICK;
+        b.st.opsT += TICK;
         b.st.xSum += p.pos.x * (p.team === 0 ? 1 : -1) / NS.PITCH_HALF_W; b.st.xN++;
         if (!c.cpu) decide(slot, p);
         else copyCpu(slot, p);
@@ -1263,7 +1301,9 @@
         pos: st.xN ? st.xSum / st.xN : 0, fwd: st.passOk ? st.fwdPass / st.passOk : 0
       };
     },
-    memory: function (b) { return (b || active).memN; }
+    memory: function (b) { return (b || active).memN; },
+    work: function (b) { return work(b || active); },
+    fmtOps: fmtOps
   };
   makeCtl(World.aiSlots[0]);
   makeCtl(World.aiSlots[1]);

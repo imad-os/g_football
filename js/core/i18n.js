@@ -837,6 +837,20 @@
   Object.assign(D.en, { 'aima.loadfail': 'That brain could not be loaded (cloud). Showing the active one.' });
   Object.assign(D.fr, { 'aima.tr.brain': 'Cerveau' });
 
+  // checkoAI: work (operations), the same on every device
+  Object.assign(D.en, {
+    'aima.w.title': 'WORK', 'aima.w.sub': 'operations, the same on every device', 'aima.w.persec': 'ops / s of play',
+    'aima.w.measured': 'Measured', 'aima.w.none': 'not played yet', 'aima.w.split': 'of which', 'aima.w.play': 'playing', 'aima.w.learn': 'learning',
+    'aima.w.expected': 'Expected now', 'aima.w.lon': 'learning on', 'aima.w.loff': 'off',
+    'aima.w.decision': 'One decision', 'aima.w.step': 'one learning step', 'aima.w.total': 'Total so far', 'aima.w.memory': 'Memory it holds',
+    'aima.w.hint': 'How heavy this brain is, counted in arithmetic operations: the same number on any TV or PC. How much of the CPU it takes then depends on the device. Fast training runs many seconds of play per real second.'
+  });
+  Object.assign(D.fr, { 'aima.w.title': 'TRAVAIL', 'aima.w.sub': 'operations, identique sur tous les appareils', 'aima.w.persec': 'ops / s de jeu',
+    'aima.w.measured': 'Mesure', 'aima.w.expected': 'Prevu', 'aima.w.play': 'jeu', 'aima.w.learn': 'apprentissage', 'aima.w.memory': 'Memoire' });
+  Object.assign(D.es, { 'aima.w.title': 'TRABAJO', 'aima.w.sub': 'operaciones, igual en todos los aparatos', 'aima.w.persec': 'ops / s de juego',
+    'aima.w.measured': 'Medido', 'aima.w.expected': 'Previsto', 'aima.w.play': 'juego', 'aima.w.learn': 'aprendizaje', 'aima.w.memory': 'Memoria' });
+  Object.assign(D.ar, { 'aima.w.title': '\u0627\u0644\u0639\u0645\u0644', 'aima.w.persec': 'ops / s' });
+
   var lang = 'en';
 
   NS.I18n = {

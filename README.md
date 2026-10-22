@@ -129,6 +129,10 @@ as a human; the other ten are the Legend CPU. A small box under the scoreboard s
 - **Training** (Settings > checkoAI > Training): a brain plays full-speed matches against the CPU at any level or against
   another brain (which plays but does not learn), with a progress bar; saved after every match (a stopped training keeps
   what it learnt); then a summary or the full stats (brain counters + debug report).
+- **Work** (Stats > Work): each brain counts the arithmetic operations it does (playing and learning), per second of
+  play: the same number on any device (how heavy the brain is; the share of CPU then depends on the device). Also the
+  expected work of its current settings (learning on / off), one decision, one learning step, the total, its memory.
+  Tiny ~2 M, Medium ~5 M, Large ~32 M, Huge ~104 M operations per second of play while it learns.
 - **Trainer**: the My PC profile named "imad", signed in with his Google account (Settings > checkoAI > Settings > Sign
   in with Google, once on a computer; if the popup is blocked inside My PC, open `aima-login.html` in a browser and paste
   the code). The token is kept in the profile's My PC save, so his TV and other devices are signed in too.

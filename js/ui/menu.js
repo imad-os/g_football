@@ -1220,6 +1220,20 @@
     }
     cols.appendChild(c3);
     list.appendChild(cols);
+
+    // work: operations, the same count on every device (how heavy this brain is, not how fast this device is)
+    var w = A.work(b), f = A.fmtOps;
+    var c4 = aimaCard(T('aima.w.title') + ' — ' + T('aima.w.sub'));
+    g = el('div', 'aima-grid');
+    kv(g, T('aima.w.measured'), w.measured ? f(w.perSec) + ' ' + T('aima.w.persec') : T('aima.w.none'));
+    if (w.measured) kv(g, '  ' + T('aima.w.split'), T('aima.w.play') + ' ' + f(w.playPerSec) + '  ·  ' + T('aima.w.learn') + ' ' + f(w.learnPerSec));
+    kv(g, T('aima.w.expected'), T('aima.w.lon') + ' ' + f(w.expOn) + '  ·  ' + T('aima.w.loff') + ' ' + f(w.expOff) + ' ' + T('aima.w.persec'));
+    kv(g, T('aima.w.decision'), f(w.perDecision) + '  ·  ' + T('aima.w.step') + ' ' + f(w.perStep));
+    kv(g, T('aima.w.total'), f(w.total));
+    kv(g, T('aima.w.memory'), (Math.round(w.memBytes / 104857.6) / 10) + ' MB');
+    c4.appendChild(g);
+    c4.appendChild(el('div', 'set-hint', T('aima.w.hint')));
+    list.appendChild(c4);
   }
 
   function modelCard(b) {
