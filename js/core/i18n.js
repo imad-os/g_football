@@ -698,7 +698,7 @@
     'aima.k.ontarget': 'on target', 'aima.k.passes': 'Passes', 'aima.k.fwd': 'forward', 'aima.k.tackles': 'Tackles', 'aima.k.wonlost': 'Ball won / lost',
     'aima.k.fouls': 'Fouls', 'aima.k.claps': 'Claps', 'aima.k.avg': 'avg', 'aima.k.reward': 'Total reward', 'aima.k.trend': 'Reward per match',
     'aima.k.alg': 'Algorithm', 'aima.k.brain': 'Brain (layers)', 'aima.k.params': 'Values (size)', 'aima.k.inputs': 'Inputs',
-    'aima.inputs': '64: play around him + match (time left, score, cards, players, possession, shots)',
+    'aima.inputs': '90: play around him, his ratings and position, the last seconds, the match (time left, score, cards, players, possession, shots)',
     'aima.k.decisions': 'Decisions', 'aima.k.own': 'his own', 'aima.k.updates': 'Learning steps', 'aima.k.copy': 'copy',
     'aima.k.samples': 'Copied moves', 'aima.k.you': 'you', 'aima.k.help': 'Legend help now', 'aima.k.from': 'Started from',
     'aima.k.created': 'Created', 'aima.k.saved': 'Last saved', 'aima.k.cloud': 'Cloud',
@@ -869,6 +869,14 @@
     'aima.ss.running': 'en cours', 'aima.ss.done': 'termine', 'aima.ss.stopped': 'arrete' });
   Object.assign(D.es, { 'aima.ss.new': 'Nuevo entrenamiento para', 'aima.tr.forever': 'Continuo', 'aima.ss.start': 'Empezar', 'aima.ss.stopall': 'Parar todo', 'aima.ss.remove': 'Quitar',
     'aima.ss.running': 'en curso', 'aima.ss.done': 'terminado', 'aima.ss.stopped': 'parado' });
+
+  // checkoAI v1.20: more inputs
+  Object.assign(D.en, {
+    'aima.o.past': 'Memory of the last seconds', 'aima.o.past.h': 'He also sees what just happened: who had the ball a second ago, his last pass / shot / tackle and how it went, recent shots, where the play is going',
+    'aima.h.inputs': 'new inputs'
+  });
+  Object.assign(D.fr, { 'aima.o.past': 'Memoire des dernieres secondes', 'aima.h.inputs': 'nouvelles entrees' });
+  Object.assign(D.es, { 'aima.o.past': 'Memoria de los ultimos segundos', 'aima.h.inputs': 'nuevas entradas' });
 
   var lang = 'en';
 

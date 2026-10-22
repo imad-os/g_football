@@ -1136,6 +1136,7 @@
     ['look', 'aima.o.look', [[0, 'aima.short'], [1, 'opt.normal'], [2, 'aima.long']]],
     ['mineW', 'aima.o.mineW', [[0, 'opt.low'], [1, 'opt.normal'], [2, 'opt.high']]],
     ['mem', 'aima.o.mem', [[0, '3 000'], [1, '6 000'], [2, '12 000']]],
+    ['past', 'aima.o.past', [[1, 'opt.on'], [0, 'opt.off']]],
     ['size', 'aima.o.size', [['TINY', 'aima.sz.TINY'], ['MEDIUM', 'aima.sz.MEDIUM'], ['LARGE', 'aima.sz.LARGE'], ['HUGE', 'aima.sz.HUGE']]]
   ];
   var aimaSel = '';       // the brain every sub-tab shows (default: the active one)
@@ -1186,6 +1187,7 @@
       case 'set': return T('aima.h.set') + ' ' + d.k + ' = ' + d.v;
       case 'size': return T('aima.h.size') + ' ' + d.v;
       case 'reset': return T('aima.h.reset');
+      case 'inputs': return T('aima.h.inputs') + ' ' + d.from + ' -> ' + d.to;
       case 'match': return T('aima.h.match') + ' ' + d.s + ' (' + T(d.vs === 'human' ? 'aima.h.vshuman' : 'aima.h.vscpu') + ')';
       case 'train': return T('aima.h.train') + ' v ' + d.opp + ': ' + d.n + (d.of && d.n < d.of ? '/' + d.of : '') + ' ' + T('aima.tr.matches') + ', ' + d.w + '-' + d.d + '-' + d.l +
         ' (' + d.gf + '-' + d.ga + ')';

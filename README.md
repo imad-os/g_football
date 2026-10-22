@@ -120,12 +120,18 @@ as a human; the other ten are the Legend CPU. A small box in the top-right corne
 - **Brains**: several networks, each with its own settings, stats and history (Settings > checkoAI > Brains: use, clone,
   rename, new, delete). The active brain (★) plays the matches and is the one every other profile gets. Sizes SMALL
   TINY 32-24, MEDIUM 64-48 (8.6k values), LARGE 256-128, HUGE 512-256 (PC); each brain has its own settings (style, speed,
-  foresight, memory, weight of the trainer's play, learning, exploring...); a clone copies them, a new brain has the defaults. 64 inputs: the play around him and the whole match situation
-  (time left, score, numbers, cards, possession, shots).
+  foresight, memory, weight of the trainer's play, learning, exploring...); a clone copies them, a new brain has the defaults. 90 inputs: the play around him, his ratings (speed, dribble, shoot,
+  stamina, header, defense) and position, the nearest opponents' speed, the last seconds (option "Memory of the last
+  seconds": who had the ball 1 s ago, his team's last pass / shot / tackle and how it went, recent shots, where the play
+  is going, how long the ball has been on one foot) and the whole match situation (time left, score, numbers, cards,
+  possession, shots). A brain saved with the old 64 inputs gets the new ones with weights of 0: it plays as before, then
+  learns to use them.
 - **Learning** (the trainer's profile only): it copies the Legend CPU in spells the CPU plays for it (Auto: fewer as it
   learns, never under 35%), copies the trainer's own play, and learns from rewards (actor-critic, 2 s returns): goals,
   shots, passes, ball won / lost, fouls, and the trainer's **claps** (Buttons screen > Clap, default ZL; hold it: a quick
-  tap is ~25%, a full 1 s hold 100%). Restarts and penalties it takes are played by the Legend CPU.
+  tap is ~25%, a full 1 s hold 100%). A clap is for what he did in the 3.5 s before the button went down: his latest
+  pass / shot / tackle / ball won there (else what he did ~0.8 s before), and the Legend moves he copied then count more;
+  his decisions wait 4.5 s before they are learnt so a late clap still reaches them. Restarts and penalties it takes are played by the Legend CPU.
 - **Training** (Settings > checkoAI > Training): sessions. Each one is a brain (the one picked at the top), its own
   opponent (the CPU at any level, or a brain, which learns too), number of matches and pitch, with its own progress bar,
   Stop, summary and full stats. Start as many as you like: the running ones take turns, one match each, and count only
