@@ -1606,6 +1606,7 @@
           NS.Storage.setSetting(def.key, o[0]);
           NS.App.applySettings();
           syncSettings();
+          if (def.key === 'difficulty') renderSettings('set:' + def.key + ':' + o[0]); // (the model row below shows for checkoAI)
         });
         b.setAttribute('data-set', def.key);
         b.setAttribute('data-val', String(o[0]));
@@ -1613,11 +1614,33 @@
       });
       row.appendChild(opts);
       refs.setList.appendChild(row);
+      if (def.key === 'difficulty' && World.settings.difficulty === 'AIMA' && NS.Aima) refs.setList.appendChild(aimaModelRow());
     });
     var tabs = refs.setTabs.querySelectorAll('[data-group]');
     for (var i = 0; i < tabs.length; i++) tabs[i].classList.toggle('sel', tabs[i].getAttribute('data-group') === settingsGroup);
     syncSettings();
     if (keepKey) { focused = null; if (!focusByKey(keepKey)) focusDefault(); }
+  }
+
+  // checkoAI is the CPU level: which of the available models plays (the active brain, the one every match uses)
+  function aimaModelRow() {
+    var A = NS.Aima;
+    var row = el('div', 'set-row');
+    var lab = el('div', 'set-label');
+    lab.appendChild(el('div', 'set-name', T('aima.pick.model')));
+    lab.appendChild(el('div', 'set-hint', T('aima.pick.model.h')));
+    row.appendChild(lab);
+    var opts = el('div', 'row');
+    var list = A.brains();
+    if (!list.length) opts.appendChild(el('div', 'set-hint', T('aima.loading')));
+    list.forEach(function (e) {
+      var on = e.id === A.activeId();
+      opts.appendChild(btn('opt' + (on ? ' sel' : ''), e.name + '  ·  ' + e.size, 'set:aimamodel:' + e.id, function () {
+        A.use(e.id).then(function () { if (current === 'SETTINGS' && settingsGroup !== 'aima') renderSettings('set:aimamodel:' + e.id); }, function () {});
+      }));
+    });
+    row.appendChild(opts);
+    return row;
   }
 
   function syncSettings() {

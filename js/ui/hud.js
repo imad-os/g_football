@@ -53,7 +53,7 @@
       var ids = ['hud', 'hud-comp', 'hud-home-badge', 'hud-home-name', 'hud-score-home', 'hud-score-away', 'hud-away-name',
         'hud-away-badge', 'hud-clock', 'hud-telemetry', 'hud-fps', 'hud-quality', 'hud-radar-box', 'radar-canvas',
         'event-banner', 'event-title', 'event-sub', 'hud-hint', 'goal-fx', 'goal-word', 'goal-sub', 'hud-home-cards', 'hud-away-cards',
-        'aima-box', 'aima-ico', 'aima-txt', 'aima-gauge', 'clap-fx', 'clap-pct'];
+        'aima-box', 'aima-name', 'aima-ico', 'aima-txt', 'aima-gauge', 'clap-fx', 'clap-pct'];
       var i;
       for (i = 0; i < ids.length; i++) el[ids[i]] = $(ids[i]);
       for (i = 1; i <= 2; i++) {
@@ -144,6 +144,8 @@
         el.hud.classList.toggle('aima-on', on); // the FPS pill moves below the box
       }
       if (!on || !NS.Aima) return;
+      var nm = NS.Aima.modelName();
+      if (last.anm !== nm) { last.anm = nm; el['aima-name'].textContent = nm; }
       var t = NS.Aima.thought();
       if (last.ath !== t) {
         last.ath = t;

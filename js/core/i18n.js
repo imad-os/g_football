@@ -873,7 +873,8 @@
   // checkoAI v1.20: more inputs
   Object.assign(D.en, {
     'aima.o.past': 'Memory of the last seconds', 'aima.o.past.h': 'He also sees what just happened: who had the ball a second ago, his last pass / shot / tackle and how it went, recent shots, where the play is going',
-    'aima.h.inputs': 'new inputs'
+    'aima.h.inputs': 'new inputs',
+    'aima.pick.model': 'checkoAI model', 'aima.pick.model.h': 'Which of his models plays (all matches use it). Models are made and trained in the checkoAI tab'
   });
   Object.assign(D.fr, { 'aima.o.past': 'Memoire des dernieres secondes', 'aima.h.inputs': 'nouvelles entrees' });
   Object.assign(D.es, { 'aima.o.past': 'Memoria de los ultimos segundos', 'aima.h.inputs': 'nuevas entradas' });

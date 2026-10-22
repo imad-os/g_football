@@ -1231,6 +1231,8 @@
     isTrainer: function () { return trainer; },
     isImad: function () { return isImad(); },
     thought: function () { return thought; },
+    // the model the status box belongs to (the one playing the team it follows)
+    modelName: function () { var s = World.aiSlots[showTeam()], b = s && s.brain || active; return b ? b.name : ''; },
     clapFrac: function () { return clapOn ? Math.min(1, (performance.now() - clapDown) / 1000 / CLAP_FULL) : -1; },
     account: function () { return auth && !auth.anon ? (auth.email || auth.uid || '?') : ''; },
     signIn: signIn,
