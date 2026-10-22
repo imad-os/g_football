@@ -924,10 +924,15 @@
 
   /* ------------------------------------------------------------------ training mode (full speed, js/game/debug.js) */
 
-  // a training run: several brains, each match pairs one of them with its opponent (the CPU, a brain, or another
-  // trained brain). Every brain that plays learns and is saved after each of its matches.
-  //   { cfg, sched: [{ h: Brain, a: Brain|null }], idx, runs: { id: { b, st0, help0, h (history line), rew, opps } }, order }
-  var training = null;
+  // Training sessions: each one is a brain, its opponent (the CPU at a level, or a brain, which learns too), its number
+  // of matches and pitch, its own progress and results. Running sessions take turns, one match each (one simulation at
+  // a time), so they all advance together but count only their own matches. Every brain that plays is saved after
+  // each of its matches.
+  //   session: { id, cfg, state: 'loading'|'running'|'done'|'stopped'|'error', done, mins, b, ob, oppLabel,
+  //              runs: { id: run }, order, log: [match lines], stopReq, curDone }
+  //   run (one brain in one session): { b, help0, h (its history line), rew, opps, acc (its stats, this session), snap }
+  var sessions = [], sesSeq = 0, rr = 0;
+  var training = null;  // the session whose match is being played right now
 
   function statDelta(a, b) {
     var d = {};
@@ -935,24 +940,63 @@
     return d;
   }
   function pct(n, d) { return d ? Math.round(n * 100 / d) + '%' : '-'; }
-  // a brain's line in its history for this run, kept up to date after every match it plays
+  // a brain's line in its history for this session, kept up to date after every match it plays
   function trainProgress(run) {
-    var d = statDelta(run.st0, run.b.st);
-    var h = run.h.d;
-    h.n = d.matches; h.w = d.w; h.d = d.d; h.l = d.l; h.gf = d.gf; h.ga = d.ga;
+    var d = run.acc, h = run.h.d;
+    h.n = d.matches || 0; h.w = d.w || 0; h.d = d.d || 0; h.l = d.l || 0; h.gf = d.gf || 0; h.ga = d.ga || 0;
     h.opp = oppList(run);
     return d;
   }
   function oppList(run) { return Object.keys(run.opps).join(', '); }
-  function addRun(t, b, of) {
-    if (t.runs[b.id]) return t.runs[b.id];
-    var run = { b: b, st0: JSON.parse(JSON.stringify(b.st)), help0: b.help(), rew: [], opps: {} };
+  function addRun(S, b, of) {
+    if (S.runs[b.id]) return S.runs[b.id];
+    var run = { b: b, help0: b.help(), rew: [], opps: {}, acc: {}, snap: null };
     b.frozen = false; // every brain of a training learns
     b.log('train', { opp: '', n: 0, of: of, w: 0, d: 0, l: 0, gf: 0, ga: 0 });
     run.h = b.hist[b.hist.length - 1];
-    t.runs[b.id] = run;
-    t.order.push(b.id);
+    S.runs[b.id] = run;
+    S.order.push(b.id);
     return run;
+  }
+  function addDelta(acc, a, b) {
+    for (var k in b) if (typeof b[k] === 'number') acc[k] = (acc[k] || 0) + b[k] - (a[k] || 0);
+  }
+
+  function notify(S) { if (Aima.onTrain) Aima.onTrain(S); }
+
+  // the next match: the next running session in turn
+  function pump() {
+    if (training || !NS.Debug || NS.Debug.running()) return;
+    var n = sessions.length, S = null;
+    for (var i = 0; i < n; i++) {
+      var c = sessions[(rr + i) % n];
+      if (c.state === 'running') { S = c; rr = (rr + i + 1) % n; break; }
+    }
+    if (!S) return;
+    training = S;
+    S.curDone = false;
+    S.mins = 0;
+    var c2 = S.cfg;
+    NS.Debug.start({ matches: 1, levels: ['AIMA', S.ob ? 'AIMA' : c2.opp], teams: 'RANDOM', teamSize: c2.teamSize, stadium: c2.stadium,
+      duration: c2.duration }, function (done, total, mins) {
+      S.mins = mins;
+      notify(S);
+    }, function (report) {
+      training = null;
+      teamBrains[0] = teamBrains[1] = null;
+      if (S.curDone) {
+        S.done++;
+        // its line of the match log ("#1 ..." of this one-match run)
+        var lines = report.split('\n');
+        for (var k = 0; k < lines.length; k++) if (lines[k].indexOf('#1 ') === 0) S.log.push('#' + S.done + ' ' + lines[k].slice(3));
+      }
+      if (S.stopReq) S.state = 'stopped';
+      else if (S.done >= S.cfg.matches) S.state = 'done';
+      if (S.state !== 'running') { S.ended = Date.now(); for (var id in S.runs) { trainProgress(S.runs[id]); saveBrain(S.runs[id].b); } }
+      setActive(active);
+      notify(S);
+      setTimeout(pump, 30);
+    });
   }
   function r1(v) { return Math.round(v * 10) / 10; }
 
@@ -982,14 +1026,13 @@
     };
   }
 
-  function trainSummary(t) {
-    var T = NS.I18n.t, c = t.cfg;
-    var L = ['checkoAI ' + T('aima.tr.title') + ': ' + t.order.length + ' ' + T('aima.tr.brains') + ', ' + T('aima.tr.opp') + ' ' + t.oppLabel +
-      '   (' + t.idx + ' / ' + t.sched.length + ' ' + T('aima.tr.matches') + ', ' + c.teamSize + ' ' + T('aima.tr.aside') + ', ' + c.stadium + ', ' +
-      c.duration + ' min)'];
-    for (var i = 0; i < t.order.length; i++) {
-      var run = t.runs[t.order[i]];
-      L.push('', brainSummary(run, statDelta(run.st0, run.b.st)));
+  function trainSummary(S) {
+    var T = NS.I18n.t, c = S.cfg;
+    var L = ['checkoAI ' + T('aima.tr.title') + ' #' + S.id + ': ' + S.b.name + '  v  ' + S.oppLabel + '   (' + S.done + ' / ' + c.matches + ' ' +
+      T('aima.tr.matches') + ', ' + c.teamSize + ' ' + T('aima.tr.aside') + ', ' + c.stadium + ', ' + c.duration + ' min)  ' + T('aima.ss.' + S.state)];
+    for (var i = 0; i < S.order.length; i++) {
+      var run = S.runs[S.order[i]];
+      L.push('', brainSummary(run, run.acc));
     }
     return L.join('\n');
   }
@@ -998,6 +1041,8 @@
     var T = NS.I18n.t;
     var b = run.b, rew = run.rew;
     var n = d.matches || 1;
+    d = statDelta({}, d); // (missing counters read as 0)
+    for (var z in freshStats()) if (typeof freshStats()[z] === 'number' && d[z] === undefined) d[z] = 0;
     var half = Math.floor(rew.length / 2);
     var a1 = 0, a2 = 0, i;
     for (i = 0; i < half; i++) a1 += rew[i];
@@ -1019,12 +1064,12 @@
     return L.join('\n');
   }
 
-  function trainFull(t, report) {
+  function trainFull(S) {
     var T = NS.I18n.t;
-    var L = [trainSummary(t)];
-    for (var r = 0; r < t.order.length; r++) {
-      var run = t.runs[t.order[r]];
-      var d = statDelta(run.st0, run.b.st);
+    var L = [trainSummary(S)];
+    for (var r = 0; r < S.order.length; r++) {
+      var run = S.runs[S.order[r]];
+      var d = run.acc;
       L.push('', T('aima.tr.brainstats') + ': ' + run.b.name);
       var keys = Object.keys(d).sort();
       for (var i = 0; i < keys.length; i++) {
@@ -1033,7 +1078,8 @@
       }
       L.push('  ' + T('aima.tr.rewards') + ': ' + run.rew.map(function (x) { return r1(x); }).join(' '));
     }
-    L.push('', report);
+    L.push('', T('aima.tr.log'));
+    for (var m = 0; m < S.log.length; m++) L.push(S.log[m]);
     return L.join('\n');
   }
 
@@ -1135,12 +1181,12 @@
     makeSlot: makeCtl,
 
     matchStart: function () {
-      if (training && training.sched.length) {
-        var pr = training.sched[training.idx % training.sched.length];
-        training.idx++;
-        teamBrains[0] = pr.h; teamBrains[1] = pr.a;
-        training.runs[pr.h.id].opps[pr.a ? 'checkoAI ' + pr.a.name : training.cfg.opp] = 1;
-        if (pr.a && pr.a !== pr.h) training.runs[pr.a.id].opps['checkoAI ' + pr.h.name] = 1;
+      if (training) {
+        var S = training;
+        teamBrains[0] = S.b; teamBrains[1] = S.ob;
+        S.runs[S.b.id].opps[S.ob ? 'checkoAI ' + S.ob.name : S.cfg.opp] = 1;
+        if (S.ob && S.ob !== S.b) S.runs[S.ob.id].opps['checkoAI ' + S.b.name] = 1;
+        for (var rid in S.runs) S.runs[rid].snap = JSON.parse(JSON.stringify(S.runs[rid].b.st));
       }
       poss[0] = poss[1] = 0; shotsT[0] = shotsT[1] = 0;
       lastOwner = null; lastOwnerAi = false; lastScore[0] = lastScore[1] = 0; matchOn = false;
@@ -1169,9 +1215,12 @@
       matchOn = false;
       if (training) {
         // every brain of this match is saved after it: a training stopped (or closed) half way keeps what was learnt
+        if (finished) training.curDone = true;
         for (var id in done) {
           var run = training.runs[id];
           if (!run) continue;
+          if (run.snap) addDelta(run.acc, run.snap, run.b.st);
+          run.snap = null;
           trainProgress(run);
           saveBrain(run.b);
         }
@@ -1294,52 +1343,51 @@
       if (NS.Audio.applause) NS.Audio.applause(strength);
     },
 
-    // ---- training: cfg.brains (ids) v cfg.opp: 'EASY'...'LEGEND' (the CPU), 'B:<id>' (a brain, it learns too) or
-    // 'EACH' (the brains play each other in turn). cfg.matches = matches per brain. Full speed (js/game/debug.js).
-    training: function () { return !!training; },
-    train: function (cfg, onProgress, onDone) {
-      // (never over a match in progress: the training plays its own matches)
-      if (training || !trainer || !NS.Debug || NS.Debug.running() || World.match.running) return false;
-      var ids = (cfg.brains || []).slice();
-      if (!ids.length) return false;
+    // ---- training sessions. cfg: { brain: id, opp: 'EASY'..'LEGEND' | 'B:<id>', matches, teamSize, stadium, duration }
+    training: function () { for (var i = 0; i < sessions.length; i++) if (sessions[i].state === 'running' || sessions[i].state === 'loading') return true; return false; },
+    sessions: function () { return sessions; },
+    playing: function () { return training; },
+    startSession: function (cfg) {
+      if (!trainer || !NS.Debug) return null;
+      // (never over a match in progress outside the training)
+      if (World.match.running && !training && !(NS.Debug && NS.Debug.running())) return null;
+      var S = { id: ++sesSeq, cfg: cfg, state: 'loading', done: 0, mins: 0, runs: {}, order: [], log: [], stopReq: false, started: Date.now() };
+      sessions.push(S);
       var oppBrain = cfg.opp.indexOf('B:') === 0 ? cfg.opp.slice(2) : '';
-      var each = cfg.opp === 'EACH' && ids.length > 1;
-      var loads = ids.map(getBrain);
+      var loads = [getBrain(cfg.brain)];
       if (oppBrain) loads.push(getBrain(oppBrain));
       Promise.all(loads).then(function (bs) {
-        var brains = bs.slice(0, ids.length), ob = oppBrain ? bs[bs.length - 1] : null;
-        var n = cfg.matches, i, r;
-        var t = { cfg: cfg, sched: [], idx: 0, runs: {}, order: [] };
-        // the schedule. Against the CPU or one brain: round after round, every brain plays one match. Against each
-        // other: every pair in turn (home and away swapped every other cycle), until each brain has played n matches.
-        if (each) {
-          var pairs = [];
-          for (i = 0; i < brains.length; i++) for (var j = i + 1; j < brains.length; j++) pairs.push([brains[i], brains[j]]);
-          var total = Math.ceil(n * brains.length / 2);
-          for (r = 0; r < total; r++) {
-            var pr = pairs[r % pairs.length], flip = Math.floor(r / pairs.length) % 2;
-            t.sched.push({ h: flip ? pr[1] : pr[0], a: flip ? pr[0] : pr[1] });
-          }
-        } else {
-          for (r = 0; r < n; r++) for (i = 0; i < brains.length; i++) t.sched.push({ h: brains[i], a: ob });
-        }
-        for (i = 0; i < brains.length; i++) addRun(t, brains[i], n);
-        if (ob && !t.runs[ob.id]) addRun(t, ob, n * brains.length); // the opponent brain learns and is saved too
-        t.oppLabel = each ? NS.I18n.t('aima.tr.each') : (ob ? 'checkoAI ' + ob.name : cfg.opp);
-        training = t;
-        for (var k in t.runs) saveBrain(t.runs[k].b);
-        NS.Debug.start({ matches: t.sched.length, levels: ['AIMA', ob || each ? 'AIMA' : cfg.opp], teams: 'RANDOM', teamSize: cfg.teamSize,
-          stadium: cfg.stadium, duration: cfg.duration }, onProgress, function (report) {
-          training = null;
-          teamBrains[0] = teamBrains[1] = null;
-          for (var id in t.runs) { trainProgress(t.runs[id]); saveBrain(t.runs[id].b); }
-          setActive(active);
-          onDone({ summary: trainSummary(t), full: trainFull(t, report) });
-        });
-      }, function (e) { onDone({ summary: 'Error: ' + (e && e.message ? e.message : e), full: '' }); });
-      return true;
+        S.b = bs[0]; S.ob = bs[1] || null;
+        S.oppLabel = S.ob ? 'checkoAI ' + S.ob.name : cfg.opp;
+        addRun(S, S.b, cfg.matches);
+        if (S.ob && S.ob !== S.b) addRun(S, S.ob, cfg.matches); // the opponent brain learns and is saved too
+        for (var k in S.runs) saveBrain(S.runs[k].b);
+        S.state = S.stopReq ? 'stopped' : 'running';
+        notify(S);
+        pump();
+      }, function (e) { S.state = 'error'; S.error = e && e.message ? e.message : String(e); notify(S); });
+      notify(S);
+      return S;
     },
-    stopTraining: function () { if (training && NS.Debug) NS.Debug.stop(); },
+    // stop a session (its match in progress is dropped; what it played is kept and saved)
+    stopSession: function (id) {
+      for (var i = 0; i < sessions.length; i++) {
+        var S = sessions[i];
+        if (S.id !== id) continue;
+        S.stopReq = true;
+        if (training === S) NS.Debug.stop();
+        else if (S.state === 'running' || S.state === 'loading') {
+          S.state = 'stopped'; S.ended = Date.now();
+          for (var k in S.runs) { trainProgress(S.runs[k]); saveBrain(S.runs[k].b); }
+          notify(S);
+        }
+      }
+    },
+    removeSession: function (id) {
+      sessions = sessions.filter(function (S) { return S.id !== id || S.state === 'running' || S.state === 'loading'; });
+    },
+    stopTraining: function () { for (var i = 0; i < sessions.length; i++) Aima.stopSession(sessions[i].id); },
+    sessionText: function (S, full) { return S.b ? (full ? trainFull(S) : trainSummary(S)) : (S.error || ''); },
 
     // style read from what he chooses himself
     style: function (b) {

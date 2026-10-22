@@ -858,6 +858,18 @@
   Object.assign(D.fr, { 'aima.tr.which': 'Cerveaux a entrainer :', 'aima.tr.each': 'Entre eux', 'aima.tr.perbrain': 'Matchs par cerveau', 'aima.tr.brains': 'cerveaux' });
   Object.assign(D.es, { 'aima.tr.which': 'Cerebros a entrenar:', 'aima.tr.each': 'Entre ellos', 'aima.tr.perbrain': 'Partidos por cerebro', 'aima.tr.brains': 'cerebros' });
 
+  // checkoAI: training sessions
+  Object.assign(D.en, {
+    'aima.ss.new': 'New training for', 'aima.ss.start': 'Start training', 'aima.ss.stopall': 'Stop all', 'aima.ss.remove': 'Remove',
+    'aima.ss.hint': 'Each training is its own session: its brain (the one picked at the top), opponent, matches and pitch, with its own progress. Start as many as you like: the running ones take turns, one match each. The opponent brain learns too. Every brain is saved after each of its matches.',
+    'aima.ss.loading': 'loading', 'aima.ss.running': 'running', 'aima.ss.done': 'done', 'aima.ss.stopped': 'stopped', 'aima.ss.error': 'error',
+    'aima.ss.now': 'playing now', 'aima.tr.log': 'MATCHES'
+  });
+  Object.assign(D.fr, { 'aima.ss.new': 'Nouvel entrainement pour', 'aima.ss.start': 'Lancer', 'aima.ss.stopall': 'Tout arreter', 'aima.ss.remove': 'Retirer',
+    'aima.ss.running': 'en cours', 'aima.ss.done': 'termine', 'aima.ss.stopped': 'arrete' });
+  Object.assign(D.es, { 'aima.ss.new': 'Nuevo entrenamiento para', 'aima.ss.start': 'Empezar', 'aima.ss.stopall': 'Parar todo', 'aima.ss.remove': 'Quitar',
+    'aima.ss.running': 'en curso', 'aima.ss.done': 'terminado', 'aima.ss.stopped': 'parado' });
+
   var lang = 'en';
 
   NS.I18n = {

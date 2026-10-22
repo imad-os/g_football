@@ -495,3 +495,9 @@ h1, h2, p { margin: 0; }
 .aima-chips { align-items: center; }
 .aima-chips .set-hint { margin-right: 0.3rem; }
 #hud.aima-on #hud-telemetry { margin-top: 2.9rem; }
+
+.aima-ses { margin-top: 0.6rem; }
+.aima-ses-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
+.aima-ses.done { border-color: rgba(34, 197, 94, 0.6); }
+.aima-ses.stopped, .aima-ses.error { opacity: 0.85; border-color: rgba(248, 113, 113, 0.5); }
+.aima-ses.running { border-color: #c084fc; }

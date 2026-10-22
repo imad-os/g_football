@@ -1150,7 +1150,10 @@
     ['length', [3, 5, 10]]
   ];
   var trSel = { matches: 1, size: 0, stadium: 1, length: 0, brain: '', opp: 'NORMAL' };
-  var trOut = null, trView = 'summary', trStatus = '', trProg = 0, trLive = false;
+  var trView = { id: 0, full: false };   // the session whose summary / full stats are open
+  var trMsg = '';
+  var sesRefs = {};                       // session id -> its card's live elements (progress, text)
+  var sesState = {};                      // session id -> the state its card was drawn with
 
   function kv(grid, label, value) {
     grid.appendChild(el('span', 'aima-k', label));
@@ -1444,116 +1447,117 @@
     return '?';
   }
 
+  // live progress of a session card (no re-render; a new state redraws the tab)
+  function sesProgress(S) {
+    var played = S.done + (NS.Aima.playing() === S ? Math.min(1, S.mins / 90) : 0);
+    return Math.min(1, played / (S.cfg.matches || 1));
+  }
+  function sesInfo(S) {
+    var d = S.b && S.runs[S.b.id] ? S.runs[S.b.id].acc : {};
+    var txt = T('aima.ss.' + S.state) + '  \u00b7  ' + S.done + ' / ' + S.cfg.matches + ' ' + T('aima.tr.matches') +
+      '  \u00b7  ' + (d.w || 0) + '-' + (d.d || 0) + '-' + (d.l || 0) + '  (' + (d.gf || 0) + '-' + (d.ga || 0) + ')';
+    if (NS.Aima.playing() === S) txt += '  \u00b7  ' + T('aima.ss.now') + ' ' + Math.floor(S.mins) + "'";
+    if (S.error) txt += '  \u00b7  ' + S.error;
+    return txt;
+  }
+  function onTrain(S) {
+    if (current !== 'SETTINGS' || settingsGroup !== 'aima' || aimaSub !== 'train') return;
+    if (sesState[S.id] !== S.state || !sesRefs[S.id]) {
+      // a new state redraws the tab: keep where the list was scrolled to
+      var sc = refs.setList, y0 = sc.scrollTop, y1 = sc.parentNode ? sc.parentNode.scrollTop : 0;
+      again('tr:start');
+      sc.scrollTop = y0;
+      if (sc.parentNode) sc.parentNode.scrollTop = y1;
+      return;
+    }
+    var r = sesRefs[S.id], f = sesProgress(S);
+    r.fill.style.width = Math.round(f * 1000) / 10 + '%';
+    r.pct.textContent = Math.round(f * 100) + '%';
+    r.info.textContent = sesInfo(S);
+  }
+
   function subTrain(list) {
     var A = NS.Aima;
+    A.onTrain = onTrain;
     if (!A.isTrainer()) { list.appendChild(el('div', 'set-hint', T('aima.note.signin'))); return; }
-    var busy = A.training();
     var brains = A.brains();
-    // the brains to train (several at once): the one picked at the top of the tab, plus any ticked here
-    var ids = brains.map(function (e) { return e.id; });
-    trSel.brains = (trSel.brains || []).filter(function (id) { return ids.indexOf(id) >= 0; });
-    if (!trSel.brains.length) trSel.brains = [aimaSel || A.activeId()];
-    var chips = el('div', 'dbg-opts aima-chips');
-    chips.appendChild(el('span', 'set-hint', T('aima.tr.which')));
-    brains.forEach(function (e) {
-      var on = trSel.brains.indexOf(e.id) >= 0;
-      var c = btn('opt dbg-opt' + (on ? ' sel' : ''), (on ? '\u2611 ' : '\u2610 ') + e.name, 'tr:b:' + e.id, function () {
-        if (A.training()) return;
-        var k = trSel.brains.indexOf(e.id);
-        if (k >= 0) { if (trSel.brains.length > 1) trSel.brains.splice(k, 1); }
-        else trSel.brains.push(e.id);
-        again('tr:b:' + e.id);
-      });
-      if (busy) c.disabled = true;
-      chips.appendChild(c);
-    });
-    list.appendChild(chips);
-    // the opponents: the CPU levels, the ticked brains against each other, then every brain (it learns too)
+    var me = selBrain();
+    // ---- a new session for the brain picked at the top: its own opponent, matches and pitch
+    var form = aimaCard(T('aima.ss.new') + ': ' + (me ? me.name : '?'));
     var opps = ['EASY', 'NORMAL', 'HARD', 'LEGEND'];
-    if (trSel.brains.length > 1) opps.push('EACH');
     brains.forEach(function (e) { opps.push('B:' + e.id); });
     if (opps.indexOf(trSel.opp) < 0) trSel.opp = 'NORMAL';
     var opts = el('div', 'dbg-opts');
     function cyc(key, label, value, next) {
-      var b = btn('opt dbg-opt', label + ': ' + value, 'tr:' + key, function () {
-        if (A.training()) return;
-        next();
-        again('tr:' + key);
-      });
-      if (busy) b.disabled = true;
-      opts.appendChild(b);
+      opts.appendChild(btn('opt dbg-opt', label + ': ' + value, 'tr:' + key, function () { next(); again('tr:' + key); }));
     }
-    cyc('opp', T('aima.tr.opp'), trSel.opp === 'EACH' ? T('aima.tr.each') :
-      (trSel.opp.indexOf('B:') === 0 ? 'checkoAI ' + trName(trSel.opp.slice(2)) : T('opt.' + trSel.opp.toLowerCase())), function () {
+    cyc('opp', T('aima.tr.opp'), trSel.opp.indexOf('B:') === 0 ? 'checkoAI ' + trName(trSel.opp.slice(2)) : T('opt.' + trSel.opp.toLowerCase()), function () {
       trSel.opp = opps[(opps.indexOf(trSel.opp) + 1) % opps.length];
     });
     TR_OPTS.forEach(function (o) {
-      cyc(o[0], T(o[0] === 'matches' ? 'aima.tr.perbrain' : 'dbg.' + o[0]), String(o[1][trSel[o[0]]]), function () { trSel[o[0]] = (trSel[o[0]] + 1) % o[1].length; });
+      cyc(o[0], T('dbg.' + o[0]), String(o[1][trSel[o[0]]]), function () { trSel[o[0]] = (trSel[o[0]] + 1) % o[1].length; });
     });
-    list.appendChild(opts);
-    refs.trStatus = el('div', 'set-hint', trStatus || T('aima.tr.hint'));
-    list.appendChild(refs.trStatus);
-    // progress: matches played + the minute of the one being played
-    var bar = el('div', 'aima-prog' + (busy || trProg > 0 ? '' : ' hidden'));
-    refs.trFill = el('b');
-    refs.trFill.style.width = Math.round(trProg * 100) + '%';
-    refs.trPct = el('span', null, Math.round(trProg * 100) + '%');
-    bar.appendChild(refs.trFill);
-    bar.appendChild(refs.trPct);
-    refs.trBar = bar;
-    list.appendChild(bar);
-    var act = el('div', 'row aima-actions');
-    act.appendChild(btn(busy ? 'danger' : 'primary', T(busy ? 'dbg.stop' : 'aima.tr.run'), 'tr:run', function () {
-      if (A.training()) { A.stopTraining(); return; }
-      trOut = null;
-      trProg = 0;
-      trLive = false;
-      trStatus = T('aima.tr.starting');
-      var ok = A.train({ brains: trSel.brains.slice(), opp: trSel.opp, matches: TR_OPTS[0][1][trSel.matches], teamSize: TR_OPTS[1][1][trSel.size],
-        stadium: TR_OPTS[2][1][trSel.stadium], duration: TR_OPTS[3][1][trSel.length] }, function (done, total, mins) {
-        trStatus = T('dbg.running').replace('%d', done + 1).replace('%t', total) + '  ' + Math.floor(mins) + "'  ·  " + T('aima.tr.saved');
-        trProg = Math.min(1, (done + Math.min(1, mins / 90)) / total);
-        // the run has really started now (it loads the brains first): the Train button becomes Stop
-        if (!trLive) { trLive = true; if (current === 'SETTINGS' && settingsGroup === 'aima' && aimaSub === 'train') again('tr:run'); }
-        if (refs.trStatus) refs.trStatus.textContent = trStatus;
-        if (refs.trFill) {
-          refs.trBar.classList.remove('hidden');
-          refs.trFill.style.width = Math.round(trProg * 1000) / 10 + '%';
-          refs.trPct.textContent = Math.round(trProg * 100) + '%';
-        }
-      }, function (res) {
-        trOut = res;
-        trLive = false;
-        trProg = 1;
-        trStatus = T('aima.tr.done');
-        if (current === 'SETTINGS' && settingsGroup === 'aima' && aimaSub === 'train') again('tr:run');
-      });
-      if (!ok) trStatus = T('aima.tr.busy');
-      again('tr:run');
+    form.appendChild(opts);
+    var row = el('div', 'row aima-actions');
+    row.appendChild(btn('primary', T('aima.ss.start'), 'tr:start', function () {
+      if (!me) return;
+      var S = A.startSession({ brain: me.id, opp: trSel.opp, matches: TR_OPTS[0][1][trSel.matches], teamSize: TR_OPTS[1][1][trSel.size],
+        stadium: TR_OPTS[2][1][trSel.stadium], duration: TR_OPTS[3][1][trSel.length] });
+      trMsg = S ? '' : T('aima.tr.busy');
+      again('tr:start');
     }));
-    if (trOut) {
-      act.appendChild(btn('opt' + (trView === 'summary' ? ' sel' : ''), T('aima.tr.summary'), 'tr:sum', function () { trView = 'summary'; again('tr:sum'); }));
-      act.appendChild(btn('opt' + (trView === 'full' ? ' sel' : ''), T('aima.tr.full'), 'tr:full', function () { trView = 'full'; again('tr:full'); }));
-      act.appendChild(btn('', T('dbg.copy'), 'tr:copy', function () {
-        var ta = refs.trText;
-        if (!ta) return;
-        ta.focus(); ta.select();
-        try { document.execCommand('copy'); } catch (e) {}
-        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).catch(function () {});
-        trStatus = T('dbg.copied');
-        if (refs.trStatus) refs.trStatus.textContent = trStatus;
+    if (A.training()) row.appendChild(btn('danger', T('aima.ss.stopall'), 'tr:stopall', function () { A.stopTraining(); again('tr:start'); }));
+    form.appendChild(row);
+    form.appendChild(el('div', 'set-hint', trMsg || T('aima.ss.hint')));
+    list.appendChild(form);
+
+    // ---- the sessions, newest first: each with its own progress bar
+    sesRefs = {};
+    var all = A.sessions().slice().reverse();
+    all.forEach(function (S) {
+      sesState[S.id] = S.state;
+      var c = el('div', 'panel-card aima-ses ' + S.state);
+      var head = el('div', 'aima-ses-head');
+      head.appendChild(el('b', null, '#' + S.id + '  ' + (S.b ? S.b.name : trName(S.cfg.brain)) + '  v  ' +
+        (S.oppLabel || (S.cfg.opp.indexOf('B:') === 0 ? 'checkoAI ' + trName(S.cfg.opp.slice(2)) : S.cfg.opp))));
+      head.appendChild(el('span', 'set-hint', S.cfg.teamSize + ' ' + T('aima.tr.aside') + ' \u00b7 ' + S.cfg.stadium + ' \u00b7 ' + S.cfg.duration + ' min'));
+      c.appendChild(head);
+      var bar = el('div', 'aima-prog');
+      var fill = el('b');
+      var f = sesProgress(S);
+      fill.style.width = Math.round(f * 1000) / 10 + '%';
+      var pc = el('span', null, Math.round(f * 100) + '%');
+      bar.appendChild(fill); bar.appendChild(pc);
+      c.appendChild(bar);
+      var info = el('div', 'set-hint', sesInfo(S));
+      c.appendChild(info);
+      sesRefs[S.id] = { fill: fill, pct: pc, info: info };
+      var acts = el('div', 'row aima-actions');
+      var live = S.state === 'running' || S.state === 'loading';
+      if (live) acts.appendChild(btn('danger', T('dbg.stop'), 'tr:stop:' + S.id, function () { A.stopSession(S.id); again('tr:stop:' + S.id); }));
+      acts.appendChild(btn('opt' + (trView.id === S.id && !trView.full ? ' sel' : ''), T('aima.tr.summary'), 'tr:sum:' + S.id, function () {
+        trView = trView.id === S.id && !trView.full ? { id: 0, full: false } : { id: S.id, full: false }; again('tr:sum:' + S.id);
       }));
-    }
-    list.appendChild(act);
-    if (trOut) {
-      var ta = document.createElement('textarea');
-      ta.className = 'dbg-text aima-out';
-      ta.readOnly = true;
-      ta.setAttribute('spellcheck', 'false');
-      ta.value = trView === 'full' ? trOut.full : trOut.summary;
-      list.appendChild(ta);
-      refs.trText = ta;
-    }
+      acts.appendChild(btn('opt' + (trView.id === S.id && trView.full ? ' sel' : ''), T('aima.tr.full'), 'tr:full:' + S.id, function () {
+        trView = trView.id === S.id && trView.full ? { id: 0, full: false } : { id: S.id, full: true }; again('tr:full:' + S.id);
+      }));
+      if (!live) acts.appendChild(btn('', T('aima.ss.remove'), 'tr:rm:' + S.id, function () { A.removeSession(S.id); again('tr:start'); }));
+      c.appendChild(acts);
+      if (trView.id === S.id) {
+        var ta = document.createElement('textarea');
+        ta.className = 'dbg-text aima-out';
+        ta.readOnly = true;
+        ta.setAttribute('spellcheck', 'false');
+        ta.value = A.sessionText(S, trView.full);
+        c.appendChild(ta);
+        c.appendChild(btn('', T('dbg.copy'), 'tr:copy:' + S.id, function () {
+          ta.focus(); ta.select();
+          try { document.execCommand('copy'); } catch (e) {}
+          if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).catch(function () {});
+        }));
+      }
+      list.appendChild(c);
+    });
   }
 
   function renderAima() {
@@ -1571,7 +1575,6 @@
     var tabs = el('div', 'tabs aima-subs');
     subs.forEach(function (s) {
       var t = btn('tab' + (s === aimaSub ? ' sel' : ''), T('aima.sub.' + s), 'as:' + s, function () {
-        if (A.training()) return;
         aimaSub = s; aimaMsg = ''; aimaConfirm = '';
         again('as:' + s);
         list.scrollTop = 0; // a new sub-tab starts at the top
@@ -1582,13 +1585,12 @@
     if (brains.length > 1 || trainer) {
       var isAct = (shown ? shown.id : aimaSel) === A.activeId();
       var pk = btn('opt aima-pick', T('aima.tr.brain') + ': ' + (isAct ? '\u2605 ' : '') + selName + '  \u25b8', 'ai:pick', function () {
-        if (A.training() || brains.length < 2) return;
+        if (brains.length < 2) return;
         var j = 0;
         for (; j < brains.length; j++) if (brains[j].id === aimaSel) break;
         selectBrain(brains[(j + 1) % brains.length].id);
         again('ai:pick');
       });
-      if (A.training()) pk.disabled = true;
       tabs.appendChild(pk);
     }
     list.appendChild(tabs);

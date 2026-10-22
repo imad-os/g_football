@@ -126,9 +126,10 @@ as a human; the other ten are the Legend CPU. A small box in the top-right corne
   learns, never under 35%), copies the trainer's own play, and learns from rewards (actor-critic, 2 s returns): goals,
   shots, passes, ball won / lost, fouls, and the trainer's **claps** (Buttons screen > Clap, default ZL; hold it: a quick
   tap is ~25%, a full 1 s hold 100%). Restarts and penalties it takes are played by the Legend CPU.
-- **Training** (Settings > checkoAI > Training): several brains at once (their matches take turns), against the CPU at any
-  level, against each other, or against one brain; every brain that plays learns, with a progress bar; saved after every match (a stopped training keeps
-  what it learnt); then a summary or the full stats (brain counters + debug report).
+- **Training** (Settings > checkoAI > Training): sessions. Each one is a brain (the one picked at the top), its own
+  opponent (the CPU at any level, or a brain, which learns too), number of matches and pitch, with its own progress bar,
+  Stop, summary and full stats. Start as many as you like: the running ones take turns, one match each, and count only
+  their own matches. Every brain is saved after each of its matches (a stopped session keeps what it played).
 - **Work** (Stats > Work): each brain counts the arithmetic operations it does (playing and learning), per second of
   play: the same number on any device (how heavy the brain is; the share of CPU then depends on the device). Also the
   expected work of its current settings (learning on / off), one decision, one learning step, the total, its memory.
