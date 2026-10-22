@@ -683,6 +683,95 @@
     'dbg.length': 'الدقائق', 'dbg.hint': 'الكمبيوتر ضد الكمبيوتر بأقصى سرعة. اضغط تشغيل ثم نسخ التقرير.',
     'dbg.running': 'المباراة %d من %t...', 'dbg.done': 'انتهى. انسخ التقرير.', 'dbg.copied': 'تم نسخ التقرير.' });
 
+  // checkoAI (the learning player, js/game/aima.js)
+  Object.assign(D.en, {
+    'opt.aima': 'checkoAI', 'set.g.aima': 'checkoAI', 'mv.clap': 'Clap checkoAI (hold = stronger)',
+    'map.clapbusy': 'That button already plays a move: pick a free one for the clap.',
+    'aima.t.watch': 'Watching Legend play', 'aima.t.happy': 'Thanks coach!', 'aima.t.shoot': 'Going for goal!', 'aima.t.through': 'Through ball!',
+    'aima.t.long': 'Switching play', 'aima.t.pass': 'Keeping the ball', 'aima.t.switch': 'Changing player', 'aima.t.win': 'Win it back!',
+    'aima.t.losing': 'Losing - must score!', 'aima.t.lead': 'Keep the lead', 'aima.t.run': 'Running at them', 'aima.t.look': 'Looking for a pass',
+    'aima.t.runbehind': 'Making a run', 'aima.t.option': 'Offering an option', 'aima.t.close': 'Closing down', 'aima.t.chase': 'Chasing the ball',
+    'aima.role.trainer': 'Your learning player. Choose CPU level checkoAI: he controls the selected player (violet arrow), the Legend CPU the others.',
+    'aima.role.viewer': "Plays imad's latest model (a fresh copy each time). Only imad trains him.",
+    'aima.c.stats': 'HIS STATS', 'aima.c.model': 'THE MODEL', 'aima.c.style': 'HIS STYLE',
+    'aima.k.matches': 'Matches (W-D-L)', 'aima.k.minutes': 'Minutes', 'aima.k.goals': 'Goals', 'aima.k.team': 'team', 'aima.k.shots': 'Shots',
+    'aima.k.ontarget': 'on target', 'aima.k.passes': 'Passes', 'aima.k.fwd': 'forward', 'aima.k.tackles': 'Tackles', 'aima.k.wonlost': 'Ball won / lost',
+    'aima.k.fouls': 'Fouls', 'aima.k.claps': 'Claps', 'aima.k.avg': 'avg', 'aima.k.reward': 'Total reward', 'aima.k.trend': 'Reward per match',
+    'aima.k.alg': 'Algorithm', 'aima.k.brain': 'Brain (layers)', 'aima.k.params': 'Values (size)', 'aima.k.inputs': 'Inputs',
+    'aima.inputs': '64: play around him + match (time left, score, cards, players, possession, shots)',
+    'aima.k.decisions': 'Decisions', 'aima.k.own': 'his own', 'aima.k.updates': 'Learning steps', 'aima.k.copy': 'copy',
+    'aima.k.samples': 'Copied moves', 'aima.k.you': 'you', 'aima.k.help': 'Legend help now', 'aima.k.from': 'Started from',
+    'aima.k.created': 'Created', 'aima.k.saved': 'Last saved', 'aima.k.cloud': 'Cloud',
+    'aima.from.new': 'a new brain', 'aima.from.seed': 'the published model', 'aima.from.trainer': "imad's model", 'aima.from.save': 'his save',
+    'aima.y.pass': 'Passing', 'aima.y.shoot': 'Shooting', 'aima.y.fwd': 'Forward passes', 'aima.y.sprint': 'Sprinting', 'aima.y.carry': 'On the ball',
+    'aima.y.pos': 'Position (back - up)',
+    'aima.o.learn': 'Learning', 'aima.o.learn.h': 'He keeps learning while he plays (off: he plays as he is)',
+    'aima.o.mine': 'Learn from my play', 'aima.o.mine.h': 'He copies what you do when you play (this is what gives him your style)',
+    'aima.o.style': 'Style goal', 'aima.o.style.h': 'What the rewards push him towards',
+    'aima.o.lr': 'Learning speed', 'aima.o.lr.h': 'High learns faster but forgets faster too',
+    'aima.o.explore': 'Trying new moves', 'aima.o.explore.h': 'High tries more new things (and makes more mistakes)',
+    'aima.o.clap': 'Clap strength', 'aima.o.clap.h': 'How much one clap counts (the hold gauge sets each clap)',
+    'aima.o.help': 'Legend help', 'aima.o.help.h': 'Share of spells the Legend CPU plays for him (he copies them). Auto: less and less as he learns',
+    'aima.o.size': 'Brain size', 'aima.o.size.h': 'Bigger can learn more but trains slower. Changing it starts a new brain',
+    'aima.st.BALANCED': 'Balanced', 'aima.st.ATTACKER': 'Attacker', 'aima.st.PLAYMAKER': 'Playmaker', 'aima.st.DEFENDER': 'Defender',
+    'aima.h0': 'None', 'aima.h30': '30%', 'aima.h60': '60%',
+    'aima.sz.SMALL': 'Small', 'aima.sz.LARGE': 'Large', 'aima.sz.HUGE': 'Huge (PC)',
+    'aima.needcloud': 'A bigger brain needs the cloud (sign in with Google first).',
+    'aima.confirm.size': 'Press again to confirm: a new brain of that size replaces the current one.', 'aima.done.size': 'New brain ready.',
+    'aima.signin': 'Sign in with Google', 'aima.signout': 'Sign out', 'aima.signing': 'Signing in...', 'aima.signed': 'Signed in:',
+    'aima.signfail': 'Sign-in failed:', 'aima.code': 'or paste the code from aima-login.html', 'aima.usecode': 'Use code',
+    'aima.save': 'Save now', 'aima.saved': 'Saved.', 'aima.reset': 'New brain',
+    'aima.confirm.reset': 'Press again to confirm: his brain and stats start from zero.', 'aima.done.reset': 'Started again from zero.',
+    'aima.note.trainer': 'Clap: hold the clap button (Buttons screen) during a match - a quick tap is a small clap, a full hold 100%.',
+    'aima.note.signin': 'Sign in with your Google account (once, on a computer) to train him and save him to the cloud for all your devices.',
+    'aima.note.viewer': 'Choose CPU level checkoAI to play against him.'
+  });
+  Object.assign(D.fr, {
+    'opt.aima': 'checkoAI', 'set.g.aima': 'checkoAI', 'mv.clap': 'Applaudir checkoAI (maintenir = plus fort)',
+    'map.clapbusy': 'Ce bouton joue deja une action : choisissez un bouton libre.',
+    'aima.t.watch': 'Regarde jouer Legend', 'aima.t.happy': 'Merci coach !', 'aima.t.shoot': 'Il va tirer !', 'aima.t.through': 'Passe en profondeur !',
+    'aima.t.long': 'Change de cote', 'aima.t.pass': 'Garde le ballon', 'aima.t.switch': 'Change de joueur', 'aima.t.win': 'Recuperer le ballon !',
+    'aima.t.losing': 'Mene - il faut marquer !', 'aima.t.lead': 'Garder l’avance', 'aima.t.run': 'Elimine en vitesse', 'aima.t.look': 'Cherche une passe',
+    'aima.t.runbehind': 'Fait un appel', 'aima.t.option': 'Se demarque', 'aima.t.close': 'Presse le porteur', 'aima.t.chase': 'Court au ballon',
+    'aima.role.trainer': 'Votre joueur qui apprend. Niveau CPU checkoAI : il controle le joueur selectionne (fleche violette), le CPU Legend les autres.',
+    'aima.role.viewer': 'Joue le dernier modele d’imad (copie neuve a chaque fois). Seul imad l’entraine.',
+    'aima.c.stats': 'SES STATS', 'aima.c.model': 'LE MODELE', 'aima.c.style': 'SON STYLE',
+    'aima.o.learn': 'Apprentissage', 'aima.o.mine': 'Apprendre de mon jeu', 'aima.o.style': 'Objectif de style', 'aima.o.lr': 'Vitesse d’apprentissage',
+    'aima.o.explore': 'Essayer de nouveaux gestes', 'aima.o.clap': 'Force des applaudissements', 'aima.o.help': 'Aide Legend', 'aima.o.size': 'Taille du cerveau',
+    'aima.signin': 'Connexion Google', 'aima.signout': 'Deconnexion', 'aima.save': 'Enregistrer', 'aima.reset': 'Nouveau cerveau',
+    'aima.note.viewer': 'Choisissez le niveau CPU checkoAI pour jouer contre lui.'
+  });
+  Object.assign(D.es, {
+    'opt.aima': 'checkoAI', 'set.g.aima': 'checkoAI', 'mv.clap': 'Aplaudir a checkoAI (mantener = mas fuerte)',
+    'map.clapbusy': 'Ese boton ya hace una jugada: elige uno libre.',
+    'aima.t.watch': 'Mira jugar a Legend', 'aima.t.happy': 'Gracias, mister!', 'aima.t.shoot': 'Va a tirar!', 'aima.t.through': 'Pase al hueco!',
+    'aima.t.long': 'Cambia de banda', 'aima.t.pass': 'Mantiene el balon', 'aima.t.switch': 'Cambia de jugador', 'aima.t.win': 'A recuperarla!',
+    'aima.t.losing': 'Perdiendo - hay que marcar!', 'aima.t.lead': 'Defender la ventaja', 'aima.t.run': 'Encara en velocidad', 'aima.t.look': 'Busca un pase',
+    'aima.t.runbehind': 'Hace un desmarque', 'aima.t.option': 'Se ofrece', 'aima.t.close': 'Presiona', 'aima.t.chase': 'Va por el balon',
+    'aima.role.trainer': 'Tu jugador que aprende. Nivel CPU checkoAI: controla al jugador seleccionado (flecha violeta), el CPU Legend al resto.',
+    'aima.role.viewer': 'Juega el ultimo modelo de imad (copia nueva cada vez). Solo imad lo entrena.',
+    'aima.c.stats': 'SUS ESTADISTICAS', 'aima.c.model': 'EL MODELO', 'aima.c.style': 'SU ESTILO',
+    'aima.o.learn': 'Aprendizaje', 'aima.o.mine': 'Aprender de mi juego', 'aima.o.style': 'Objetivo de estilo', 'aima.o.lr': 'Velocidad de aprendizaje',
+    'aima.o.explore': 'Probar jugadas nuevas', 'aima.o.clap': 'Fuerza del aplauso', 'aima.o.help': 'Ayuda Legend', 'aima.o.size': 'Tamano del cerebro',
+    'aima.signin': 'Entrar con Google', 'aima.signout': 'Salir', 'aima.save': 'Guardar', 'aima.reset': 'Cerebro nuevo',
+    'aima.note.viewer': 'Elige el nivel CPU checkoAI para jugar contra el.'
+  });
+  Object.assign(D.ar, {
+    'opt.aima': 'checkoAI', 'set.g.aima': 'checkoAI', 'mv.clap': 'تصفيق لـ checkoAI (الضغط المطول = أقوى)',
+    'map.clapbusy': 'هذا الزر مستخدم لحركة أخرى: اختر زرا حرا.',
+    'aima.t.watch': 'يشاهد Legend يلعب', 'aima.t.happy': 'شكرا يا مدرب!', 'aima.t.shoot': 'سيسدد!', 'aima.t.through': 'تمريرة بينية!',
+    'aima.t.long': 'يغير اللعب', 'aima.t.pass': 'يحتفظ بالكرة', 'aima.t.switch': 'يغير اللاعب', 'aima.t.win': 'استرجع الكرة!',
+    'aima.t.losing': 'متأخر - يجب التسجيل!', 'aima.t.lead': 'يحافظ على التقدم', 'aima.t.run': 'ينطلق نحوهم', 'aima.t.look': 'يبحث عن تمريرة',
+    'aima.t.runbehind': 'ينطلق خلف الدفاع', 'aima.t.option': 'يقدم حلا', 'aima.t.close': 'يضغط على حامل الكرة', 'aima.t.chase': 'يطارد الكرة',
+    'aima.role.trainer': 'لاعبك الذي يتعلم. اختر مستوى checkoAI: يتحكم في اللاعب المحدد (السهم البنفسجي) و Legend في الباقين.',
+    'aima.role.viewer': 'يلعب بآخر نموذج لـ imad (نسخة جديدة كل مرة). فقط imad يدربه.',
+    'aima.c.stats': 'إحصائياته', 'aima.c.model': 'النموذج', 'aima.c.style': 'أسلوبه',
+    'aima.o.learn': 'التعلم', 'aima.o.mine': 'التعلم من لعبي', 'aima.o.style': 'هدف الأسلوب', 'aima.o.lr': 'سرعة التعلم',
+    'aima.o.explore': 'تجربة حركات جديدة', 'aima.o.clap': 'قوة التصفيق', 'aima.o.help': 'مساعدة Legend', 'aima.o.size': 'حجم الدماغ',
+    'aima.signin': 'الدخول بحساب Google', 'aima.signout': 'خروج', 'aima.save': 'حفظ الآن', 'aima.reset': 'دماغ جديد',
+    'aima.note.viewer': 'اختر مستوى checkoAI للعب ضده.'
+  });
+
   var lang = 'en';
 
   NS.I18n = {

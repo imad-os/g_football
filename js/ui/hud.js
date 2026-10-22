@@ -17,6 +17,14 @@
   var boxes = [{ l: 0, r: 0, t: 2, b: 2 }, { l: 0, r: 0, t: 2, b: 2 }, { l: 0, r: 0, t: 2, b: 2 }];
   var covered = [false, false, false];
   var hintTimer = 0;
+  var clapTimer = 0;
+  // checkoAI: a white rooster's head (named after the owner's rooster)
+  var ROOSTER = '<svg viewBox="0 0 64 64" aria-hidden="true"><path fill="#ef4444" d="M20 18c-2-8 6-12 9-6 1-8 10-8 10 0 3-6 11-3 8 4 5 0 6 6 1 8H22c-4-1-5-4-2-6z"/>' +
+    '<path fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5" d="M18 26c0-7 7-11 15-11s15 5 15 13c0 5-2 9-5 12l2 16H20l3-15c-3-4-5-9-5-15z"/>' +
+    '<path fill="#f59e0b" stroke="#b45309" stroke-width="1" d="M47 26l12 5-12 5z"/><path fill="#ef4444" d="M44 36c3 0 5 3 4 7-1 4-6 4-7 0 0-3 1-7 3-7z"/>' +
+    '<circle cx="38" cy="25" r="2.6" fill="#0f172a"/><circle cx="38.8" cy="24.2" r="0.8" fill="#fff"/></svg>';
+  var AIMA_ICO = { watch: '👀', happy: '😊', shoot: '🎯', through: '🚀', long: '📡', pass: '🔁', switch: '🔀', win: '🛡️',
+    losing: '🔥', lead: '🧊', run: '⚡', look: '🧠', runbehind: '🏃', option: '🙋', close: '👟', chase: '⚽' };
 
   function text(key, node, value) {
     if (last[key] !== value) { last[key] = value; node.textContent = value; }
@@ -40,10 +48,12 @@
   })();
 
   NS.HUD = {
+    ROOSTER: ROOSTER,
     init: function () {
       var ids = ['hud', 'hud-comp', 'hud-home-badge', 'hud-home-name', 'hud-score-home', 'hud-score-away', 'hud-away-name',
         'hud-away-badge', 'hud-clock', 'hud-telemetry', 'hud-fps', 'hud-quality', 'hud-radar-box', 'radar-canvas',
-        'event-banner', 'event-title', 'event-sub', 'hud-hint', 'goal-fx', 'goal-word', 'goal-sub', 'hud-home-cards', 'hud-away-cards'];
+        'event-banner', 'event-title', 'event-sub', 'hud-hint', 'goal-fx', 'goal-word', 'goal-sub', 'hud-home-cards', 'hud-away-cards',
+        'aima-box', 'aima-ico', 'aima-txt', 'aima-gauge', 'clap-fx', 'clap-pct'];
       var i;
       for (i = 0; i < ids.length; i++) el[ids[i]] = $(ids[i]);
       for (i = 1; i <= 2; i++) {
@@ -54,6 +64,7 @@
         el['p' + i + '-mark'] = $('p' + i + '-mark');
         el['p' + i + '-act'] = $('p' + i + '-act');
       }
+      $('aima-head').innerHTML = ROOSTER;
       plates[0] = document.querySelector('.plate.p1');
       plates[1] = document.querySelector('.plate.p2');
       var c = el['radar-canvas'];
@@ -123,6 +134,36 @@
     applySettings: function (settings) {
       el['hud-radar-box'].style.visibility = settings.showRadar ? 'visible' : 'hidden';
       el['hud-telemetry'].style.display = settings.showFPS ? 'flex' : 'none';
+    },
+
+    // AI.MA's status box (per frame: DOM writes only when something changed) and the trainer's clap gauge
+    aima: function (on) {
+      if (last.aon !== on) { last.aon = on; el['aima-box'].classList.toggle('hidden', !on); }
+      if (!on || !NS.Aima) return;
+      var t = NS.Aima.thought();
+      if (last.ath !== t) {
+        last.ath = t;
+        el['aima-ico'].textContent = AIMA_ICO[t] || '';
+        el['aima-txt'].textContent = NS.I18n.t('aima.t.' + t);
+      }
+      var f = NS.Aima.clapFrac();
+      var g = f < 0 ? -1 : Math.round(f * 20);
+      if (last.agf !== g) {
+        last.agf = g;
+        el['aima-gauge'].style.visibility = g < 0 ? 'hidden' : 'visible';
+        if (g >= 0) el['aima-gauge'].firstChild.style.width = (g * 5) + '%';
+      }
+    },
+    // a clap from the trainer: hands pop beside the status box (bigger for a stronger clap); play goes on underneath
+    clap: function (strength) {
+      var fx = el['clap-fx'];
+      fx.classList.remove('hidden', 'play');
+      fx.style.setProperty('--s', String(0.6 + strength * 0.6));
+      el['clap-pct'].textContent = Math.round(strength * 100) + '%';
+      void fx.offsetWidth; // restart the animation (only on a clap, never per frame)
+      fx.classList.add('play');
+      clearTimeout(clapTimer);
+      clapTimer = setTimeout(function () { fx.classList.add('hidden'); fx.classList.remove('play'); }, 1600);
     },
 
     // Player plate i (0 left, 1 right).

@@ -203,6 +203,20 @@
   // World.levels = ["HARD", "EASY"] lets each CPU team play at its own level (used by the balancing tests).
   function levelOf(team) { return World.levels ? World.levels[team] : World.settings.difficulty; }
 
+  // AI.MA: a CPU team on the AI.MA level has its learning player (js/game/aima.js) on the selected player; the rest of
+  // the team is the Legend CPU
+  function syncAiSlots() {
+    for (var t = 0; t < 2; t++) {
+      var s = World.aiSlots[t];
+      var on = !!NS.Aima && !humanTeam(t) && levelOf(t) === 'AIMA';
+      if (on !== s.active) {
+        s.active = on; s.player = null; s.evActive = false; s.lockT = 0; s.manual = false;
+        if (s.pad) { s.pad.cur = 0; s.pad.x = 0; s.pad.y = 0; }
+      }
+      if (on && !s.player) s.player = Actions.nearestToBall(t, null, null);
+    }
+  }
+
   function profFor(team) {
     return humanTeam(team) ? AI.profiles.NORMAL : AI.profile(levelOf(team));
   }
@@ -238,6 +252,14 @@
       s.player = pick || fallback;
       used = s.player;
       s.chargeMove = -1; s.chargeFrac = 0; s.pressing = false; s.burstT = 0; s.evActive = false; s.evMove = -1;
+    }
+    // AI.MA starts on a forward too
+    syncAiSlots();
+    for (var t = 0; t < 2; t++) {
+      var as = World.aiSlots[t];
+      if (!as.active) continue;
+      for (var k = 0; k < players.length; k++) if (players[k].team === t && players[k].role === 'FWD') { as.player = players[k]; break; }
+      as.evActive = false; as.evMove = -1; as.chargeMove = -1; as.lockT = 0;
     }
   }
 
@@ -332,6 +354,7 @@
     setMoods(3, m.score[0] > m.score[1] ? 0 : (m.score[1] > m.score[0] ? 1 : -1));
     NS.Audio.whistle(2);
     NS.HUD.banner(NS.I18n.t('hud.fulltime'), m.score[0] + ' - ' + m.score[1], 0);
+    if (NS.Aima) NS.Aima.matchEnd(true);
     if (World.slots[0].active) {
       var won = m.score[0] > m.score[1] ? 1 : 0;
       var cup = 0; // cups are counted when a competition is won (NS.Comp)
@@ -427,7 +450,7 @@
     if (ball.receiver === p) ball.receiver = null;
     if (ball.contester === p) ball.contester = null;
     for (var k = 0; k < players.length; k++) if (players[k].mark === p) players[k].mark = null;
-    for (var s = 0; s < 2; s++) if (World.slots[s].player === p) World.slots[s].player = null;
+    for (var s = 0; s < 4; s++) if (World.allSlots[s].player === p) World.allSlots[s].player = null;
   }
 
   function onFoul(tackler, victim) {
@@ -984,6 +1007,7 @@
         NS.Scene.rebuildStadium();
       }
       configureSlots();
+      if (NS.Aima) NS.Aima.matchStart();
       this.rebuildTeams();
       m.score[0] = 0; m.score[1] = 0;
       m.timeSeconds = 0;
@@ -1026,6 +1050,9 @@
       NS.HUD.hideGoalFx();
       NS.Scene.setRing(0, false, 0, 0);
       NS.Scene.setRing(1, false, 0, 0);
+      NS.Scene.setRing(2, false, 0, 0);
+      NS.Scene.setRing(3, false, 0, 0);
+      if (NS.Aima && finished !== true) NS.Aima.matchEnd(false);
       if (NS.Comp && NS.Comp.active()) {
         if (finished === true) NS.Comp.recordUserMatch(m.score[0], m.score[1]);
         NS.UI.show('COMPHUB');
@@ -1156,7 +1183,9 @@
       if (World.pressT[0] > 0) World.pressT[0] -= dt;
       if (World.pressT[1] > 0) World.pressT[1] -= dt;
 
-      // ----- humans -----
+      // ----- humans (and AI.MA, who plays like one) -----
+      syncAiSlots();
+      if (NS.Aima) NS.Aima.poll(dt);
       // the ball changed hands: a human team takes control of its new carrier straight away
       if (ball.owner !== lastOwner) {
         lastOwner = ball.owner;
@@ -1168,7 +1197,18 @@
         if (!slot.active || !slot.player) continue;
         slot.player.isCtl = true;
         Controls.update(slot, dt);
-        slot.player.isCtl = true;
+        if (slot.player) slot.player.isCtl = true;
+        if (NS.Aima) NS.Aima.observe(slot, dt); // the trainer's play teaches AI.MA
+      }
+      for (i = 0; i < 2; i++) {
+        var as = World.aiSlots[i];
+        if (!as.active || !as.player) continue;
+        // false: a spell played by the Legend CPU (AI.MA copies it)
+        if (NS.Aima.drive(as, dt)) {
+          as.player.isCtl = true;
+          Controls.update(as, dt);
+          if (as.player) as.player.isCtl = true;
+        }
       }
       for (i = 0; i < 2; i++) {
         if (World.slots[i].active && World.slots[i].player) World.slots[i].player.isCtl = true;
@@ -1397,6 +1437,10 @@
         if (sl.active && sl.player) NS.Scene.setRing(i, true, sl.player.pos.x, sl.player.pos.z,
           !ball.owner && (ball.receiver === sl.player || ball.contester === sl.player));
         else NS.Scene.setRing(i, false, 0, 0);
+        // AI.MA's arrow (violet)
+        var al = World.aiSlots[i];
+        if (al.active && al.player) NS.Scene.setRing(2 + i, true, al.player.pos.x, al.player.pos.z, false);
+        else NS.Scene.setRing(2 + i, false, 0, 0);
       }
       NS.Scene.followBall(dt, ball.pos.x, ball.pos.z, settings.cameraMode);
     },
@@ -1405,10 +1449,14 @@
     drawHud: function (dt) {
       var s0 = World.slots[0];
       var s1 = World.slots[1];
+      var a0 = World.aiSlots[0], a1 = World.aiSlots[1];
       if (s0.active) NS.HUD.plate(0, labels.p1, s0.player, s0);
+      else if (a0.active && a0.player) NS.HUD.plate(0, 'checkoAI', a0.player, a0);
       else NS.HUD.plate(0, labels.cpu, featured(0), null);
       if (s1.active) NS.HUD.plate(1, labels.p2, s1.player, s1);
+      else if (a1.active && a1.player) NS.HUD.plate(1, 'checkoAI', a1.player, a1);
       else NS.HUD.plate(1, labels.cpu, featured(1), null);
+      NS.HUD.aima(a0.active || a1.active);
       if (World.settings.showRadar) NS.HUD.radar(World.players, World.ball, World.slots);
       // the ball behind a player box or the radar: fade that box out
       NS.Scene.project(World.ball.pos);

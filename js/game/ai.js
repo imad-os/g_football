@@ -1003,7 +1003,8 @@
 
   NS.AI = {
     profiles: PROFILES,
-    profile: function (name) { return PROFILES[name] || PROFILES.NORMAL; },
+    // AI.MA's team-mates are the Legend CPU (only its selected player is the learning model)
+    profile: function (name) { return PROFILES[name === 'AIMA' ? 'LEGEND' : name] || PROFILES.NORMAL; },
     teams: TEAMS,
     teamUpdate: teamUpdate,
     shotQuality: shotQuality,

@@ -2,7 +2,7 @@
 (function (NS) {
   'use strict';
 
-  NS.VERSION = '1.15.5';
+  NS.VERSION = '1.16.0';
 
   // Pitch geometry (world units; x = length, z = width, y = up). The players and the goal are drawn ~1.5x real size,
   // so the markings around the goal are the real ones scaled to the goal (BOX_K), not to the pitch: the boxes look
@@ -71,12 +71,12 @@
   };
 
   // Settings groups (the tabs of the Settings screen)
-  NS.SETTING_GROUPS = [['game', 'set.g.game'], ['video', 'set.g.video'], ['audio', 'set.g.audio']];
+  NS.SETTING_GROUPS = [['game', 'set.g.game'], ['video', 'set.g.video'], ['audio', 'set.g.audio'], ['aima', 'set.g.aima']];
 
   // Settings schema: drives the Settings screen, validation and the app_config merge.
   NS.SETTING_DEFS = [
     { key: 'difficulty', group: 'game', label: 'set.difficulty', hint: 'set.difficulty.h',
-      options: [['EASY', 'opt.easy'], ['NORMAL', 'opt.normal'], ['HARD', 'opt.hard'], ['LEGEND', 'opt.legend']] },
+      options: [['EASY', 'opt.easy'], ['NORMAL', 'opt.normal'], ['HARD', 'opt.hard'], ['LEGEND', 'opt.legend'], ['AIMA', 'opt.aima']] },
     // players per team (applies from the next match)
     { key: 'teamSize', group: 'game', label: 'set.teamsize', hint: 'set.teamsize.h',
       options: [[11, 'opt.t11'], [7, 'opt.t7']] },

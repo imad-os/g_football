@@ -332,6 +332,15 @@
         lastSent = now + 5.5;
       } catch (e) {}
     },
+    // the trainer claps checkoAI: a few claps, more and louder for a stronger one
+    applause: function (strength) {
+      var c = ensure();
+      if (!c || !buf.clap) return;
+      try {
+        var n = 2 + Math.round(strength * 4);
+        for (var k = 0; k < n; k++) play(buf.clap, 0.25 + strength * 0.35, 0.9 + Math.random() * 0.25, k * 0.13);
+      } catch (e) {}
+    },
     // near miss / big chance: "oooh"
     ooh: function () {
       var c = ensure();

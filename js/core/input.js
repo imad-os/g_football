@@ -61,6 +61,9 @@
         p.cur &= ~bit;
         p.ign &= ~bit;
       }
+      // checkoAI's clap: held = the gauge fills, released = the clap (only the trainer's profile; never a move)
+      var cm = NS.Bindings.clapMask();
+      if (NS.Aima && cm && (bit & cm)) NS.Aima.clapButton(pressed && (p.cur & cm) === cm);
     },
     releaseAll: function () {
       for (var i = 0; i < 2; i++) {

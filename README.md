@@ -111,6 +111,42 @@ middle / final third), completed passes going forward / square / backward...), t
 restart not taken, a player far off the pitch, header chains, ping-pong turnovers, code errors) and a log of every match
 with its goals and cards. The game reports its events through `NS.dbg` (js/game/debug.js), which is null otherwise.
 
+## checkoAI (CPU level "checkoAI")
+
+A learning player named after the owner's white rooster (js/game/aima.js). On a CPU team at level checkoAI it controls the
+selected player only (violet arrow), through a virtual controller with the same stick, sprint, buttons and hold times
+as a human; the other ten are the Legend CPU. A small box under the scoreboard shows what it is thinking.
+
+- **Model**: a neural network (64 inputs: the play around him and the whole match situation, time left, score, numbers,
+  cards, possession, shots; two hidden layers; heads for stick, sprint, button, power and a value). Brain sizes SMALL
+  64-48 (8.6k values), LARGE 256-128, HUGE 512-256 (PC).
+- **Learning** (the trainer's profile only): it copies the Legend CPU in spells it plays as the CPU (Auto: fewer as it
+  learns, never under 35%), copies the trainer's own play, and learns from rewards (actor-critic, 2 s returns): goals,
+  shots, passes, ball won / lost, fouls, and the trainer's **claps** (Buttons screen > Clap, default ZL; hold it: a quick
+  tap is ~25%, a full 1 s hold 100%). Restarts and penalties it takes are played by the Legend CPU.
+- **Trainer**: the My PC profile named "imad", signed in with his Google account (Settings > checkoAI > Sign in with
+  Google, once on a computer; if the popup is blocked inside My PC, open `aima-login.html` in a browser and paste the
+  code). The sign-in token is kept in the profile's My PC save, so his TV uses it too.
+- **Everyone else**: signs in anonymously and plays a fresh copy of the trainer's latest model (read only).
+- **Store**: its own Firebase project (`js/data/aima-cloud.js`, public web config; the app config `aimaFirebase`
+  overrides it), through the REST APIs. The model is the Firestore document `aima/trainer`.
+
+Firebase setup: Authentication > Sign-in method: enable **Google** and **Anonymous**; Authentication > Settings >
+Authorized domains: add `imad-os.github.io`. Firestore rules (put the trainer's Gmail address):
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /aima/trainer {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.token.email == 'YOUR_GMAIL@gmail.com'
+                   && request.auth.token.email_verified == true;
+    }
+  }
+}
+```
+
 ## 11-a-side, the rules of the game
 
 * **Settings > Gameplay > Players per team**: 11 v 11 (default) or 7 v 7, from the next match.

@@ -112,6 +112,7 @@
         NS.Gamepad.init();
         var settings = NS.Storage.load();
         World.settings = settings;
+        try { NS.Aima.init(info); } catch (e) { MyPC.report && MyPC.report(e, { where: 'checkoAI init' }); } // never blocks the game
         NS.Comp.load(); // a saved league / cup to continue
         NS.Audio.setEnabled(settings.soundEnabled);
         NS.Audio.setChants(settings.crowdChants);

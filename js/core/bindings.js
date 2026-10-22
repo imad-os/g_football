@@ -44,6 +44,8 @@
   var DEF_SPRINT = PR;
 
   var sprintMask = DEF_SPRINT;
+  var DEF_CLAP = PZL;           // checkoAI's clap (the trainer's profile only): a button no default move uses
+  var clapMask = DEF_CLAP;
   var relevant = 0;
 
   function recompute() {
@@ -61,6 +63,13 @@
       return -1;
     },
     sprintMask: function () { return sprintMask; },
+    clapMask: function () { return clapMask; },
+    // the clap may not share a button with a move or sprint (it must never play anything)
+    setClap: function (mask) {
+      if (!mask || (mask & relevant) || (mask & sprintMask)) return false;
+      clapMask = mask;
+      return true;
+    },
     // true while the sprint button (or all buttons of a sprint combination) is held
     sprintDown: function (cur) { return sprintMask !== 0 && (cur & sprintMask) === sprintMask; },
     // Buttons that take part in any move: other buttons (plain sprint) are ignored by the move engine.
@@ -105,12 +114,13 @@
     reset: function () {
       for (var k = 0; k < MOVES.length; k++) MOVES[k].mask = DEF[k];
       sprintMask = DEF_SPRINT;
+      clapMask = DEF_CLAP;
       recompute();
     },
 
     // Saved form: { v: 3, s: sprint, m: { id: mask } }
     serialize: function () {
-      var out = { v: SAVE_VERSION, s: sprintMask, m: {} };
+      var out = { v: SAVE_VERSION, s: sprintMask, c: clapMask, m: {} };
       for (var k = 0; k < MOVES.length; k++) out.m[MOVES[k].id] = MOVES[k].mask;
       return out;
     },
@@ -120,6 +130,7 @@
       var k, v;
       if (saved.v === SAVE_VERSION) {
         if (okMask(saved.s)) sprintMask = saved.s;
+        if (okMask(saved.c)) clapMask = saved.c;
         for (k = 0; k < MOVES.length; k++) {
           v = saved.m[MOVES[k].id];
           if (v === 0 || okMask(v)) MOVES[k].mask = v;

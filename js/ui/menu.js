@@ -1019,8 +1019,8 @@
   // CPU v CPU matches at full speed with every move counted (js/game/debug.js); the report goes into a text box to copy.
   var DBG_OPTS = [
     ['matches', [5, 10, 20, 50, 100]],
-    ['home', ['EASY', 'NORMAL', 'HARD', 'LEGEND']],
-    ['away', ['EASY', 'NORMAL', 'HARD', 'LEGEND']],
+    ['home', ['EASY', 'NORMAL', 'HARD', 'LEGEND', 'AIMA']],
+    ['away', ['EASY', 'NORMAL', 'HARD', 'LEGEND', 'AIMA']],
     ['teams', ['SELECTED', 'RANDOM']],
     ['size', [11, 7]],
     ['stadium', ['COMPACT', 'CLASSIC', 'GRAND', 'MEGA']],
@@ -1065,7 +1065,8 @@
     clear(refs.dbgOpts);
     var busy = NS.Debug.running();
     DBG_OPTS.forEach(function (o) {
-      var b = btn('opt dbg-opt', T('dbg.' + o[0]) + ': ' + o[1][dbgSel[o[0]]], 'dbg:' + o[0], function () {
+      var shown = o[1][dbgSel[o[0]]] === 'AIMA' ? 'checkoAI' : o[1][dbgSel[o[0]]];
+      var b = btn('opt dbg-opt', T('dbg.' + o[0]) + ': ' + shown, 'dbg:' + o[0], function () {
         if (NS.Debug.running()) return;
         dbgSel[o[0]] = (dbgSel[o[0]] + 1) % o[1].length;
         renderDebug('dbg:' + o[0]);
@@ -1110,9 +1111,184 @@
     if (ok) refs.dbgStatus.textContent = T('dbg.copied');
   }
 
+  /* ------------------------------ checkoAI (Settings tab) ------------------------------ */
+
+  // option rows: [cfg key, label, [[value, text key]...], trainer only]
+  var AIMA_OPTS = [
+    ['learn', 'aima.o.learn', [[true, 'opt.on'], [false, 'opt.off']]],
+    ['mine', 'aima.o.mine', [[true, 'opt.on'], [false, 'opt.off']]],
+    ['style', 'aima.o.style', [['BALANCED', 'aima.st.BALANCED'], ['ATTACKER', 'aima.st.ATTACKER'], ['PLAYMAKER', 'aima.st.PLAYMAKER'], ['DEFENDER', 'aima.st.DEFENDER']]],
+    ['lr', 'aima.o.lr', [[0, 'opt.low'], [1, 'opt.normal'], [2, 'opt.high']]],
+    ['explore', 'aima.o.explore', [[0, 'opt.low'], [1, 'opt.normal'], [2, 'opt.high']]],
+    ['clap', 'aima.o.clap', [[0, 'opt.low'], [1, 'opt.normal'], [2, 'opt.high']]],
+    ['help', 'aima.o.help', [['AUTO', 'opt.auto'], ['H0', 'aima.h0'], ['H30', 'aima.h30'], ['H60', 'aima.h60']]],
+    ['size', 'aima.o.size', [['SMALL', 'aima.sz.SMALL'], ['LARGE', 'aima.sz.LARGE'], ['HUGE', 'aima.sz.HUGE']]]
+  ];
+  var aimaConfirm = '';   // a size change / reset waits for a second press
+  var aimaMsg = '';
+
+  function kv(grid, label, value) {
+    grid.appendChild(el('span', 'aima-k', label));
+    grid.appendChild(el('b', 'aima-v', value));
+  }
+  function pct(v) { return Math.round(v * 100) + '%'; }
+  function spark(h) {
+    if (!h || !h.length) return '-';
+    var bars = '▁▂▃▄▅▆▇█', mn = 1e9, mx = -1e9, i, out = '';
+    var a = h.slice(-12);
+    for (i = 0; i < a.length; i++) { mn = Math.min(mn, a[i]); mx = Math.max(mx, a[i]); }
+    for (i = 0; i < a.length; i++) out += bars[mx > mn ? Math.round((a[i] - mn) / (mx - mn) * 7) : 3];
+    return out + '  ' + a[a.length - 1];
+  }
+  function when(t) { return t ? new Date(t).toLocaleString() : '-'; }
+
+  function renderAima(keepKey) {
+    var A = NS.Aima;
+    var list = refs.setList;
+    var s = A.stats(), md = A.meta(), cfg = A.cfg, trainer = A.isTrainer();
+    // head: the rooster, his name, who he plays for
+    var head = el('div', 'aima-head');
+    var ico = el('span', 'aima-rooster');
+    ico.innerHTML = NS.HUD.ROOSTER;
+    head.appendChild(ico);
+    var ht = el('div');
+    ht.appendChild(el('div', 'aima-name', 'checkoAI'));
+    ht.appendChild(el('div', 'set-hint', T(trainer ? 'aima.role.trainer' : 'aima.role.viewer')));
+    head.appendChild(ht);
+    list.appendChild(head);
+
+    var cols = el('div', 'aima-cols');
+    // his stats
+    var c1 = el('div', 'panel-card');
+    c1.appendChild(el('div', 'tag amber', T('aima.c.stats')));
+    var g = el('div', 'aima-grid');
+    kv(g, T('aima.k.matches'), s.matches + '  (' + s.w + '-' + s.d + '-' + s.l + ')');
+    kv(g, T('aima.k.minutes'), String(Math.round(s.mins)));
+    kv(g, T('aima.k.goals'), s.goals + '   (' + T('aima.k.team') + ' ' + s.gf + '-' + s.ga + ')');
+    kv(g, T('aima.k.shots'), s.shots + '  (' + T('aima.k.ontarget') + ' ' + s.onTarget + ')');
+    kv(g, T('aima.k.passes'), s.passes + '  (' + (s.passes ? pct(s.passOk / s.passes) : '-') + ', ' + T('aima.k.fwd') + ' ' + s.fwdPass + ')');
+    kv(g, T('aima.k.tackles'), String(s.tackles));
+    kv(g, T('aima.k.wonlost'), s.won + ' / ' + s.lost);
+    kv(g, T('aima.k.fouls'), String(s.fouls));
+    kv(g, T('aima.k.claps'), s.claps + (s.claps ? '  (' + T('aima.k.avg') + ' ' + pct(s.clapSum / s.claps) + ')' : ''));
+    kv(g, T('aima.k.reward'), String(Math.round(s.reward * 10) / 10));
+    kv(g, T('aima.k.trend'), spark(s.hist));
+    c1.appendChild(g);
+    cols.appendChild(c1);
+
+    // the model
+    var c2 = el('div', 'panel-card');
+    c2.appendChild(el('div', 'tag amber', T('aima.c.model')));
+    g = el('div', 'aima-grid');
+    kv(g, T('aima.k.alg'), A.ALG);
+    kv(g, T('aima.k.brain'), cfg.size + '  ' + A.F + '-' + A.H1 + '-' + A.H2 + '-' + A.NOUT);
+    kv(g, T('aima.k.params'), A.NP.toLocaleString() + '  (' + (A.sizeKB ? A.sizeKB + ' KB' : '-') + ')');
+    kv(g, T('aima.k.inputs'), T('aima.inputs'));
+    kv(g, T('aima.k.decisions'), s.decisions + '  (' + T('aima.k.own') + ' ' + (s.decisions ? pct(s.modelDec / s.decisions) : '-') + ')');
+    kv(g, T('aima.k.updates'), 'RL ' + s.rl + '  /  ' + T('aima.k.copy') + ' ' + s.im);
+    kv(g, T('aima.k.samples'), T('aima.k.you') + ' ' + s.humanSamples + '  /  Legend ' + s.cpuSamples + '  (' + A.memory() + ')');
+    kv(g, T('aima.k.help'), pct(A.help()));
+    kv(g, T('aima.k.from'), T('aima.from.' + (md && md.from ? md.from : 'new')));
+    kv(g, T('aima.k.created'), when(md && md.created));
+    kv(g, T('aima.k.saved'), when(md && md.saved));
+    kv(g, T('aima.k.cloud'), A.cloud + (A.account() ? '  (' + A.account() + ')' : ''));
+    c2.appendChild(g);
+    cols.appendChild(c2);
+
+    // his style (from what he chooses himself)
+    var c3 = el('div', 'panel-card');
+    c3.appendChild(el('div', 'tag amber', T('aima.c.style')));
+    var sy = A.style();
+    var bars = [['aima.y.pass', sy.pass], ['aima.y.shoot', sy.shoot], ['aima.y.fwd', sy.fwd], ['aima.y.sprint', sy.sprint], ['aima.y.carry', sy.carry],
+      ['aima.y.pos', (sy.pos + 1) / 2]];
+    for (var b = 0; b < bars.length; b++) {
+      var row = el('div', 'aima-bar');
+      row.appendChild(el('span', 'aima-k', T(bars[b][0])));
+      var tr = el('i');
+      var fill = el('b');
+      fill.style.width = Math.round(Math.max(0, Math.min(1, bars[b][1])) * 100) + '%';
+      tr.appendChild(fill);
+      row.appendChild(tr);
+      c3.appendChild(row);
+    }
+    cols.appendChild(c3);
+    list.appendChild(cols);
+
+    // options (the trainer only: everybody else plays his model as it is)
+    if (trainer) {
+      AIMA_OPTS.forEach(function (o) {
+        var r = el('div', 'set-row');
+        var lab = el('div', 'set-label');
+        lab.appendChild(el('div', 'set-name', T(o[1])));
+        lab.appendChild(el('div', 'set-hint', T(o[1] + '.h')));
+        r.appendChild(lab);
+        var opts = el('div', 'row');
+        o[2].forEach(function (v) {
+          var key = 'ai:' + o[0] + ':' + v[0];
+          var bt = btn('opt' + (cfg[o[0]] === v[0] ? ' sel' : ''), T(v[1]), key, function () {
+            if (o[0] === 'size') {
+              if (v[0] === cfg.size) return;
+              if (v[0] !== 'SMALL' && !A.hasCloud()) { aimaMsg = T('aima.needcloud'); renderSettings(key); return; }
+              if (aimaConfirm !== key) { aimaConfirm = key; aimaMsg = T('aima.confirm.size'); renderSettings(key); return; }
+              aimaConfirm = '';
+              A.setSize(v[0]);
+              aimaMsg = T('aima.done.size');
+            } else {
+              A.setCfg(o[0], v[0]);
+            }
+            renderSettings(key);
+          });
+          opts.appendChild(bt);
+        });
+        r.appendChild(opts);
+        list.appendChild(r);
+      });
+    }
+
+    // account and model actions
+    var act = el('div', 'row aima-actions');
+    if (A.isImad() && A.hasCloud()) {
+      if (A.account()) {
+        act.appendChild(btn('', T('aima.signout'), 'ai:signout', function () { A.signOut(); aimaMsg = ''; renderSettings('ai:signout'); }));
+      } else {
+        act.appendChild(btn('primary', T('aima.signin'), 'ai:signin', function () {
+          aimaMsg = T('aima.signing');
+          renderSettings('ai:signin');
+          A.signIn().then(function (who) { aimaMsg = T('aima.signed') + ' ' + who; renderSettings('ai:signin'); },
+            function (e) { aimaMsg = T('aima.signfail') + ' ' + (e && e.message ? e.message : e); renderSettings('ai:signin'); });
+        }));
+        // fallback: the code shown by aima-login.html (opened in a browser), pasted here
+        var inp = document.createElement('input');
+        inp.className = 'aima-code';
+        inp.placeholder = T('aima.code');
+        inp.setAttribute('spellcheck', 'false');
+        act.appendChild(inp);
+        act.appendChild(btn('', T('aima.usecode'), 'ai:code', function () {
+          if (!inp.value.trim()) return;
+          A.signInCode(inp.value.trim()).then(function (who) { aimaMsg = T('aima.signed') + ' ' + who; renderSettings('ai:code'); },
+            function (e) { aimaMsg = T('aima.signfail') + ' ' + (e && e.message ? e.message : e); renderSettings('ai:code'); });
+        }));
+      }
+    }
+    if (trainer) {
+      act.appendChild(btn('', T('aima.save'), 'ai:save', function () { A.save(); aimaMsg = T('aima.saved'); renderSettings('ai:save'); }));
+      act.appendChild(btn('danger', T('aima.reset'), 'ai:reset', function () {
+        if (aimaConfirm !== 'reset') { aimaConfirm = 'reset'; aimaMsg = T('aima.confirm.reset'); renderSettings('ai:reset'); return; }
+        aimaConfirm = '';
+        A.reset();
+        aimaMsg = T('aima.done.reset');
+        renderSettings('ai:reset');
+      }));
+    }
+    list.appendChild(act);
+    if (aimaMsg) list.appendChild(el('div', 'map-msg', aimaMsg));
+    list.appendChild(el('div', 'set-hint aima-note', T(trainer ? 'aima.note.trainer' : (A.isImad() ? 'aima.note.signin' : 'aima.note.viewer'))));
+  }
+
   function renderSettings(keepKey) {
     clear(refs.setList);
-    NS.SETTING_DEFS.forEach(function (def) {
+    if (settingsGroup === 'aima') renderAima();
+    else NS.SETTING_DEFS.forEach(function (def) {
       if (def.group !== settingsGroup) return;
       var row = el('div', 'set-row');
       var lab = el('div', 'set-label');
@@ -1248,13 +1424,13 @@
 
   function mapRow(idx) {
     var B = NS.Bindings;
-    var sprint = idx === -1;
+    var sprint = idx === -1, clap = idx === -2;
     var b = btn('map-row', '', 'mv:' + idx, function () { startCapture(idx); });
     b.setAttribute('data-mv', String(idx));
-    b.appendChild(el('span', 'map-name', T(sprint ? 'mv.sprint' : 'mv.' + B.MOVES[idx].id)));
+    b.appendChild(el('span', 'map-name', T(clap ? 'mv.clap' : (sprint ? 'mv.sprint' : 'mv.' + B.MOVES[idx].id))));
     // one map for every controller and phone controller
-    var v = el('span', 'map-val pad' + (!sprint && !B.MOVES[idx].mask ? ' off' : ''),
-      sprint ? B.maskLabel(B.sprintMask()) : B.bindingLabel(idx));
+    var v = el('span', 'map-val pad' + (!sprint && !clap && !B.MOVES[idx].mask ? ' off' : ''),
+      clap ? B.maskLabel(B.clapMask()) : (sprint ? B.maskLabel(B.sprintMask()) : B.bindingLabel(idx)));
     b.appendChild(v);
     return b;
   }
@@ -1268,7 +1444,10 @@
       var card = el('div', 'panel-card');
       card.appendChild(el('div', 'tag amber', T(g[0])));
       var list = el('div', 'stack');
-      if (g[1] === 0) list.appendChild(mapRow(-1));
+      if (g[1] === 0) {
+        list.appendChild(mapRow(-1));
+        if (NS.Aima && NS.Aima.isImad()) list.appendChild(mapRow(-2)); // checkoAI's clap: the trainer's profile only
+      }
       else for (var i = 0; i < B.MOVES.length; i++) if (B.MOVES[i].ctx === g[1]) list.appendChild(mapRow(i));
       card.appendChild(list);
       refs.mapCols.appendChild(card);
@@ -1281,9 +1460,9 @@
   // button was pressed, the remote / keyboard side otherwise. Nothing cancels it but the 5 s timeout.
   function startCapture(idx) {
     var B = NS.Bindings;
-    var sprint = idx === -1;
-    refs.capTitle.textContent = T(sprint ? 'mv.sprint' : 'mv.' + B.MOVES[idx].id);
-    refs.capText.textContent = T(sprint ? 'map.prompt.sprint' : 'map.prompt');
+    var sprint = idx === -1, clap = idx === -2;
+    refs.capTitle.textContent = T(clap ? 'mv.clap' : (sprint ? 'mv.sprint' : 'mv.' + B.MOVES[idx].id));
+    refs.capText.textContent = T(sprint || clap ? 'map.prompt.sprint' : 'map.prompt');
     refs.capLive.textContent = T('map.waiting');
     refs.capture.classList.remove('hidden');
     refs.mapMsg.textContent = '';
@@ -1291,6 +1470,8 @@
       var msg;
       if (!mask) {
         msg = T('map.timeout');
+      } else if (clap) {
+        msg = B.setClap(mask) ? T('mv.clap') + ' = ' + B.maskLabel(mask) : T('map.clapbusy');
       } else if (sprint) {
         B.setSprint(mask);
         msg = T('mv.sprint') + ' = ' + B.maskLabel(mask);

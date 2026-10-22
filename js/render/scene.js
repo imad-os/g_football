@@ -11,9 +11,9 @@
   var projV = null;
   var nets = [null, null];  // goal nets (-x, +x)
   var netT = [0, 0];        // net bulge, 1 when the ball hits it
-  var rings = [null, null]; // controlled-player arrows (P1, P2)
+  var rings = [null, null, null, null]; // controlled-player arrows (P1, P2, AI.MA of team 0 / 1)
   var arrowMats = [null, null];
-  var ARROW_COLORS = [0x93c5fd, 0xfca5a5]; // light blue (P1), light red (P2)
+  var ARROW_COLORS = [0x93c5fd, 0xfca5a5, 0xc084fc, 0xc084fc]; // light blue (P1), light red (P2), violet (AI.MA)
   var ARROW_BLINK = 0xfde047;              // yellow flash while receiving a pass
   var ARROW_Y = 4.2;
   var arrowT = 0;
@@ -121,7 +121,7 @@
         trail.push(tm);
       }
       projV = new THREE.Vector3();
-      for (var i = 0; i < 2; i++) {
+      for (var i = 0; i < 4; i++) {
         // light fill + dark border (a slightly bigger back-face copy drawn behind it)
         rings[i] = new THREE.Group();
         arrowMats[i] = new THREE.MeshBasicMaterial({ color: ARROW_COLORS[i] });

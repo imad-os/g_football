@@ -424,3 +424,42 @@ h1, h2, p { margin: 0; }
 .dbg-status { margin: 0.4rem 0; flex-shrink: 0; font-size: 0.85rem; }
 .dbg-text { flex: 1; min-height: 0; width: 100%; box-sizing: border-box; resize: none; background: rgba(2, 6, 15, 0.85); color: #e2e8f0;
   border: 1px solid var(--line); border-radius: 0.6rem; padding: 0.5rem; font: 0.7rem/1.35 monospace; white-space: pre; overflow: auto; }
+
+/* AI.MA: status box under the scoreboard (top-left, small, translucent), clap gauge, clap */
+#aima-box { position: absolute; top: calc(2.2% + 3.4rem); left: 2.5%; display: flex; align-items: center; gap: 0.45rem;
+  max-width: 30%; padding: 0.25rem 0.7rem; font-size: 0.85rem; font-weight: 700; color: #ede9fe; opacity: 0.9;
+  border-color: rgba(192, 132, 252, 0.7); white-space: nowrap; overflow: hidden; }
+#aima-ico { font-size: 1.05rem; }
+#aima-txt { overflow: hidden; text-overflow: ellipsis; }
+#aima-gauge { position: relative; width: 4.2rem; height: 0.45rem; border-radius: 0.3rem; background: rgba(255, 255, 255, 0.15); visibility: hidden; overflow: hidden; }
+#aima-gauge b { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: linear-gradient(90deg, #a855f7, #f0abfc); }
+#clap-fx { position: absolute; top: calc(2.2% + 5.6rem); left: 3%; width: 6rem; pointer-events: none; transform-origin: 0 0; }
+#clap-fx svg { width: 100%; display: block; fill: #fcd34d; stroke: #92400e; stroke-width: 1.5; }
+#clap-fx .spark { stroke: #fde68a; stroke-width: 3; stroke-linecap: round; fill: none; opacity: 0; }
+#clap-fx b { display: block; text-align: center; font-size: 0.85rem; color: #f5d0fe; font-weight: 800; }
+#clap-fx.play { animation: clapPop 1.5s ease-out both; }
+#clap-fx.play .hand.l { animation: clapL 0.25s ease-in-out 4 alternate; transform-origin: 40px 70px; }
+#clap-fx.play .hand.r { animation: clapR 0.25s ease-in-out 4 alternate; transform-origin: 80px 70px; }
+#clap-fx.play .spark { animation: clapSpark 0.5s ease-out 0.25s 2; }
+@keyframes clapPop { 0% { transform: scale(0.3); opacity: 0; } 15% { transform: scale(var(--s, 1)); opacity: 1; } 80% { transform: scale(var(--s, 1)); opacity: 1; } 100% { transform: scale(var(--s, 1)) translateY(-0.6rem); opacity: 0; } }
+@keyframes clapL { from { transform: rotate(-14deg); } to { transform: rotate(4deg) translateX(4px); } }
+@keyframes clapR { from { transform: rotate(14deg); } to { transform: rotate(-4deg) translateX(-4px); } }
+@keyframes clapSpark { 0% { opacity: 0; } 30% { opacity: 1; } 100% { opacity: 0; } }
+
+#aima-head { display: inline-block; width: 1.5rem; height: 1.5rem; }
+#aima-head svg, .aima-rooster svg { width: 100%; height: 100%; display: block; }
+/* checkoAI tab */
+.aima-head { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 0.5rem; }
+.aima-rooster { width: 3.2rem; height: 3.2rem; border-radius: 50%; background: rgba(168, 85, 247, 0.18); border: 2px solid #c084fc; padding: 0.2rem; }
+.aima-name { font-size: 1.4rem; font-weight: 900; color: #f5d0fe; }
+.aima-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.7rem; margin-bottom: 0.7rem; }
+.aima-grid { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.2rem 0.7rem; font-size: 0.82rem; }
+.aima-k { color: var(--muted, #94a3b8); }
+.aima-v { overflow-wrap: anywhere; }
+.aima-bar { display: grid; grid-template-columns: 7rem minmax(0, 1fr); align-items: center; gap: 0.5rem; font-size: 0.82rem; margin: 0.25rem 0; }
+.aima-bar i { height: 0.55rem; border-radius: 0.3rem; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.aima-bar b { display: block; height: 100%; background: linear-gradient(90deg, #a855f7, #f0abfc); }
+.aima-actions { flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem; }
+.aima-code { min-width: 14rem; padding: 0.4rem 0.6rem; border-radius: 0.5rem; border: 1px solid var(--line); background: rgba(2, 6, 15, 0.85); color: #e2e8f0; }
+.aima-note { margin-top: 0.5rem; }
+@media (max-width: 900px) { .aima-cols { grid-template-columns: minmax(0, 1fr); } }

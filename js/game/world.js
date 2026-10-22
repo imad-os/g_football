@@ -186,6 +186,8 @@
     players: [],
     sentOff: [],   // players sent off this match (out of World.players, meshes hidden; disposed with the teams)
     slots: [makeSlot(0), makeSlot(1)],
+    aiSlots: [makeSlot(2), makeSlot(3)], // AI.MA: the learning player of team 0 / 1 (js/game/aima.js)
+    allSlots: null,                      // the 2 human slots, then the 2 AI.MA slots
     pressT: [0, 0],
     kickoffTeam: 0,
     settings: null,
@@ -293,5 +295,8 @@
     netHit: 0 // goal whose net the ball just hit (+1 / -1), read and cleared by the match
   };
 
+  World.aiSlots[0].team = 0;
+  World.aiSlots[1].team = 1;
+  World.allSlots = [World.slots[0], World.slots[1], World.aiSlots[0], World.aiSlots[1]];
   NS.World = World;
 })(window.RS6 = window.RS6 || {});

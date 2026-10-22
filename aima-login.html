@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>checkoAI sign-in</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #0b1220; color: #e2e8f0;
+    font: 16px/1.5 system-ui, sans-serif; padding: 16px; box-sizing: border-box; }
+  .card { max-width: 560px; width: 100%; background: #111a2e; border: 1px solid #334155; border-radius: 14px; padding: 24px; }
+  h1 { margin: 0 0 8px; font-size: 1.4rem; color: #f5d0fe; }
+  button { font: inherit; padding: 10px 16px; border-radius: 10px; border: 0; background: #a855f7; color: #fff; cursor: pointer; }
+  textarea { width: 100%; box-sizing: border-box; height: 110px; margin-top: 12px; background: #020617; color: #e2e8f0; border: 1px solid #334155;
+    border-radius: 8px; padding: 8px; font: 12px monospace; }
+  .muted { color: #94a3b8; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>checkoAI: sign in</h1>
+  <p class="muted">Only needed if "Sign in with Google" does not open inside My PC. Sign in with the trainer's Google account,
+    copy the code, and paste it in Settings &gt; checkoAI &gt; "Use code" on the imad profile. Keep the code private: it lets a
+    device train checkoAI as you.</p>
+  <button id="go" type="button">Sign in with Google</button>
+  <textarea id="code" readonly placeholder="the code appears here"></textarea>
+  <p id="msg" class="muted"></p>
+</div>
+<script src="js/data/aima-cloud.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script>
+  (function () {
+    var c = window.RS6.AIMA_CLOUD;
+    var app = firebase.initializeApp(c);
+    document.getElementById('go').onclick = function () {
+      var msg = document.getElementById('msg');
+      msg.textContent = 'Signing in...';
+      app.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()).then(function (res) {
+        document.getElementById('code').value = res.user.refreshToken;
+        msg.textContent = 'Signed in as ' + res.user.email + '. Copy the code above.';
+      }, function (e) { msg.textContent = 'Failed: ' + e.message; });
+    };
+  })();
+</script>
+</body>
+</html>

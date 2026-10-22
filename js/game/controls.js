@@ -32,6 +32,7 @@
   function fullCharge() { var t = World.settings && World.settings.gaugeTime; return t > 0 ? t : 0.5; }
 
   function otherPlayer(slot) {
+    if (slot.ai) return null; // AI.MA plays alone on its team
     var o = World.slots[1 - slot.idx];
     return o.active ? o.player : null;
   }
@@ -90,8 +91,9 @@
     else if (mi === I_SHOOT) { type = ACT.SHOOT; follow = false; } // the gauge (same power as the bar)
     else if (mi === I_CURVE) { type = ACT.CURVE; power = holdPower(d); follow = false; }
     else if (mi === I_CHIP) { type = ACT.CHIP; power = holdPower(d); follow = false; }
-    else if (mi === I_ONETWO) { Actions.oneTwo(p, pad.x, pad.y); slot.lockT = 1.4; return; }
+    else if (mi === I_ONETWO) { if (NS.Aima) NS.Aima.humanMove(slot, mi, d); Actions.oneTwo(p, pad.x, pad.y); slot.lockT = 1.4; return; }
     else return;
+    if (NS.Aima) NS.Aima.humanMove(slot, mi, d);
     Actions.passPower = follow ? power : -1;
     Actions.kick(p, type, power, pad.x, pad.y, 1);
     Actions.passPower = -1;
@@ -124,6 +126,7 @@
   // Pass / through / long = headed pass; shot / curve / chip = headed shot.
   function header(slot, p, mi, pad) {
     var shot = mi === I_SHOOT || mi === I_CURVE || mi === I_CHIP;
+    if (NS.Aima) NS.Aima.humanMove(slot, mi, slot.evT);
     var type = mi === I_THR ? ACT.THROUGH : (mi === I_LONG ? ACT.LONG : ACT.PASS);
     Actions.header(p, shot, type, pad.x, pad.y);
     var t = Actions.lastTarget;
@@ -131,6 +134,7 @@
   }
 
   function fireDefense(slot, mi) {
+    if (NS.Aima) NS.Aima.humanMove(slot, mi, 0);
     if (mi === I_TACKLE) tackleOrSwitch(slot, false);
     else if (mi === I_SLIDE) tackleOrSwitch(slot, true);
     else if (mi === I_SWITCH) switchCursor(slot);
@@ -164,8 +168,8 @@
     claimBall: function (o) {
       if (!o) return;
       var pick = null;
-      for (var i = 0; i < 2; i++) {
-        var s = World.slots[i];
+      for (var i = 0; i < 4; i++) {
+        var s = World.allSlots[i];
         if (!s.active) continue;
         if (s.team !== o.team) { s.lockT = 0; continue; }
         if (s.player === o) return; // already controlled
@@ -189,12 +193,13 @@
       assignT -= dt;
       if (assignT > 0 && !force) return;
       assignT = 0.12;
-      var auto = World.settings.switchMode === 'AUTO';
+      var autoSet = World.settings.switchMode === 'AUTO';
       var ball = World.ball;
       var o = ball.owner;
-      for (var i = 0; i < 2; i++) {
-        var s = World.slots[i];
+      for (var i = 0; i < 4; i++) {
+        var s = World.allSlots[i];
         if (!s.active) continue;
+        var auto = autoSet || s.ai; // AI.MA: auto switching (plus its own switch button)
         var other = otherPlayer(s);
         var cur = s.player;
         if (!cur) { s.player = Actions.nearestToBall(s.team, other, null); continue; }
@@ -234,7 +239,7 @@
     },
 
     update: function (slot, dt) {
-      var pad = Input.pads[slot.idx];
+      var pad = slot.pad || Input.pads[slot.idx]; // AI.MA: its virtual controller
       var p = slot.player;
       if (!p) return;
       var ball = World.ball;
