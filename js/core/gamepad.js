@@ -21,6 +21,8 @@
     nintendo: ['B', 'A', 'Y', 'X', 'L', 'R', 'ZL', 'ZR', '−', '+', 'L3', 'R3'],
     generic: ['A', 'B', 'X', 'Y', 'L', 'R', 'ZL', 'ZR', 'Select', 'Start', 'L3', 'R3']
   };
+  var DPAD_NAMES = ['D-pad \u2191', 'D-pad \u2193', 'D-pad \u2190', 'D-pad \u2192'];
+  var DPAD_BIT = [8192, 16384, 32768, 65536]; // up down left right (NS.Bindings)
   var DEAD = 0.22; // stick dead zone
   // the touch pad: [action, label, standard button index, place] (Nintendo: A right, B bottom, X top, Y left)
   var TOUCH = [['b0', 'B', 0, 'bottom'], ['b1', 'A', 1, 'right'], ['b2', 'Y', 2, 'left'], ['b3', 'X', 3, 'top'],
@@ -35,6 +37,7 @@
   var kind = 'generic';
   var dpad = [[0, 0, 0, 0], [0, 0, 0, 0]]; // per player: up down left right held
   var stick = [[0, 0], [0, 0]];
+  var side = [0, 0];     // per player: stick / D-pad held left (-1), right (1) or neither (the sides screen)
 
   function kindOf(name) {
     var id = String(name || '').toLowerCase();
@@ -57,12 +60,20 @@
     var x = stick[n][0], y = stick[n][1];
     if (d[2] || d[3] || d[0] || d[1]) { x = (d[3] ? 1 : 0) - (d[2] ? 1 : 0); y = (d[1] ? 1 : 0) - (d[0] ? 1 : 0); }
     NS.Input.direction(n, x, y);
+    var h = x > 0.6 ? 1 : (x < -0.6 ? -1 : (Math.abs(x) < 0.3 ? 0 : side[n]));
+    if (h !== side[n]) { side[n] = h; if (h && NS.UI && NS.UI.padSide) NS.UI.padSide(n, h); }
   }
 
   function onButton(i, pressed, value, dev) {
     var n = playerOf(dev);
     if (n < 0) return;
-    if (i >= 12 && i <= 15) { dpad[n][i - 12] = pressed ? 1 : 0; push(n); return; }
+    if (i >= 12 && i <= 15) {
+      var db = DPAD_BIT[i - 12], B = NS.Bindings;
+      if (NS.Mapper && NS.Mapper.active()) { NS.Mapper.button(db, pressed); return; }
+      // a D-pad button mapped to checkoAI's clap / punishment (the trainer): that button, not a direction
+      if (NS.Aima && NS.Aima.isImad() && (db & (B.clapMask() | B.punishMask()))) { NS.Input.button(n, db, pressed); return; }
+      dpad[n][i - 12] = pressed ? 1 : 0; push(n); return;
+    }
     var bit = i < BIT.length ? BIT[i] : 0;
     if (!bit) return; // Start / Select / Home: menus (My PC sends 'menu')
     if (NS.Mapper && NS.Mapper.active()) { NS.Mapper.button(bit, pressed); return; }
@@ -133,7 +144,7 @@
     count: function () { return order.length; },
     kind: function () { return kind; },
     // display name of a standard button index on this controller (L / ZL on Nintendo, LB / LT on Xbox...)
-    label: function (index) { return NAMES[kind][index] || ('#' + (index + 1)); },
+    label: function (index) { return index >= 12 && index <= 15 ? DPAD_NAMES[index - 12] : (NAMES[kind][index] || ('#' + (index + 1))); },
     // after a pause: every held direction is let go (My PC releases the buttons itself)
     reset: function () {
       for (var n = 0; n < 2; n++) { dpad[n][0] = dpad[n][1] = dpad[n][2] = dpad[n][3] = 0; stick[n][0] = stick[n][1] = 0; push(n); }

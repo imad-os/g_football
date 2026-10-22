@@ -222,13 +222,13 @@
   }
 
   function configureSlots() {
-    var mode = World.session.sideMode;
+    var pd = NS.sidePads();
     var s0 = World.slots[0];
     var s1 = World.slots[1];
-    s0.active = mode !== 'CPU_CPU';
-    s0.team = 0;
-    s1.active = mode === '1P_2P' || mode === 'COOP_CPU';
-    s1.team = mode === '1P_2P' ? 1 : 0;
+    s0.active = pd[0] >= 0;
+    s0.team = pd[0] >= 0 ? pd[0] : 0;
+    s1.active = pd[1] >= 0;
+    s1.team = pd[1] >= 0 ? pd[1] : 1;
     NS.Input.setPlayers(s1.active ? 2 : 1);
     s0.player = null;
     s1.player = null;
@@ -292,7 +292,7 @@
   // The ball is in `team`'s own penalty area (where its keeper may use his hands).
   function inOwnBox(team) {
     var ball = World.ball;
-    var goalX = team === 0 ? -HALF_W : HALF_W;
+    var goalX = -NS.attack(team) * HALF_W;
     return Math.abs(ball.pos.x - goalX) < NS.BOX_D + 0.5 && Math.abs(ball.pos.z) < NS.BOX_HW + 0.5;
   }
 
@@ -327,7 +327,7 @@
     var own = !!(k && k.team !== team);
     scorer = k && !own ? k : Actions.nearestToBall(team, null, null);
     if (scorer) {
-      var a = team === 0 ? 1 : -1;
+      var a = NS.attack(team);
       scorer.mood = 4;
       scorer.celX = a * (HALF_W - 2.5);
       scorer.celZ = (scorer.pos.z >= 0 ? 1 : -1) * (HALF_H - 2.5);
@@ -338,11 +338,20 @@
     var mins = Math.min(90, Math.floor(m.timeSeconds / 60) + 1);
     if (NS.dbg) NS.dbg('goal', team, { own: own, who: who, mins: mins, k: k });
     NS.HUD.goalFx(NS.I18n.t('hud.goalword'), (own ? NS.I18n.t('hud.owngoal') + ' ' : '') + who + '  ' + mins + "'", team);
-    if (team === 0 && World.slots[0].active) NS.Storage.addResult(0, 1, 0);
+    if (World.slots[0].active && team === World.slots[0].team) NS.Storage.addResult(0, 1, 0);
     ball.owner = null;
     ball.receiver = null;
     ball.contester = null;
     ball.vel.multiplyScalar(0.7); // it carries on into the net
+  }
+
+  // every player's formation place on his team's new end (second half)
+  function swapHomes() {
+    for (var i = 0; i < World.players.length; i++) {
+      var p = World.players[i], sl = layoutOf(p.team)[p.index], d = NS.attack(p.team);
+      if (!sl) continue;
+      p.homeX = sl.x * d * SX(); p.homeZ = sl.z * d * SZ();
+    }
   }
 
   function finish() {
@@ -356,10 +365,11 @@
     NS.HUD.banner(NS.I18n.t('hud.fulltime'), m.score[0] + ' - ' + m.score[1], 0);
     if (NS.Aima) NS.Aima.matchEnd(true);
     if (World.slots[0].active) {
-      var won = m.score[0] > m.score[1] ? 1 : 0;
+      var mt = World.slots[0].team;
+      var won = m.score[mt] > m.score[1 - mt] ? 1 : 0;
       var cup = 0; // cups are counted when a competition is won (NS.Comp)
       NS.Storage.addResult(won, 0, cup);
-      NS.Storage.submitMatchScore(m.score[0], m.score[1], cup);
+      NS.Storage.submitMatchScore(m.score[mt], m.score[1 - mt], cup);
       MyPC.announce(NS.I18n.t('hud.fulltime') + ' ' + m.score[0] + ' - ' + m.score[1]);
     }
   }
@@ -460,7 +470,7 @@
     var card = book(tackler);
     if (NS.dbg) NS.dbg('foul_committed', tackler.team, card, tackler.name);
     m.sendOff = card === 3 ? tackler : null;
-    var ownGoalX = tackler.team === 0 ? -HALF_W : HALF_W;
+    var ownGoalX = -NS.attack(tackler.team) * HALF_W;
     var inBox = Math.abs(victim.pos.x - ownGoalX) < NS.BOX_D && Math.abs(victim.pos.z) < NS.BOX_HW;
     m.setPiece = inBox ? 2 : 1;
     if (NS.dbg) NS.dbg(inBox ? 'penalty_won' : 'free_kick_won', victim.team);
@@ -490,7 +500,7 @@
     gk.diveCd = 1.6; // no other dive: he is committed
     World.ball.pen = true; // a struck penalty is harder to keep out even when he guesses right
     if (!side) return;
-    gk.facing = gk.team === 0 ? Math.PI / 2 : -Math.PI / 2;
+    gk.facing = NS.attack(gk.team) * Math.PI / 2;
     gk.vel.z = side * 13;
     gk.diveT = 0.8;
     gk.diveHigh = Math.random() < 0.3;
@@ -601,7 +611,7 @@
       return;
     }
     var gs = ball.pos.x > 0 ? 1 : -1;
-    var defending = gs > 0 ? 1 : 0; // team 1 defends the +x goal
+    var defending = NS.attack(0) === gs ? 1 : 0; // the team defending that goal
     m.setX = gs * HALF_W;
     if (last === defending) {
       m.setPiece = 4;
@@ -719,7 +729,7 @@
     if (m.sendOff) { sendOff(m.sendOff); m.sendOff = null; }
     var players = World.players;
     var t = m.setTeam;
-    var a = t === 0 ? 1 : -1;
+    var a = NS.attack(t);
     var kind = m.setPiece;
     var i, p;
     var walk = kind >= 3 && kind <= 5;
@@ -769,7 +779,7 @@
       m.restart = 4;
     } else if (kind === 5) {
       // goal kick: from the edge of the goal area, taken by the keeper; the opponents leave the box
-      var d = t === 0 ? 1 : -1;
+      var d = NS.attack(t);
       var own = -d * HALF_W;
       for (i = 0; i < players.length; i++) {
         p = players[i];
@@ -840,9 +850,9 @@
     if (m.setPieceTimer > 0) return m.setPiece === 2 || m.setPiece === 4;
     if (m.penalty || m.restart === 4) return true;
     var o = ball.owner;
-    if (o) return o.pos.x * (o.team === 0 ? 1 : -1) > HALF_W / 3;
+    if (o) return o.pos.x * NS.attack(o.team) > HALF_W / 3;
     if (ball.hard) return true;
-    return ball.pos.x * (ball.lastTouchTeam === 0 ? 1 : -1) > HALF_W / 3;
+    return ball.pos.x * NS.attack(ball.lastTouchTeam === 0 ? 0 : 1) > HALF_W / 3;
   }
 
   var Match = {
@@ -882,7 +892,7 @@
       var lit = NS.Scene.lit();
       var kits = NS.Teams.matchKits(homeT, awayT); // away kit when the colours clash
       for (var t = 0; t < 2; t++) {
-        var dir = t === 0 ? 1 : -1;
+        var dir = NS.attack(t);
         var td = t === 0 ? kits.home : kits.away;
         var layout = layoutOf(t);
         var names = s.rosters[t];
@@ -899,7 +909,7 @@
             roleText: slot.role + ' #' + slot.num,
             homeX: slot.x * dir * SX(), homeZ: slot.z * dir * SZ(),
             pos: pos, vel: new THREE.Vector3(),
-            facing: t === 0 ? Math.PI / 2 : -Math.PI / 2,
+            facing: dir * Math.PI / 2,
             stamina: 100, animPhase: Math.random() * 6, mesh: mesh,
             stun: 0, tackleT: 0, tackleCd: 0, tackleHit: false, tackleHuman: false,
             runToX: 0, runToZ: 0, runToT: 0, aiCd: Math.random() * 0.3,
@@ -936,7 +946,7 @@
         var p = World.players[i];
         var layout = layoutOf(p.team);
         var slot = layout[p.index];
-        var dir = p.team === 0 ? 1 : -1;
+        var dir = NS.attack(p.team);
         p.name = s.rosters[p.team][p.index] || ('PLAYER ' + slot.num);
         rate(p, NS.Teams.byId(p.team === 0 ? s.homeTeamId : s.awayTeamId));
         p.role = slot.role;
@@ -954,7 +964,7 @@
         var p = World.players[i];
         p.pos.set(p.homeX, 0, p.homeZ);
         p.vel.set(0, 0, 0);
-        p.facing = p.team === 0 ? Math.PI / 2 : -Math.PI / 2;
+        p.facing = NS.attack(p.team) * Math.PI / 2;
         p.stun = 0; p.tackleT = 0; p.tackleCd = 0; p.runToT = 0; p.returnTo = null; p.dribbling = false;
         p.kickT = 0; p.lungeT = 0; p.slideT = 0; p.fallT = 0; p.diveT = 0; p.headT = 0; p.catchT = 0; p.gkHands = false;
         p.mood = 0; p.slid = false; p.throwIn = false; p.throwT = 0; p.shoulderT = 0; p.offside = false;
@@ -975,7 +985,7 @@
         if (cand.team === World.kickoffTeam && cand.role !== 'GK' && !kicker) kicker = cand;
       }
       if (kicker) {
-        kicker.pos.set(kicker.team === 0 ? -0.95 : 0.95, 0, 0);
+        kicker.pos.set(-NS.attack(kicker.team) * 0.95, 0, 0);
         kicker.carry = 0.95;
         World.ball.owner = kicker;
         World.ball.lastTouchTeam = kicker.team;
@@ -1007,6 +1017,8 @@
         NS.Scene.rebuildStadium();
       }
       configureSlots();
+      // ends: home on the left in the first half, or drawn at random (Gameplay setting); the teams swap them at half time
+      m.dir[0] = World.settings.randomEnds && Math.random() < 0.5 ? -1 : 1; m.dir[1] = -m.dir[0];
       if (NS.Aima) NS.Aima.matchStart();
       this.rebuildTeams();
       m.score[0] = 0; m.score[1] = 0;
@@ -1129,7 +1141,7 @@
           m.protectT = 0;
         } else if (m.restartT > 10) {
           if (NS.dbg) NS.dbg('restart_auto_played_10s', m.setTaker.team, m.restart);
-          Actions.kick(m.setTaker, m.restart === 5 ? ACT.LONG : ACT.PASS, 0.5, m.setTaker.team === 0 ? 1 : -1, 0, 1);
+          Actions.kick(m.setTaker, m.restart === 5 ? ACT.LONG : ACT.PASS, 0.5, NS.attack(m.setTaker.team), 0, 1);
         }
       }
       // the penalty has been struck: the keeper has to guess, then everybody plays on
@@ -1150,6 +1162,8 @@
       if (over && m.half === 2) { finish(); return; }
       if (over && m.half === 1) {
         m.half = 2;
+        m.dir[0] = -m.dir[0]; m.dir[1] = -m.dir[1]; // the teams change ends
+        swapHomes();
         World.kickoffTeam = 1 - m.firstKick;
         m.celebrationTimer = 3.4; // the players walk off, then the second-half kickoff
         breakKind = 2;
@@ -1236,7 +1250,7 @@
         var pace = p.mSpd * fatigue(p);
         if (!p.isCtl) {
           var run = Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z);
-          if (run > 6.5) p.stamina = Math.max(5, p.stamina - (run - 6.5) * 0.65 * dt * p.drain);
+          if (run > 6.5) p.stamina = Math.max(5, p.stamina - (run - 6.5) * 0.325 * dt * p.drain);
           else p.stamina = Math.min(100, p.stamina + 0.9 * dt * (1.6 - p.drain));
         }
         var nx = p.pos.x + p.vel.x * dt * pace;
@@ -1245,7 +1259,7 @@
         p.pos.z = clamp(nz, -HALF_H - 1.5, HALF_H + 1.5);
         // a goal kick: the opponents stay out of the box until it is taken
         if (m.restart === 5 && p.team !== m.setTeam) {
-          var ownX = m.setTeam === 0 ? -HALF_W : HALF_W;
+          var ownX = -NS.attack(m.setTeam) * HALF_W;
           if (Math.abs(p.pos.x - ownX) < NS.BOX_D + 1 && Math.abs(p.pos.z) < NS.BOX_HW + 1) p.pos.x = ownX - (ownX > 0 ? 1 : -1) * (NS.BOX_D + 1);
         }
         p.mesh.root.rotation.y = p.facing;
@@ -1363,7 +1377,7 @@
             // humans head the ball themselves (their team-mates never do it for them)
             if (p.role === 'GK' || p.isCtl || humanTeam(p.team) || p.tackleT > 0) continue;
             if (!Actions.canHead(p)) continue; // in reach, and nobody closer to the ball
-            var att = p.team === 0 ? 1 : -1;
+            var att = NS.attack(p.team);
             var toGoal = Math.abs(att * HALF_W - p.pos.x) + Math.abs(p.pos.z) * 0.5;
             var shotOn = toGoal < 18 && p.role !== 'DEF';
             if (ball.lastTouchTeam === p.team && !shotOn) continue;
@@ -1406,7 +1420,7 @@
         hold.gkHold += dt;
         if (hold.gkHold > 5) {
           hold.gkHold = 0;
-          Actions.kick(hold, ACT.LONG, 0.8, hold.team === 0 ? 1 : -1, 0, 1);
+          Actions.kick(hold, ACT.LONG, 0.8, NS.attack(hold.team), 0, 1);
         }
       }
 
@@ -1450,12 +1464,14 @@
       var s0 = World.slots[0];
       var s1 = World.slots[1];
       var a0 = World.aiSlots[0], a1 = World.aiSlots[1];
-      if (s0.active) NS.HUD.plate(0, labels.p1, s0.player, s0);
-      else if (a0.active && a0.player) NS.HUD.plate(0, 'checkoAI', a0.player, a0);
-      else NS.HUD.plate(0, labels.cpu, featured(0), null);
-      if (s1.active) NS.HUD.plate(1, labels.p2, s1.player, s1);
-      else if (a1.active && a1.player) NS.HUD.plate(1, 'checkoAI', a1.player, a1);
-      else NS.HUD.plate(1, labels.cpu, featured(1), null);
+      // each team's box: its player (P1 / P2), else its checkoAI, else the CPU
+      for (var t = 0; t < 2; t++) {
+        var hs = s0.active && s0.team === t ? s0 : (s1.active && s1.team === t ? s1 : null);
+        var as = t === 0 ? a0 : a1;
+        if (hs) NS.HUD.plate(t, hs === s0 ? labels.p1 : labels.p2, hs.player, hs);
+        else if (as.active && as.player) NS.HUD.plate(t, 'checkoAI', as.player, as);
+        else NS.HUD.plate(t, labels.cpu, featured(t), null);
+      }
       NS.HUD.aima(a0.active || a1.active);
       if (World.settings.showRadar) NS.HUD.radar(World.players, World.ball, World.slots);
       // the ball behind a player box or the radar: fade that box out

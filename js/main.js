@@ -73,7 +73,7 @@
     // My PC's actions drive the menus only (remote, keyboard and controllers); matches are played with the controllers
     // themselves (js/core/gamepad.js)
     input: function (action, pressed, repeat, dev) {
-      if (NS.UI.isOpen()) NS.UI.onInput(action, pressed, repeat);
+      if (NS.UI.isOpen()) NS.UI.onInput(action, pressed, repeat, dev);
       else if (action === 'menu' && pressed && !repeat) NS.Match.requestMenu();
     },
     applySettings: function () {

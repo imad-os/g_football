@@ -14,13 +14,15 @@
 
   // button bits (standard positions: a = bottom, b = right, x = left, y = top), see js/core/gamepad.js
   var PA = 8, PB = 16, PX = 32, PY = 64, PL = 128, PR = 256, PZL = 512, PZR = 1024, PL3 = 2048, PR3 = 4096;
+  // the D-pad (the four buttons under the left stick): it moves the player; only the clap / punish may use it
+  var PDU = 8192, PDD = 16384, PDL = 32768, PDR = 65536, DPAD = PDU | PDD | PDL | PDR;
   // [bit, standard button index] for the names
-  var BIT_INDEX = [[PA, 0], [PB, 1], [PX, 2], [PY, 3], [PL, 4], [PR, 5], [PZL, 6], [PZR, 7], [PL3, 10], [PR3, 11]];
-  var PAD_FALLBACK = ['A', 'B', 'X', 'Y', 'L', 'R', 'ZL', 'ZR', '', '', 'L3', 'R3'];
+  var BIT_INDEX = [[PA, 0], [PB, 1], [PX, 2], [PY, 3], [PL, 4], [PR, 5], [PZL, 6], [PZR, 7], [PL3, 10], [PR3, 11], [PDU, 12], [PDD, 13], [PDL, 14], [PDR, 15]];
+  var PAD_FALLBACK = ['A', 'B', 'X', 'Y', 'L', 'R', 'ZL', 'ZR', '', '', 'L3', 'R3', 'D-pad \u2191', 'D-pad \u2193', 'D-pad \u2190', 'D-pad \u2192'];
   function padName(i) { return NS.Gamepad ? NS.Gamepad.label(i) : PAD_FALLBACK[i]; }
 
   var SAVE_VERSION = 3; // v3: one map for all controllers (v2 had a separate TV / keyboard side: its pad side is kept)
-  var ALL = 8191;
+  var ALL = 131071;
 
   function pop(m) { var c = 0; while (m) { c += m & 1; m >>>= 1; } return c; }
 
@@ -44,8 +46,9 @@
   var DEF_SPRINT = PR;
 
   var sprintMask = DEF_SPRINT;
-  var DEF_CLAP = PZL;           // checkoAI's clap (the trainer's profile only): a button no default move uses
-  var clapMask = DEF_CLAP;
+  var DEF_CLAP = PDU;           // checkoAI's clap (the trainer's profile only): D-pad up
+  var DEF_PUNISH = PDD;         // checkoAI's punishment ("that was bad"): D-pad down
+  var clapMask = DEF_CLAP, punishMask = DEF_PUNISH;
   var relevant = 0;
 
   function recompute() {
@@ -64,10 +67,17 @@
     },
     sprintMask: function () { return sprintMask; },
     clapMask: function () { return clapMask; },
-    // the clap may not share a button with a move or sprint (it must never play anything)
+    punishMask: function () { return punishMask; },
+    DPAD: DPAD,
+    // the clap / punish may not share a button with a move, sprint or each other (they must never play anything)
     setClap: function (mask) {
-      if (!mask || (mask & relevant) || (mask & sprintMask)) return false;
+      if (!mask || (mask & relevant) || (mask & sprintMask) || mask === punishMask) return false;
       clapMask = mask;
+      return true;
+    },
+    setPunish: function (mask) {
+      if (!mask || (mask & relevant) || (mask & sprintMask) || mask === clapMask) return false;
+      punishMask = mask;
       return true;
     },
     // true while the sprint button (or all buttons of a sprint combination) is held
@@ -115,12 +125,13 @@
       for (var k = 0; k < MOVES.length; k++) MOVES[k].mask = DEF[k];
       sprintMask = DEF_SPRINT;
       clapMask = DEF_CLAP;
+      punishMask = DEF_PUNISH;
       recompute();
     },
 
     // Saved form: { v: 3, s: sprint, m: { id: mask } }
     serialize: function () {
-      var out = { v: SAVE_VERSION, s: sprintMask, c: clapMask, m: {} };
+      var out = { v: SAVE_VERSION, s: sprintMask, c: clapMask, p: punishMask, m: {} };
       for (var k = 0; k < MOVES.length; k++) out.m[MOVES[k].id] = MOVES[k].mask;
       return out;
     },
@@ -130,7 +141,9 @@
       var k, v;
       if (saved.v === SAVE_VERSION) {
         if (okMask(saved.s)) sprintMask = saved.s;
-        if (okMask(saved.c)) clapMask = saved.c;
+        // (ZL was the clap before the D-pad could be mapped: it moves to D-pad up)
+        if (okMask(saved.c) && saved.c !== PZL) clapMask = saved.c;
+        if (okMask(saved.p) && saved.p !== clapMask) punishMask = saved.p;
         for (k = 0; k < MOVES.length; k++) {
           v = saved.m[MOVES[k].id];
           if (v === 0 || okMask(v)) MOVES[k].mask = v;

@@ -139,7 +139,7 @@
       if (az > GOAL_HALF_W - R) { st.z = (st.z > 0 ? 1 : -1) * (GOAL_HALF_W - R); st.vz *= -0.2; }
       if (st.y > GOAL_HEIGHT - R) { st.y = GOAL_HEIGHT - R; st.vy *= -0.2; }
       // all of the ball over the line, between the posts and under the bar: goal
-      if (scoring && st.x * gs > HALF_W + R && az < GOAL_HALF_W - POST_R) return gs > 0 ? 0 : 1;
+      if (scoring && st.x * gs > HALF_W + R && az < GOAL_HALF_W - POST_R) return NS.attack(0) === gs ? 0 : 1;
       return -1;
     }
     if (hit) return -2;
@@ -193,7 +193,8 @@
     settings: null,
     session: {
       compType: 'EXHIBITION',
-      sideMode: '1P_CPU', // 1P_CPU | 1P_2P | COOP_CPU | CPU_CPU
+      sideMode: '1P_CPU', // 1P_CPU | 1P_2P | COOP_CPU | CPU_CPU (competitions) | CUSTOM (the sides screen: pads)
+      pads: [0, -1],      // CUSTOM: the team of player 1 / player 2 (0 home, 1 away, -1 none: the CPU plays)
       activeCategory: 'LEAGUE_MAR',
       homeTeamId: 'WAC',
       awayTeamId: 'RCA',
@@ -213,6 +214,7 @@
       penalty: false,  // a penalty is being taken: only the taker and the keeper move until the kick
       protectT: 0,     // a free kick is being taken: nobody may tackle the taker yet
       sendOff: null,   // a player shown a red card: he leaves when play restarts
+      dir: [1, -1],    // the way each team attacks (+1: towards +x); random ends, swapped at half time
       warned: [false, false], // the team had its verbal warning (its next foul is a yellow)
       restart: 0,      // 1 free kick, 3 throw-in, 4 corner, 5 goal kick, 6 kick-off: the taker has not played it yet
                        // (he stands at the ball and has to pass / shoot it, he cannot run with it)
@@ -299,4 +301,12 @@
   World.aiSlots[1].team = 1;
   World.allSlots = [World.slots[0], World.slots[1], World.aiSlots[0], World.aiSlots[1]];
   NS.World = World;
+  // the way team t attacks: +1 towards +x, -1 towards -x (it changes at half time)
+  NS.attack = function (t) { return World.match.dir[t]; };
+  // the team of player 1 / player 2 for a side mode
+  var MODE_PADS = { '1P_CPU': [0, -1], '1P_2P': [0, 1], 'COOP_CPU': [0, 0], 'CPU_CPU': [-1, -1] };
+  NS.sidePads = function () {
+    var s = World.session;
+    return s.sideMode === 'CUSTOM' && s.pads ? s.pads : (MODE_PADS[s.sideMode] || MODE_PADS['1P_CPU']);
+  };
 })(window.RS6 = window.RS6 || {});

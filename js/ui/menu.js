@@ -25,7 +25,6 @@
     { comp: 'CONTINENTAL_CUP', icon: '🏆', tone: 'amber' },
     { comp: 'WORLD_NATIONALS', icon: '🌍', tone: 'purple' }
   ];
-  var PRESETS = ['1P_CPU', '1P_2P', 'COOP_CPU', 'CPU_CPU'];
   // competition being set up on the team-pick screen
   var pick = { comp: 'DOMESTIC_LEAGUE', cat: 'LEAGUE_MAR', team: 'WAC', side: '1P_CPU' };
   var abandonArmed = false;
@@ -525,45 +524,33 @@
 
   /* ------------------------------ SIDES ------------------------------ */
 
+  // Like FIFA / PES: each controller's icon starts where it was last time; push the stick (or the D-pad) left for the
+  // home team, right for the away team, to the middle for none. A team with nobody on it is played by the CPU (or
+  // checkoAI on that level), so P1 can play either team, P1 + P2 together, against each other, or nobody (watch).
   var slotEls = {};
 
   function buildSides() {
     var wrap = screens.SIDES;
     var head = el('div', 'screen-head');
     head.appendChild(el('h2', null, T('sides.title')));
-    head.appendChild(el('p', 'muted', T('sides.sub')));
+    head.appendChild(el('p', 'muted', T('sides.how')));
     wrap.appendChild(head);
 
-    var row = el('div', 'sides-row');
+    var row = el('div', 'sides-row sides-pick');
     var home = el('div', 'panel-card home');
     home.appendChild(el('div', 'tag red', T('sides.home')));
     home.appendChild(el('div', 'big', T('sides.team1')));
-    slotEls.p1h = el('div', 'slot');
-    slotEls.p2h = el('div', 'slot');
-    home.appendChild(slotEls.p1h);
-    home.appendChild(slotEls.p2h);
-
-    var mid = el('div', 'panel-card');
-    mid.appendChild(el('div', 'tag amber', T('sides.presets')));
-    var list = el('div', 'stack');
-    PRESETS.forEach(function (p, i) {
-      var b = btn('wide', T('preset.' + p), 'p:' + p, function () {
-        World.session.sideMode = p;
-        updateSideSlots();
-      });
-      b.setAttribute('data-preset', p);
-      if (i === 0) b.setAttribute('data-default', '1');
-      list.appendChild(b);
-    });
-    mid.appendChild(list);
-
+    slotEls.z0 = el('div', 'side-zone');
+    home.appendChild(slotEls.z0);
+    var mid = el('div', 'panel-card side-mid');
+    mid.appendChild(el('div', 'tag amber', T('sides.ctrl')));
+    slotEls.zm = el('div', 'side-zone');
+    mid.appendChild(slotEls.zm);
     var away = el('div', 'panel-card away');
     away.appendChild(el('div', 'tag blue', T('sides.away')));
     away.appendChild(el('div', 'big', T('sides.team2')));
-    slotEls.p1a = el('div', 'slot');
-    slotEls.p2a = el('div', 'slot');
-    away.appendChild(slotEls.p1a);
-    away.appendChild(slotEls.p2a);
+    slotEls.z1 = el('div', 'side-zone');
+    away.appendChild(slotEls.z1);
     row.appendChild(home);
     row.appendChild(mid);
     row.appendChild(away);
@@ -574,39 +561,41 @@
     refs.sidesNext = plusKey(btn('primary', T('nav.next_teams'), 'next', function () {
       if (matchRunning()) { NS.Match.applySides(); show('PAUSE'); } else show('TEAMS');
     }));
+    refs.sidesNext.setAttribute('data-default', '1');
     foot.appendChild(refs.sidesNext);
     wrap.appendChild(foot);
   }
 
-  function setSlot(node, text, tone) {
-    node.textContent = text;
-    node.className = 'slot ' + (tone || 'empty');
-  }
+  // how many players can pick a side: one per controller (two at most), at least player 1 (remote, keyboard, touch)
+  function sidePlayers() { return NS.Gamepad && NS.Gamepad.count() >= 2 ? 2 : 1; }
 
   function updateSideSlots() {
-    var mode = World.session.sideMode;
-    setSlot(slotEls.p1h, T('slot.empty'));
-    setSlot(slotEls.p2h, T('slot.empty'));
-    setSlot(slotEls.p1a, T('slot.empty'));
-    setSlot(slotEls.p2a, T('slot.empty'));
-    if (mode === '1P_CPU') {
-      setSlot(slotEls.p1h, T('slot.p1'), 'p1');
-      setSlot(slotEls.p2a, T('slot.cpu'), 'cpu');
-    } else if (mode === '1P_2P') {
-      setSlot(slotEls.p1h, T('slot.p1'), 'p1');
-      setSlot(slotEls.p2a, T('slot.p2local'), 'p2');
-    } else if (mode === 'COOP_CPU') {
-      setSlot(slotEls.p1h, T('slot.p1cap'), 'p1');
-      setSlot(slotEls.p2h, T('slot.p2coop'), 'p2');
-      setSlot(slotEls.p2a, T('slot.cpu'), 'cpu');
-    } else {
-      setSlot(slotEls.p1h, T('slot.cpuhome'), 'cpu');
-      setSlot(slotEls.p2a, T('slot.cpuaway'), 'cpu');
+    var s = World.session;
+    if (s.sideMode !== 'CUSTOM') { s.pads = NS.sidePads().slice(); s.sideMode = 'CUSTOM'; }
+    var n = sidePlayers();
+    if (n < 2) s.pads[1] = -1; // no second controller: nobody for player 2
+    var zones = { '0': slotEls.z0, '1': slotEls.z1, '-1': slotEls.zm };
+    clear(slotEls.z0); clear(slotEls.z1); clear(slotEls.zm);
+    for (var i = 0; i < n; i++) {
+      var ic = el('div', 'pad-ico p' + (i + 1));
+      ic.appendChild(el('b', null, 'P' + (i + 1)));
+      ic.appendChild(el('span', null, '\u25C0  \u25B6'));
+      zones[String(s.pads[i])].appendChild(ic);
     }
-    var presets = screens.SIDES.querySelectorAll('[data-preset]');
-    for (var i = 0; i < presets.length; i++) {
-      presets[i].classList.toggle('sel', presets[i].getAttribute('data-preset') === mode);
+    for (var t = 0; t < 2; t++) {
+      if (s.pads[0] !== t && s.pads[1] !== t) zones[String(t)].appendChild(el('div', 'slot cpu', T('slot.cpu')));
     }
+  }
+
+  // player n pushed his stick / D-pad left (-1) or right (+1) on this screen
+  function sideMove(n, d) {
+    if (!open || current !== 'SIDES' || n >= sidePlayers()) return;
+    var s = World.session;
+    if (s.sideMode !== 'CUSTOM') updateSideSlots();
+    var pos = s.pads[n] === 0 ? -1 : (s.pads[n] === 1 ? 1 : 0);
+    pos = Math.max(-1, Math.min(1, pos + d));
+    s.pads[n] = pos < 0 ? 0 : (pos > 0 ? 1 : -1);
+    updateSideSlots();
   }
 
   /* ------------------------------ TEAMS ------------------------------ */
@@ -1211,6 +1200,7 @@
     kv(g, T('aima.k.wonlost'), s.won + ' / ' + s.lost);
     kv(g, T('aima.k.fouls'), String(s.fouls));
     kv(g, T('aima.k.claps'), s.claps + (s.claps ? '  (' + T('aima.k.avg') + ' ' + pct(s.clapSum / s.claps) + ')' : ''));
+    kv(g, T('aima.k.punish'), String(s.punish || 0));
     kv(g, T('aima.k.reward'), String(Math.round(s.reward * 10) / 10));
     kv(g, T('aima.k.trend'), spark(s.hist));
     c1.appendChild(g);
@@ -1754,7 +1744,14 @@
 
   function mapRow(idx) {
     var B = NS.Bindings;
-    var sprint = idx === -1, clap = idx === -2;
+    var sprint = idx === -1, clap = idx === -2, pun = idx === -3;
+    if (pun) {
+      var pb = btn('map-row', '', 'mv:' + idx, function () { startCapture(idx); });
+      pb.setAttribute('data-mv', String(idx));
+      pb.appendChild(el('span', 'map-name', T('mv.punish')));
+      pb.appendChild(el('span', 'map-val pad', B.maskLabel(B.punishMask())));
+      return pb;
+    }
     var b = btn('map-row', '', 'mv:' + idx, function () { startCapture(idx); });
     b.setAttribute('data-mv', String(idx));
     b.appendChild(el('span', 'map-name', T(clap ? 'mv.clap' : (sprint ? 'mv.sprint' : 'mv.' + B.MOVES[idx].id))));
@@ -1776,7 +1773,7 @@
       var list = el('div', 'stack');
       if (g[1] === 0) {
         list.appendChild(mapRow(-1));
-        if (NS.Aima && NS.Aima.isImad()) list.appendChild(mapRow(-2)); // checkoAI's clap: the trainer's profile only
+        if (NS.Aima && NS.Aima.isImad()) { list.appendChild(mapRow(-2)); list.appendChild(mapRow(-3)); } // checkoAI's clap / punishment: the trainer only
       }
       else for (var i = 0; i < B.MOVES.length; i++) if (B.MOVES[i].ctx === g[1]) list.appendChild(mapRow(i));
       card.appendChild(list);
@@ -1790,9 +1787,9 @@
   // button was pressed, the remote / keyboard side otherwise. Nothing cancels it but the 5 s timeout.
   function startCapture(idx) {
     var B = NS.Bindings;
-    var sprint = idx === -1, clap = idx === -2;
-    refs.capTitle.textContent = T(clap ? 'mv.clap' : (sprint ? 'mv.sprint' : 'mv.' + B.MOVES[idx].id));
-    refs.capText.textContent = T(sprint || clap ? 'map.prompt.sprint' : 'map.prompt');
+    var sprint = idx === -1, clap = idx === -2, pun = idx === -3;
+    refs.capTitle.textContent = T(pun ? 'mv.punish' : (clap ? 'mv.clap' : (sprint ? 'mv.sprint' : 'mv.' + B.MOVES[idx].id)));
+    refs.capText.textContent = T(sprint || clap || pun ? 'map.prompt.sprint' : 'map.prompt');
     refs.capLive.textContent = T('map.waiting');
     refs.capture.classList.remove('hidden');
     refs.mapMsg.textContent = '';
@@ -1800,6 +1797,10 @@
       var msg;
       if (!mask) {
         msg = T('map.timeout');
+      } else if (!clap && !pun && (mask & B.DPAD)) {
+        msg = T('map.dpad'); mask = 0; // the D-pad moves the player: only the clap / punishment may use it
+      } else if (pun) {
+        msg = B.setPunish(mask) ? T('mv.punish') + ' = ' + B.maskLabel(mask) : T('map.clapbusy');
       } else if (clap) {
         msg = B.setClap(mask) ? T('mv.clap') + ' = ' + B.maskLabel(mask) : T('map.clapbusy');
       } else if (sprint) {
@@ -1852,7 +1853,12 @@
     isOpen: function () { return open; },
     screen: function () { return current; },
     // controllers connected / gone: the mapping screen shows the right names and the "connect a controller" note
-    padsChanged: function () { if (open && current === 'BUTTONS' && !NS.Mapper.active()) renderButtons(focused && focused.getAttribute('data-k')); },
+    padsChanged: function () {
+      if (open && current === 'BUTTONS' && !NS.Mapper.active()) renderButtons(focused && focused.getAttribute('data-k'));
+      if (open && current === 'SIDES') updateSideSlots();
+    },
+    // a controller's stick / D-pad went left or right (js/core/gamepad.js): the sides screen moves its icon
+    padSide: sideMove,
     openPause: function () {
       World.match.paused = true;
       NS.Audio.whistle(0);
@@ -1874,9 +1880,14 @@
       refs.statCups.textContent = st.cups;
       refs.statGoals.textContent = st.goals;
     },
-    onInput: function (action, pressed, repeat) {
+    onInput: function (action, pressed, repeat, dev) {
       if (NS.Mapper.active()) return; // the mapper is listening to the real buttons
       if (!pressed) return;
+      // the sides screen: left / right move player 1's icon (a controller moves its own, through padSide)
+      if (current === 'SIDES' && (action === 'left' || action === 'right')) {
+        if (!repeat && !(/^pad/.test(dev || '') && NS.Gamepad && NS.Gamepad.live())) sideMove(0, action === 'left' ? -1 : 1);
+        return;
+      }
       switch (action) {
         case 'left': move(0); break;
         case 'right': move(1); break;

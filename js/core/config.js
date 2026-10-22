@@ -2,7 +2,7 @@
 (function (NS) {
   'use strict';
 
-  NS.VERSION = '1.20.4';
+  NS.VERSION = '1.21.0';
 
   // Pitch geometry (world units; x = length, z = width, y = up). The players and the goal are drawn ~1.5x real size,
   // so the markings around the goal are the real ones scaled to the goal (BOX_K), not to the pitch: the boxes look
@@ -64,6 +64,7 @@
     cameraMode: 'WIDE',
     ballSkin: 'CLASSIC',
     switchMode: 'AUTO',
+    randomEnds: false,
     soundEnabled: true,
     crowdChants: true,
     showRadar: true,
@@ -92,6 +93,9 @@
       options: [[1.0, 'opt.slow'], [0.75, 'opt.normal'], [0.5, 'opt.fast'], [0.35, 'opt.vfast']] },
     { key: 'switchMode', group: 'game', label: 'set.switch', hint: 'set.switch.h',
       options: [['AUTO', 'opt.auto'], ['MANUAL', 'opt.manual']] },
+    // first-half ends: home on the left, or drawn at random (the teams swap ends at half time either way)
+    { key: 'randomEnds', group: 'game', label: 'set.ends', hint: 'set.ends.h',
+      options: [[false, 'opt.ends.home'], [true, 'opt.ends.random']] },
     { key: 'cameraMode', group: 'video', label: 'set.camera', hint: 'set.camera.h',
       options: [['CLOSE', 'opt.dynamic'], ['WIDE', 'opt.wide'], ['BLIMP', 'opt.blimp']] },
     { key: 'ballSkin', group: 'video', label: 'set.ball', hint: 'set.ball.h',

@@ -42,7 +42,7 @@
     run.anomCount[text.split(':')[0]] = (run.anomCount[text.split(':')[0]] || 0) + 1;
   }
   function sideName(t) { return run.cur.names[t]; }
-  function goalX(team) { return team === 0 ? NS.PITCH_HALF_W : -NS.PITCH_HALF_W; }
+  function goalX(team) { return NS.attack(team) * NS.PITCH_HALF_W; }
   function bucket(d) { return d <= 12 ? '0-12m' : (d <= 20 ? '12-20m' : (d <= 28 ? '20-28m' : '28m+')); }
 
   // ---- events from the game code
@@ -136,7 +136,7 @@
     // possession and where it is
     if (o) {
       add('possession_seconds', o.team, STEP);
-      var a = o.team === 0 ? 1 : -1;
+      var a = NS.attack(o.team);
       var fx = o.pos.x * a; // from the half-way line towards the goal it attacks
       run.ownerZone = fx > NS.PITCH_HALF_W / 3 ? 'final_third' : (fx < -NS.PITCH_HALF_W / 3 ? 'own_third' : 'middle_third');
       add('ball_seconds_in_' + run.ownerZone, o.team, STEP);
@@ -163,7 +163,7 @@
         add('pass_' + ps.type + (o.team === ps.team ? '_completed' : '_intercepted'), ps.team);
         if (o.team === ps.team) {
           // how far up the pitch it moved the ball
-          var gain = (o.pos.x - ps.x) * (ps.team === 0 ? 1 : -1);
+          var gain = (o.pos.x - ps.x) * NS.attack(ps.team);
           add(gain > 5 ? 'pass_completed_forward_5m_plus' : (gain < -3 ? 'pass_completed_backward' : 'pass_completed_square'), ps.team);
         }
         if (o.team === ps.team && o.offside) add('pass_' + ps.type + '_to_offside_player', ps.team);

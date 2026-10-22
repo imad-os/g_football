@@ -421,7 +421,7 @@
         p.vel.x += (mx / len * speed - p.vel.x) * k;
         p.vel.z += (mz / len * speed - p.vel.z) * k;
         p.facing = Math.atan2(mx, mz);
-        if (drain > 0) p.stamina = Math.max(5, p.stamina - drain * dt * p.drain); // his Stamina rating
+        if (drain > 0) p.stamina = Math.max(5, p.stamina - drain * 0.5 * dt * p.drain); // his Stamina rating (x0.5: a full bar lasts two long runs)
         else p.stamina = Math.min(100, p.stamina + 3 * dt);
       } else {
         p.vel.x *= Math.max(0, 1 - 12 * dt);

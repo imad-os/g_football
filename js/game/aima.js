@@ -6,7 +6,7 @@
  * plays in matches and is the one every other profile gets. Each team of a match may use a different brain (training:
  * brain v brain, or a brain v the CPU at any level).
  *
- * A brain is a small neural network (90 inputs: the play around him, his ratings and position, the last seconds and the
+ * A brain is a small neural network (91 inputs: the play around him, his ratings and position, the last seconds and the
  * whole match situation; 2 hidden layers;
  * heads for stick, sprint, button, power and a value). It learns (the trainer's profile only):
  *  - by copying: the Legend CPU in spells it plays for him (fewer as he learns), and the trainer's own play
@@ -25,8 +25,8 @@
   var ALG = 'AIMA-AC 1.1 (actor-critic + imitation)';
   var SAVE_KEY = 'aima';
   var TRAINER = 'imad';
-  var F = 90;      // inputs (v1.20: 64 -> 90; an older brain gets the new ones with weights of 0, so it plays as before)
-  var OLD_F = 64;
+  var F = 91;      // inputs (v1.20: 64 -> 90, v1.21: 91; an older brain gets the new ones with weights of 0, so it plays as before)
+  var OLD_FS = [64, 90];
   // brain sizes (hidden layers)
   var SIZES = { TINY: [32, 24], MEDIUM: [64, 48], LARGE: [256, 128], HUGE: [512, 256] }; // MEDIUM = the old SMALL (same layers)
   var LOCAL_SIZES = {};   // no model data in My PC's profile save: every brain lives in the cloud
@@ -47,6 +47,7 @@
   var LR = [0.0003, 0.001, 0.003];
   var TEMP = [0.7, 1.0, 1.4];
   var CLAP_W = [0.6, 1.0, 1.6];
+  var PUNISH = 3.0;         // a punishment: twice a clap's reward, negative
   var HELP = { AUTO: -1, H0: 0, H30: 0.3, H60: 0.6 };
   var HIST_MAX = 80;
   // reward weights per style: goal, shot, pass, forward pass, won, lost, carry
@@ -64,7 +65,7 @@
   function freshStats() {
     return {
       matches: 0, mins: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, goals: 0, shots: 0, onTarget: 0, passes: 0, passOk: 0,
-      fwdPass: 0, tackles: 0, won: 0, lost: 0, fouls: 0, claps: 0, clapSum: 0, reward: 0, decisions: 0, modelDec: 0,
+      fwdPass: 0, tackles: 0, won: 0, lost: 0, fouls: 0, claps: 0, clapSum: 0, punish: 0, reward: 0, decisions: 0, modelDec: 0,
       rl: 0, im: 0, humanSamples: 0, cpuSamples: 0, carryT: 0, sprintT: 0, playT: 0, xSum: 0, xN: 0, trainMatches: 0,
       opsP: 0, opsL: 0, opsT: 0, // arithmetic operations, and the seconds of play they were counted over: playing (its decisions) and learning (the same count on every device)
       btn: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], hist: []
@@ -299,11 +300,11 @@
     }
   }
 
-  // 90 inputs, in the team's frame (x towards the goal it attacks). b: the brain (its "memory of the last seconds" option)
+  // 91 inputs, in the team's frame (x towards the goal it attacks). b: the brain (its "memory of the last seconds" option)
   function features(p, x, b) {
     var ball = World.ball, m = World.match, players = World.players;
     var HW = NS.PITCH_HALF_W, HH = NS.PITCH_HALF_H;
-    var a = p.team === 0 ? 1 : -1;
+    var a = NS.attack(p.team);
     var px = p.pos.x * a, pz = p.pos.z;
     var o = ball.owner;
     var i, k, q, dx, dz;
@@ -386,8 +387,10 @@
     var ps = p.st || {};
     x[64] = rating(ps.spd); x[65] = rating(ps.drb); x[66] = rating(ps.sht); x[67] = rating(ps.sta); x[68] = rating(ps.hdr); x[69] = rating(ps.def);
     x[70] = p.role === 'GK' ? 1 : 0; x[71] = p.role === 'DEF' ? 1 : 0; x[72] = p.role === 'MID' ? 1 : 0; x[73] = p.role === 'FWD' ? 1 : 0;
+    // his team's end: +1 attacking towards the right of the screen, -1 towards the left (the ends swap at half time)
+    x[90] = NS.attack(p.team);
     // (74-76: above) the last seconds
-    if (b && !b.cfg.past) { for (i = 77; i < F; i++) x[i] = 0; return; }
+    if (b && !b.cfg.past) { for (i = 77; i < 90; i++) x[i] = 0; return; }
     var t = p.team;
     x[77] = Math.min(1.5, possT / 10);                       // since the ball changed teams
     var oi = ownRing[ownI];                                   // the owner 1 s ago
@@ -455,7 +458,7 @@
   function copyMove(slot, p, mi, pw, w) {
     var b = slot.brain, c = slot.c;
     if (!b.learns() || mi < 0) return;
-    var a = p.team === 0 ? 1 : -1;
+    var a = NS.attack(p.team);
     features(p, xs, b);
     var sp = Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z);
     // (kept with its time: a clap soon after makes this copied move count more)
@@ -561,7 +564,7 @@
     if (b.memW) {
       for (k = 0; k < c.cp.length; k++) {
         if (c.cpt[k] < t0 - CLAP_BACK || c.cpt[k] > t0 + 0.05) continue;
-        b.memW[c.cp[k]] = Math.min(4, b.memW[c.cp[k]] * (1 + strength));
+        b.memW[c.cp[k]] = r < 0 ? Math.max(0.02, b.memW[c.cp[k]] * (1 - 0.8 * strength)) : Math.min(4, b.memW[c.cp[k]] * (1 + strength));
         c.cpt[k] = -1e9; // (once)
         copied++;
       }
@@ -623,7 +626,7 @@
   // the CPU played this tick: copy what it did (moves are copied at the moment they happen, see the hooks)
   function copyCpu(slot, p) {
     var b = slot.brain, c = slot.c;
-    var a = p.team === 0 ? 1 : -1;
+    var a = NS.attack(p.team);
     if (b.learns() && c.tBtn === 0) {
       features(p, xs, b);
       var sp = Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z);
@@ -712,7 +715,7 @@
     }
     if (o && o !== lastOwner) {
       if (lastOwner) {
-        var lt = lastOwner.team, a = lt === 0 ? 1 : -1;
+        var lt = lastOwner.team, a = NS.attack(lt);
         b = brainOfTeam(lt);
         if (lastOwnerAi && b) {
           if (o.team !== lt) { b.st.lost++; addReward(lt, -0.25 * b.styleW(5)); }
@@ -732,7 +735,7 @@
     if (o && aiOf(o)) {
       b = brainOfTeam(o.team);
       b.st.carryT += dt;
-      addReward(o.team, 0.004 * b.styleW(6) * o.vel.x * (o.team === 0 ? 1 : -1) * dt);
+      addReward(o.team, 0.004 * b.styleW(6) * o.vel.x * NS.attack(o.team) * dt);
     }
     if (m.setPiece !== lastSetPiece) {
       var ft = 1 - m.setTeam;
@@ -745,14 +748,15 @@
 
   /* ------------------------------------------------------------------ what he is thinking (the status box) */
 
-  var thought = 'watch', thoughtT = 0, happyT = 0;
+  var thought = 'watch', thoughtT = 0, happyT = 0, sorryT = 0;
   function think(slot, p, btn, stk, spr) {
     // the status box follows the trainer's opponent (or team 1 when the CPU plays both)
     if (slot.team !== showTeam()) return;
     var m = World.match, o = World.ball.owner;
     var key;
     var frac = m.timeSeconds / 5400, my = m.score[p.team], th = m.score[1 - p.team];
-    if (happyT > 0) key = 'happy';
+    if (sorryT > 0) key = 'sorry';
+    else if (happyT > 0) key = 'happy';
     else if (slot.c.cpu) key = 'watch';
     else if (btn > 0 && B.MOVES[btn - 1].ctx === 1) {
       var id = B.MOVES[btn - 1].id;
@@ -764,7 +768,7 @@
     else if (o && o.team === p.team) key = spr ? 'runbehind' : 'option';
     else if (o) key = 'close';
     else key = 'chase';
-    if (key !== thought && (thoughtT <= 0 || key === 'shoot' || key === 'happy')) { thought = key; thoughtT = 0.6; }
+    if (key !== thought && (thoughtT <= 0 || key === 'shoot' || key === 'happy' || key === 'sorry')) { thought = key; thoughtT = 0.6; }
   }
   function showTeam() { return World.aiSlots[1].active ? 1 : 0; }
 
@@ -801,11 +805,11 @@
     }
     return { dims: [F, b.H1, b.H2, NOUT], sc: scales, w: b64(new Uint8Array(q.buffer)) };
   }
-  // (a brain saved with fewer inputs, OLD_F: its first layer gets the new inputs with weights of 0 = it plays the same)
+  // (a brain saved with fewer inputs, OLD_FS: its first layer gets the new inputs with weights of 0 = it plays the same)
   function unpackWeights(b, obj) {
     if (!obj || !obj.dims || obj.dims[3] !== NOUT) return false;
     var f0 = obj.dims[0];
-    if (f0 !== F && f0 !== OLD_F) return false;
+    if (f0 !== F && OLD_FS.indexOf(f0) < 0) return false;
     var size = null;
     for (var k in SIZES) if (SIZES[k][0] === obj.dims[1] && SIZES[k][1] === obj.dims[2]) size = k;
     if (!size) return false;
@@ -1061,7 +1065,33 @@
 
   /* ------------------------------------------------------------------ claps (the trainer only) */
 
-  var clapDown = 0, clapOn = false, clapAt = [0, 0]; // (clapAt: each slot's clock when the button went down)
+  var clapDown = 0, clapOn = false, clapSign = 1, clapAt = [0, 0]; // (clapAt: each slot's clock when the button went down)
+
+  // the trainer's clap (sign 1) or punishment (sign -1): held = stronger; credited to what he did just before the press
+  function coach(down, sign) {
+    if (!trainer || !World.match.running || World.match.paused || !anyAi()) { clapOn = false; return; }
+    if (down) {
+      if (!clapOn) { clapOn = true; clapSign = sign; clapDown = performance.now(); clapAt[0] = World.aiSlots[0].c.clock; clapAt[1] = World.aiSlots[1].c.clock; }
+      return;
+    }
+    if (!clapOn || clapSign !== sign) return;
+    clapOn = false;
+    var held = (performance.now() - clapDown) / 1000;
+    var strength = 0.25 + 0.75 * Math.min(1, held / CLAP_FULL); // a tap ~25%, a full hold 100%
+    for (var t = 0; t < 2; t++) {
+      var s = World.aiSlots[t];
+      if (!s.active || !s.brain) continue;
+      var w = CLAP_W[s.brain.cfg.clap] || 1;
+      clapCredit(s, clapAt[t], sign > 0 ? 1.5 * strength * w : -PUNISH * strength * w, strength);
+      if (sign > 0) { s.brain.st.claps++; s.brain.st.clapSum += strength; } else s.brain.st.punish++;
+    }
+    if (sign > 0) { happyT = 1.5 + strength; sorryT = 0; thought = 'happy'; }
+    else { sorryT = 1.5 + strength; happyT = 0; thought = 'sorry'; }
+    thoughtT = 1;
+    if (NS.HUD.clap) NS.HUD.clap(strength, sign < 0);
+    if (sign > 0) { if (NS.Audio.applause) NS.Audio.applause(strength); }
+    else if (NS.Audio.whistle) NS.Audio.whistle(0);
+  }
 
   /* ------------------------------------------------------------------ training mode (full speed, js/game/debug.js) */
 
@@ -1420,6 +1450,7 @@
       if (slot.team === showTeam()) {
         if (thoughtT > 0) thoughtT -= dt;
         if (happyT > 0) happyT -= dt;
+        if (sorryT > 0) sorryT -= dt;
       }
       if (tick) {
         var TICK = TICKS[b.cfg.tick] || TICKS[1];
@@ -1427,7 +1458,7 @@
         b.st.decisions++;
         b.st.playT += TICK;
         b.st.opsT += TICK;
-        b.st.xSum += p.pos.x * (p.team === 0 ? 1 : -1) / NS.PITCH_HALF_W; b.st.xN++;
+        b.st.xSum += p.pos.x * NS.attack(p.team) / NS.PITCH_HALF_W; b.st.xN++;
         if (!c.cpu) decide(slot, p);
         else copyCpu(slot, p);
         if (b.learns() && b.memN) { imitateOne(b); imitateOne(b); imitateOne(b); }
@@ -1437,7 +1468,7 @@
         pad.cur = 0; pad.x = 0; pad.y = 0; c.holdLeft = 0;
         return false;
       }
-      var a2 = p.team === 0 ? 1 : -1;
+      var a2 = NS.attack(p.team);
       if (c.stk) {
         var ang = (c.stk - 1) * Math.PI / 4;
         pad.x = Math.cos(ang) * a2; pad.y = Math.sin(ang);
@@ -1468,7 +1499,7 @@
       slot.obsPressing = slot.pressing;
       setMask(ctx);
       if (!bmask[btn]) btn = 0;
-      remember(b, xs, stickClass(pad.x, pad.y, p.team === 0 ? 1 : -1), B.sprintDown(pad.cur) ? 1 : 0, btn, btn ? 1 : -1, ctx, (MINEW[b.cfg.mineW] || 3) / 2);
+      remember(b, xs, stickClass(pad.x, pad.y, NS.attack(p.team)), B.sprintDown(pad.cur) ? 1 : 0, btn, btn ? 1 : -1, ctx, (MINEW[b.cfg.mineW] || 3) / 2);
       b.st.humanSamples++;
       imitateOne(b);
     },
@@ -1481,7 +1512,7 @@
       var f = mv.kind === 2 ? holdT / 1.5 : holdT / full;
       var p = slot.player, pad = NS.Input.pads[slot.idx];
       features(p, xs, b);
-      remember(b, xs, stickClass(pad.x, pad.y, p.team === 0 ? 1 : -1), B.sprintDown(pad.cur) ? 1 : 0, mi + 1, f < 0.3 ? 0 : (f < 0.75 ? 1 : 2), mv.ctx, MINEW[b.cfg.mineW] || 3);
+      remember(b, xs, stickClass(pad.x, pad.y, NS.attack(p.team)), B.sprintDown(pad.cur) ? 1 : 0, mi + 1, f < 0.3 ? 0 : (f < 0.75 ? 1 : 2), mv.ctx, MINEW[b.cfg.mineW] || 3);
       b.st.humanSamples++;
     },
 
@@ -1489,26 +1520,9 @@
     inputs: function (p, b) { var x = new Float32Array(F); features(p, x, b || active); return x; },
 
     // the clap button (js/core/input.js): down starts the gauge, up gives the clap
-    clapButton: function (down) {
-      if (!trainer || !World.match.running || World.match.paused || !anyAi()) { clapOn = false; return; }
-      if (down) {
-        if (!clapOn) { clapOn = true; clapDown = performance.now(); clapAt[0] = World.aiSlots[0].c.clock; clapAt[1] = World.aiSlots[1].c.clock; }
-        return;
-      }
-      if (!clapOn) return;
-      clapOn = false;
-      var held = (performance.now() - clapDown) / 1000;
-      var strength = 0.25 + 0.75 * Math.min(1, held / CLAP_FULL); // a tap ~25%, a full hold 100%
-      for (var t = 0; t < 2; t++) {
-        var s = World.aiSlots[t];
-        if (!s.active || !s.brain) continue;
-        clapCredit(s, clapAt[t], 1.5 * strength * (CLAP_W[s.brain.cfg.clap] || 1), strength);
-        s.brain.st.claps++; s.brain.st.clapSum += strength;
-      }
-      happyT = 1.5 + strength; thought = 'happy'; thoughtT = 1;
-      if (NS.HUD.clap) NS.HUD.clap(strength);
-      if (NS.Audio.applause) NS.Audio.applause(strength);
-    },
+    clapButton: function (down) { coach(down, 1); },
+    // the punishment: "that was bad" (the same timing as a clap, a reward of -PUNISH x the strength)
+    punishButton: function (down) { coach(down, -1); },
 
     // ---- training sessions. cfg: { brain: id, opp: 'EASY'..'LEGEND' | 'B:<id>', matches, teamSize, stadium, duration }
     training: function () { for (var i = 0; i < sessions.length; i++) if (sessions[i].state === 'running' || sessions[i].state === 'loading') return true; return false; },

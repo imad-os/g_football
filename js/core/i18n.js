@@ -22,7 +22,7 @@
     'mode.help': 'CONTROLS', 'mode.help.tag': 'How to play',
     'mode.help.d': 'Pass, through ball, long ball, shot, dribble, tackle, press and player switch.',
     'sides.title': 'Select controller sides', 'sides.sub': 'Assign player 1 and player 2 (same screen) to Home, Away or the CPU',
-    'sides.home': 'HOME SIDE', 'sides.away': 'AWAY SIDE', 'sides.team1': 'TEAM 1 (LEFT)', 'sides.team2': 'TEAM 2 (RIGHT)',
+    'sides.home': 'HOME SIDE', 'sides.away': 'AWAY SIDE', 'sides.team1': 'TEAM 1', 'sides.team2': 'TEAM 2',
     'sides.presets': 'CONTROLLER PRESETS',
     'preset.1P_CPU': 'P1 (Home) vs CPU (Away)', 'preset.1P_2P': 'P1 (Home) vs P2 (Away)',
     'preset.COOP_CPU': 'P1 + P2 co-op (Home) vs CPU', 'preset.CPU_CPU': 'CPU vs CPU (watch)',
@@ -102,7 +102,7 @@
     'mode.help': 'COMMANDES', 'mode.help.tag': 'Comment jouer',
     'mode.help.d': 'Passe, passe en profondeur, long ballon, tir, dribble, tacle, pressing et changement de joueur.',
     'sides.title': 'Choix des manettes', 'sides.sub': 'Attribuez le joueur 1 et le joueur 2 (meme ecran) a Domicile, Exterieur ou au CPU',
-    'sides.home': 'DOMICILE', 'sides.away': 'EXTERIEUR', 'sides.team1': 'EQUIPE 1 (GAUCHE)', 'sides.team2': 'EQUIPE 2 (DROITE)',
+    'sides.home': 'DOMICILE', 'sides.away': 'EXTERIEUR', 'sides.team1': 'EQUIPE 1', 'sides.team2': 'EQUIPE 2',
     'sides.presets': 'PRESETS',
     'preset.1P_CPU': 'J1 (Dom.) contre CPU (Ext.)', 'preset.1P_2P': 'J1 (Dom.) contre J2 (Ext.)',
     'preset.COOP_CPU': 'J1 + J2 coop (Dom.) contre CPU', 'preset.CPU_CPU': 'CPU contre CPU (spectateur)',
@@ -182,7 +182,7 @@
     'mode.help': 'CONTROLES', 'mode.help.tag': 'Como jugar',
     'mode.help.d': 'Pase, pase al hueco, balon largo, tiro, regate, entrada, presion y cambio de jugador.',
     'sides.title': 'Elegir mandos', 'sides.sub': 'Asigna al jugador 1 y 2 (misma pantalla) a Local, Visitante o CPU',
-    'sides.home': 'LOCAL', 'sides.away': 'VISITANTE', 'sides.team1': 'EQUIPO 1 (IZQ.)', 'sides.team2': 'EQUIPO 2 (DER.)',
+    'sides.home': 'LOCAL', 'sides.away': 'VISITANTE', 'sides.team1': 'EQUIPO 1', 'sides.team2': 'EQUIPO 2',
     'sides.presets': 'PRESETS',
     'preset.1P_CPU': 'J1 (Local) contra CPU (Visit.)', 'preset.1P_2P': 'J1 (Local) contra J2 (Visit.)',
     'preset.COOP_CPU': 'J1 + J2 coop (Local) contra CPU', 'preset.CPU_CPU': 'CPU contra CPU (espectador)',
@@ -262,7 +262,7 @@
     'mode.help': 'التحكم', 'mode.help.tag': 'كيف تلعب',
     'mode.help.d': 'تمريرة وتمريرة بينية وكرة طويلة وتسديدة ومراوغة وتدخل وضغط.',
     'sides.title': 'اختيار الأذرع', 'sides.sub': 'وزّع اللاعب 1 واللاعب 2 على صاحب الأرض أو الضيف أو الكمبيوتر',
-    'sides.home': 'صاحب الأرض', 'sides.away': 'الضيف', 'sides.team1': 'الفريق 1 (يسار)', 'sides.team2': 'الفريق 2 (يمين)',
+    'sides.home': 'صاحب الأرض', 'sides.away': 'الضيف', 'sides.team1': 'الفريق 1', 'sides.team2': 'الفريق 2',
     'sides.presets': 'خيارات جاهزة',
     'preset.1P_CPU': 'لاعب 1 ضد الكمبيوتر', 'preset.1P_2P': 'لاعب 1 ضد لاعب 2',
     'preset.COOP_CPU': 'لاعبان معًا ضد الكمبيوتر', 'preset.CPU_CPU': 'كمبيوتر ضد كمبيوتر (مشاهدة)',
@@ -685,7 +685,7 @@
 
   // checkoAI (the learning player, js/game/aima.js)
   Object.assign(D.en, {
-    'opt.aima': 'checkoAI', 'set.g.aima': 'checkoAI', 'mv.clap': 'Clap checkoAI (hold = stronger)',
+    'opt.aima': 'checkoAI', 'set.g.aima': 'checkoAI', 'mv.clap': 'Clap checkoAI: that was good (hold = stronger)',
     'map.clapbusy': 'That button already plays a move: pick a free one for the clap.',
     'aima.t.watch': 'Watching Legend play', 'aima.t.happy': 'Thanks coach!', 'aima.t.shoot': 'Going for goal!', 'aima.t.through': 'Through ball!',
     'aima.t.long': 'Switching play', 'aima.t.pass': 'Keeping the ball', 'aima.t.switch': 'Changing player', 'aima.t.win': 'Win it back!',
@@ -698,7 +698,7 @@
     'aima.k.ontarget': 'on target', 'aima.k.passes': 'Passes', 'aima.k.fwd': 'forward', 'aima.k.tackles': 'Tackles', 'aima.k.wonlost': 'Ball won / lost',
     'aima.k.fouls': 'Fouls', 'aima.k.claps': 'Claps', 'aima.k.avg': 'avg', 'aima.k.reward': 'Total reward', 'aima.k.trend': 'Reward per match',
     'aima.k.alg': 'Algorithm', 'aima.k.brain': 'Brain (layers)', 'aima.k.params': 'Values (size)', 'aima.k.inputs': 'Inputs',
-    'aima.inputs': '90: play around him, his ratings and position, the last seconds, the match (time left, score, cards, players, possession, shots)',
+    'aima.inputs': '91: play around him, his ratings and position, which end his team attacks, the last seconds, the match (time left, score, cards, players, possession, shots)',
     'aima.k.decisions': 'Decisions', 'aima.k.own': 'his own', 'aima.k.updates': 'Learning steps', 'aima.k.copy': 'copy',
     'aima.k.samples': 'Copied moves', 'aima.k.you': 'you', 'aima.k.help': 'Legend help now', 'aima.k.from': 'Started from',
     'aima.k.created': 'Created', 'aima.k.saved': 'Last saved', 'aima.k.cloud': 'Cloud',
@@ -878,6 +878,27 @@
   });
   Object.assign(D.fr, { 'aima.o.past': 'Memoire des dernieres secondes', 'aima.h.inputs': 'nouvelles entrees' });
   Object.assign(D.es, { 'aima.o.past': 'Memoria de los ultimos segundos', 'aima.h.inputs': 'nuevas entradas' });
+
+  // the sides screen (FIFA / PES style)
+  Object.assign(D.en, { 'sides.how': 'Push your stick left for the home team, right for the away team, middle to watch. A team with no player is played by the CPU.', 'sides.ctrl': 'CONTROLLERS' });
+  Object.assign(D.fr, { 'sides.how': 'Poussez le stick a gauche pour domicile, a droite pour exterieur, au milieu pour regarder. Une equipe sans joueur est jouee par le CPU.', 'sides.ctrl': 'MANETTES' });
+  Object.assign(D.es, { 'sides.how': 'Mueve el stick a la izquierda para local, a la derecha para visitante, al centro para mirar. Un equipo sin jugador lo juega la CPU.', 'sides.ctrl': 'MANDOS' });
+
+  // checkoAI: the punishment, the D-pad
+  Object.assign(D.en, { 'mv.punish': 'Punish checkoAI: that was bad (hold = stronger)', 'aima.t.sorry': 'Sorry coach!',
+    'map.dpad': 'The D-pad moves the player: it can only be the clap or the punishment.' });
+  Object.assign(D.fr, { 'mv.punish': 'Punir checkoAI : c\'etait mauvais (maintenir = plus fort)', 'aima.t.sorry': 'Pardon coach !',
+    'map.dpad': 'La croix deplace le joueur : seulement pour applaudir ou punir.' });
+  Object.assign(D.es, { 'mv.punish': 'Castigar a checkoAI: eso estuvo mal (mantener = mas fuerte)', 'aima.t.sorry': 'Perdon, mister!',
+    'map.dpad': 'La cruceta mueve al jugador: solo para aplaudir o castigar.' });
+
+  // ends of the pitch
+  Object.assign(D.en, { 'set.ends': 'Ends', 'set.ends.h': 'First half: home team on the left, or drawn at random. The teams change ends at half time.',
+    'opt.ends.home': 'HOME LEFT', 'opt.ends.random': 'RANDOM', 'aima.k.punish': 'Punishments' });
+  Object.assign(D.fr, { 'set.ends': 'Cotes du terrain', 'set.ends.h': '1re mi-temps : domicile a gauche, ou au hasard. Les equipes changent de cote a la mi-temps.',
+    'opt.ends.home': 'DOMICILE A GAUCHE', 'opt.ends.random': 'AU HASARD', 'aima.k.punish': 'Punitions' });
+  Object.assign(D.es, { 'set.ends': 'Campos', 'set.ends.h': '1a parte: local a la izquierda, o al azar. Los equipos cambian de campo en el descanso.',
+    'opt.ends.home': 'LOCAL IZQUIERDA', 'opt.ends.random': 'AL AZAR', 'aima.k.punish': 'Castigos' });
 
   var lang = 'en';
 

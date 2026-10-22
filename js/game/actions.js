@@ -56,7 +56,7 @@
 
     scanTargets: function (passer, fx, fz, t, minDot, want) {
       var players = World.players;
-      var attack = passer.team === 0 ? 1 : -1;
+      var attack = NS.attack(passer.team);
       var lofted = t === ACT.LONG;
       var best = null;
       var bestScore = -1e9;
@@ -140,7 +140,7 @@
       var rs = World.match.restart;
       if (rs >= 3 && rs <= 5 && type >= ACT.SHOOT && type !== ACT.CHIP) type = ACT.LONG;
       this.release(p, type);
-      var attack = p.team === 0 ? 1 : -1;
+      var attack = NS.attack(p.team);
 
       var angle, speed, vy, d, tx, tz;
       if (type >= ACT.SHOOT) {
@@ -256,7 +256,7 @@
     shotSpeed: function (g) { return SHOT_MIN + (SHOT_MAX - SHOT_MIN) * Math.pow(Math.min(1, g / 0.5), 0.7); },
     driveShot: function (p, goalZ, g, accuracy, bend) {
       var ball = World.ball;
-      var attack = p.team === 0 ? 1 : -1;
+      var attack = NS.attack(p.team);
       g = clamp(g, 0, 1);
       var goalX = attack * HALF_W;
       var sdx = goalX - ball.pos.x, sdz = goalZ - ball.pos.z; // from the ball (in front of his foot)
@@ -351,7 +351,7 @@
     markOffside: function (p) {
       var players = World.players;
       var ball = World.ball;
-      var a = p.team === 0 ? 1 : -1;
+      var a = NS.attack(p.team);
       var i, q;
       for (i = 0; i < players.length; i++) players[i].offside = false;
       ball.offTeam = -1;
@@ -476,7 +476,7 @@
     // nearest the aim (headers do not carry far, so a long ball becomes a through-ball distance).
     header: function (p, shot, type, ax, az) {
       var ball = World.ball;
-      var attack = p.team === 0 ? 1 : -1;
+      var attack = NS.attack(p.team);
       var y0 = ball.pos.y;
       if (this.touch(p)) return;
       this.release(p, shot ? ACT.SHOOT : type);
@@ -519,7 +519,7 @@
 
     // One-two: short pass, the receiver plays it straight back into the space the passer runs into.
     oneTwo: function (p, ax, az) {
-      var attack = p.team === 0 ? 1 : -1;
+      var attack = NS.attack(p.team);
       this.kick(p, ACT.PASS, 0.6, ax, az, 1);
       var m = this.lastTarget;
       if (m) {

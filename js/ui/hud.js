@@ -161,11 +161,12 @@
       }
     },
     // a clap from the trainer: hands pop beside the status box (bigger for a stronger clap); play goes on underneath
-    clap: function (strength) {
+    clap: function (strength, bad) {
       var fx = el['clap-fx'];
       fx.classList.remove('hidden', 'play');
+      fx.classList.toggle('bad', !!bad); // a punishment: red, with a minus
       fx.style.setProperty('--s', String(0.6 + strength * 0.6));
-      el['clap-pct'].textContent = Math.round(strength * 100) + '%';
+      el['clap-pct'].textContent = (bad ? '-' : '') + Math.round(strength * 100) + '%';
       void fx.offsetWidth; // restart the animation (only on a clap, never per frame)
       fx.classList.add('play');
       clearTimeout(clapTimer);

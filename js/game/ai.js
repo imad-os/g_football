@@ -73,7 +73,7 @@
 
   /* ------------------------------------------------------------------ helpers */
 
-  function attackOf(p) { return p.team === 0 ? 1 : -1; }
+  function attackOf(p) { return NS.attack(p.team); }
 
   function moveToward(p, tx, tz, speed, dt) {
     var dx = tx - p.pos.x;
@@ -161,7 +161,7 @@
 
   // 0..~1: how good a shot from (x, z) is for `team` (goal angle, distance, blockers, keeper)
   function shotQuality(x, z, team) {
-    var a = team === 0 ? 1 : -1;
+    var a = NS.attack(team);
     var goalX = a * HALF_W;
     var dx = Math.abs(goalX - x);
     if (dx < 1) dx = 1;
@@ -189,14 +189,14 @@
   // The offside line `team` attacks against (x): the second-last opponent (O.lastX: their deepest outfield player),
   // or the ball when it is further forward, and never inside our own half.
   function offLine(team, ball) {
-    var a = team === 0 ? 1 : -1;
+    var a = NS.attack(team);
     var O = TEAMS[1 - team];
     return a * Math.max(O.lastX * a, ball.pos.x * a, 0);
   }
 
   // p stands in an offside position right now
   function offsideNow(p, ball) {
-    var a = p.team === 0 ? 1 : -1;
+    var a = NS.attack(p.team);
     return p.pos.x * a > offLine(p.team, ball) * a + 0.2;
   }
 
@@ -225,7 +225,7 @@
 
   function assignMarks(t, T) {
     var players = World.players;
-    var a = t === 0 ? 1 : -1;
+    var a = NS.attack(t);
     var ownGoalX = -a * HALF_W;
     var carrier = World.ball.owner;
     var n = 0, i, j;
@@ -273,7 +273,7 @@
     var mins = m.timeSeconds / 60;
     for (var t = 0; t < 2; t++) {
       var T = TEAMS[t];
-      var a = t === 0 ? 1 : -1;
+      var a = NS.attack(t);
       T.phase = owner ? (owner.team === t ? 1 : 2) : 0;
       var diff = m.score[t] - m.score[1 - t];
       T.urgency = diff < 0 ? clamp((mins - 45) / 40, 0, 1) * (diff < -1 ? 1 : 0.75) : 0;
