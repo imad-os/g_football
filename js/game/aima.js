@@ -861,7 +861,12 @@
     return c && c.apiKey && c.projectId ? c : null;
   }
   // only a Google sign-in is kept in the profile; a guest login stays in memory (it must never replace the saved sign-in)
-  function saveAuth() { if (auth && auth.anon) return; try { MyPC.save('aimaAuth', auth); } catch (e) {} }
+  // (also a copy in this device's own storage: it restores the profile's value if that ever comes back empty)
+  function saveAuth() {
+    if (auth && auth.anon) return;
+    try { MyPC.save('aimaAuth', auth); } catch (e) {}
+    try { if (auth) localStorage.setItem('rs6_aimaAuth', JSON.stringify(auth)); else localStorage.removeItem('rs6_aimaAuth'); } catch (e) {}
+  }
   function post(url, body, form) {
     return fetch(url, { method: 'POST', headers: { 'Content-Type': form ? 'application/x-www-form-urlencoded' : 'application/json' }, body: body })
       .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error((j.error && j.error.message) || 'HTTP ' + r.status); return j; }); });
@@ -1249,7 +1254,14 @@
       var pr = info && info.profile ? info.profile : null;
       profile = { id: pr && pr.id ? String(pr.id) : '', name: pr && pr.name ? String(pr.name) : '' };
       try { auth = MyPC.load('aimaAuth', null); } catch (e) { auth = null; }
-      if (auth && (auth.anon || !auth.refresh)) { auth = null; try { MyPC.save('aimaAuth', null); } catch (e) {} } // old guest login
+      // a saved sign-in is never erased here: an old guest login is only ignored (writing over it could wipe a newer one from another device)
+      if (auth && (auth.anon || !auth.refresh)) auth = null;
+      if (!auth) {
+        try {
+          var cp = JSON.parse(localStorage.getItem('rs6_aimaAuth') || 'null');
+          if (cp && cp.refresh && !cp.anon) { auth = cp; MyPC.save('aimaAuth', auth); }
+        } catch (e) {}
+      }
       // the trainer: the profile named "imad", signed in with his Google account (when the cloud store is set up)
       trainer = isImad() && (!cloudCfg() || !!(auth && auth.refresh && !auth.anon));
       // testing in a plain browser (not My PC): ?aimatrainer=1 shows the trainer's screens (it cannot write the cloud)
