@@ -27,6 +27,7 @@
   var I_SLIDE = B.index('slide');
   var I_TEAM = B.index('teampress');
   var I_SWITCH = B.index('switch');
+  var I_LOB = B.index('lobthrough'); // long through pass: lands over the defenders (humans only, checkoAI never sees it)
 
   // seconds to fill the power bar (shot gauge, pass power): Settings > Gameplay > Power bar speed
   function fullCharge() { var t = World.settings && World.settings.gaugeTime; return t > 0 ? t : 0.5; }
@@ -83,25 +84,29 @@
   function fireAttack(slot, p, mi, d, pad) {
     var type;
     var follow = true;
+    var lob = false;
     var full = fullCharge();
     var power = d / full > 1 ? 1 : d / full; // passes: a longer hold = a firmer pass
     if (mi === I_LOW) type = ACT.PASS;
     else if (mi === I_THR) type = ACT.THROUGH;
     else if (mi === I_LONG) type = ACT.LONG;
+    else if (mi === I_LOB) { type = ACT.THROUGH; lob = true; }
     else if (mi === I_SHOOT) { type = ACT.SHOOT; follow = false; } // the gauge (same power as the bar)
     else if (mi === I_CURVE) { type = ACT.CURVE; power = holdPower(d); follow = false; }
     else if (mi === I_CHIP) { type = ACT.CHIP; power = holdPower(d); follow = false; }
     else if (mi === I_ONETWO) { if (NS.Aima) NS.Aima.humanMove(slot, mi, d); Actions.oneTwo(p, pad.x, pad.y); slot.lockT = 1.4; return; }
     else return;
-    if (NS.Aima) NS.Aima.humanMove(slot, mi, d);
+    if (NS.Aima && !lob) NS.Aima.humanMove(slot, mi, d);
     Actions.passPower = follow ? power : -1;
+    Actions.lob = lob;
     Actions.kick(p, type, power, pad.x, pad.y, 1);
+    Actions.lob = false;
     Actions.passPower = -1;
     var target = Actions.lastTarget;
     // the receiver is the human's player right away (both switch modes): he goes to meet the ball
     if (follow && target && target !== otherPlayer(slot)) {
       slot.player = target;
-      slot.lockT = type === ACT.LONG ? 2.2 : 1.6; // stay on the receiver while the ball travels
+      slot.lockT = type === ACT.LONG || lob ? 2.2 : 1.6; // stay on the receiver while the ball travels
     }
   }
 
@@ -137,8 +142,8 @@
   // Pass / through / long = headed pass; shot / curve / chip = headed shot.
   function header(slot, p, mi, pad) {
     var shot = mi === I_SHOOT || mi === I_CURVE || mi === I_CHIP;
-    if (NS.Aima) NS.Aima.humanMove(slot, mi, slot.evT);
-    var type = mi === I_THR ? ACT.THROUGH : (mi === I_LONG ? ACT.LONG : ACT.PASS);
+    if (NS.Aima && mi !== I_LOB) NS.Aima.humanMove(slot, mi, slot.evT);
+    var type = mi === I_THR || mi === I_LOB ? ACT.THROUGH : (mi === I_LONG ? ACT.LONG : ACT.PASS);
     Actions.header(p, shot, type, pad.x, pad.y);
     var t = Actions.lastTarget;
     if (!shot && t && t !== otherPlayer(slot)) { slot.player = t; slot.lockT = 1.6; }
@@ -423,7 +428,11 @@
       // height when a header was asked for). The stick is ignored until somebody has the ball.
       if (!has && receiving(p)) {
         var chase = slot.knockT > 0 ? 14.4 : 0; // his own knock-on: flat out after it
-        World.intercept(p, chase || (sprint ? 12.5 : 11), slot.evActive && slot.evCtx === 3 ? 3.1 : 1.9);
+        // a through ball: he runs on towards the goal into the space and waits for it there (he never drops back to
+        // meet a ball that comes from behind him)
+        var thruRun = ball.thru && ball.receiver === p && (p.pos.x - ball.pos.x) * NS.attack(p.team) > 0;
+        if (thruRun) { World.icX = ball.thruX; World.icZ = ball.thruZ; }
+        else World.intercept(p, chase || (sprint ? 12.5 : 11), slot.evActive && slot.evCtx === 3 ? 3.1 : 1.9);
         var ix = World.icX - p.pos.x;
         var iz = World.icZ - p.pos.z;
         var il = Math.sqrt(ix * ix + iz * iz);

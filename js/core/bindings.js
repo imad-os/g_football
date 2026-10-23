@@ -39,7 +39,9 @@
     { id: 'slide', ctx: 2, kind: 0, cls: 1, mask: PX },
     { id: 'press', ctx: 2, kind: 2, cls: 2, mask: PA },
     { id: 'teampress', ctx: 2, kind: 2, cls: 3, mask: PY },
-    { id: 'switch', ctx: 2, kind: 0, cls: 1, mask: PL }
+    { id: 'switch', ctx: 2, kind: 0, cls: 1, mask: PL },
+    // (last on purpose: checkoAI's button head has one slot per move above; this one is for humans only)
+    { id: 'lobthrough', ctx: 1, kind: 0, cls: 2, mask: PL | PY }
   ];
   var DEF = [];
   for (var i = 0; i < MOVES.length; i++) DEF.push(MOVES[i].mask);

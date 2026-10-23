@@ -162,6 +162,8 @@
     pickupCooldown: 0,
     receiver: null,  // team-mate the last pass was played to (he runs onto it)
     contester: null, // the opponent nearest to that pass (he runs to it too)
+    thru: false,     // the pass is a through ball: its receiver runs on to (thruX, thruZ) and waits for it there
+    thruX: 0, thruZ: 0,
     pen: false,      // a penalty kick in flight
     shotD: 0,        // distance to goal the last shot was struck from
     fromX: 0, fromZ: 0, // where it was last played from (kick, header, deflection): the next player's reaction time

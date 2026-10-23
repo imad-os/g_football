@@ -1391,6 +1391,10 @@
                 }
               } else if (NS.dbg) NS.dbg('gk_beaten_in_reach', p.team);
               break;
+            } else if (ball.pickupCooldown <= 0 && ball.pos.y < 1.9 && d2 < takerD) {
+              // already had his save attempt on this kick: a slow loose opponent ball in his box is still gathered (hands)
+              takerD = d2;
+              taker = p;
             }
           } else if (ball.pickupCooldown <= 0 && (ball.pos.y < 1.9 ? d2 < takerD : (ball.pos.y < 2.6 && d2 < Math.min(takerD, 0.6)))) {
             // at his feet, or a ball at chest height that hits his body
@@ -1438,7 +1442,9 @@
           if (hardHit || !Actions.controls(taker)) {
             if (Actions.knockOff(taker, hardHit)) return;
           } else {
-            takeBall(taker);
+            // a keeper takes a ball from the opponents in his box with his hands, a team-mate's pass / back-pass with his feet
+            var byHands = taker.role === 'GK' && ball.lastTouchTeam !== taker.team && inOwnBox(taker.team);
+            if (takeBall(taker) && byHands) { taker.gkHands = true; taker.catchT = 0.4; }
           }
         }
       }

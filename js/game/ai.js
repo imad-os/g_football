@@ -1452,6 +1452,13 @@
 
       // a pass was played to this player (or he is the opponent nearest to it): meet it where it can be played
       if (!ball.owner && (ball.receiver === p || ball.contester === p)) {
+        // a through ball: he keeps running towards the goal into the space and waits there, he does not drop back
+        // for a ball that comes from behind him
+        if (ball.thru && ball.receiver === p && (p.pos.x - ball.pos.x) * NS.attack(p.team) > 0) {
+          moveToward(p, ball.thruX, ball.thruZ, 11.8 * prof.speedMul, dt);
+          p.runToT = 0;
+          return;
+        }
         interceptTime(p, 11.5 * prof.speedMul, 1.9);
         moveToward(p, ICX, ICZ, 11.5 * prof.speedMul, dt);
         p.runToT = 0;

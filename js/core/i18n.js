@@ -327,7 +327,7 @@
 
   // ---- button mapping ----
   Object.assign(D.en, {
-    'mv.lowpass': 'Low pass', 'mv.through': 'Through pass', 'mv.long': 'Long pass', 'mv.shoot': 'Shoot', 'mv.curve': 'Curve shot',
+    'mv.lowpass': 'Low pass', 'mv.through': 'Through pass', 'mv.lobthrough': 'Long through pass', 'mv.long': 'Long pass', 'mv.shoot': 'Shoot', 'mv.curve': 'Curve shot',
     'mv.chip': 'Chip shot', 'mv.onetwo': 'One-two', 'mv.tackle': 'Tackle', 'mv.slide': 'Slide tackle', 'mv.press': 'Press',
     'mv.teampress': 'Team press', 'mv.switch': 'Switch player', 'mv.sprint': 'Sprint / dribble',
     'tier.0': 'tap', 'tier.1': 'hold', 'tier.2': 'hold+', 'tier.3': 'long hold', 'tier.hold': 'hold',
@@ -345,7 +345,7 @@
     'hud.hint': 'OK: pass \u2022 hold OK: through / long / shot \u2022 more moves and your own buttons: Settings > Button mapping'
   });
   Object.assign(D.fr, {
-    'mv.lowpass': 'Passe rasante', 'mv.through': 'Passe en profondeur', 'mv.long': 'Longue passe', 'mv.shoot': 'Tir', 'mv.curve': 'Tir enroule',
+    'mv.lowpass': 'Passe rasante', 'mv.through': 'Passe en profondeur', 'mv.lobthrough': 'Longue passe en profondeur', 'mv.long': 'Longue passe', 'mv.shoot': 'Tir', 'mv.curve': 'Tir enroule',
     'mv.chip': 'Lob', 'mv.onetwo': 'Une-deux', 'mv.tackle': 'Tacle', 'mv.slide': 'Tacle glisse', 'mv.press': 'Pressing',
     'mv.teampress': 'Pressing collectif', 'mv.switch': 'Changer de joueur', 'mv.sprint': 'Sprint / dribble',
     'tier.0': 'appui court', 'tier.1': 'maintenir', 'tier.2': 'maintenir +', 'tier.3': 'maintenir longtemps', 'tier.hold': 'maintenir',
@@ -363,7 +363,7 @@
     'hud.hint': 'OK : passe \u2022 maintenir OK : profondeur / long / tir \u2022 autres actions et boutons : Reglages > Configuration des boutons'
   });
   Object.assign(D.es, {
-    'mv.lowpass': 'Pase raso', 'mv.through': 'Pase al hueco', 'mv.long': 'Pase largo', 'mv.shoot': 'Disparo', 'mv.curve': 'Disparo con efecto',
+    'mv.lowpass': 'Pase raso', 'mv.through': 'Pase al hueco', 'mv.lobthrough': 'Pase largo al hueco', 'mv.long': 'Pase largo', 'mv.shoot': 'Disparo', 'mv.curve': 'Disparo con efecto',
     'mv.chip': 'Vaselina', 'mv.onetwo': 'Pared', 'mv.tackle': 'Entrada', 'mv.slide': 'Entrada deslizante', 'mv.press': 'Presion',
     'mv.teampress': 'Presion del equipo', 'mv.switch': 'Cambiar de jugador', 'mv.sprint': 'Sprint / regate',
     'tier.0': 'toque', 'tier.1': 'mantener', 'tier.2': 'mantener +', 'tier.3': 'mantener mucho', 'tier.hold': 'mantener',
@@ -381,7 +381,7 @@
     'hud.hint': 'OK: pase \u2022 mantener OK: al hueco / largo / tiro \u2022 mas acciones y tus botones: Ajustes > Asignacion de botones'
   });
   Object.assign(D.ar, {
-    'mv.lowpass': 'تمريرة أرضية', 'mv.through': 'تمريرة بينية', 'mv.long': 'تمريرة طويلة', 'mv.shoot': 'تسديد', 'mv.curve': 'تسديدة ملتفة',
+    'mv.lowpass': 'تمريرة أرضية', 'mv.through': 'تمريرة بينية', 'mv.lobthrough': 'بينية طويلة', 'mv.long': 'تمريرة طويلة', 'mv.shoot': 'تسديد', 'mv.curve': 'تسديدة ملتفة',
     'mv.chip': 'تسديدة ساقطة', 'mv.onetwo': 'تمريرة حائط', 'mv.tackle': 'تدخل', 'mv.slide': 'تدخل انزلاقي', 'mv.press': 'ضغط',
     'mv.teampress': 'ضغط الفريق', 'mv.switch': 'تبديل اللاعب', 'mv.sprint': 'ركض / مراوغة',
     'tier.0': 'ضغطة', 'tier.1': 'إبقاء', 'tier.2': 'إبقاء +', 'tier.3': 'إبقاء طويل', 'tier.hold': 'إبقاء',

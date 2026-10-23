@@ -16,7 +16,8 @@
   var arrowMats = [null, null];
   var ARROW_COLORS = [0x93c5fd, 0xfca5a5, 0xc084fc, 0xc084fc]; // light blue (P1), light red (P2), violet (AI.MA)
   var ARROW_BLINK = 0xfde047;              // yellow flash while receiving a pass
-  var ARROW_Y = 4.2;
+  var ARROW_Y = 4.1;
+  var ARROW_SCALE = 0.6;                   // a small pyramid above the head, not a big marker
   var arrowT = 0;
   var lookTarget = null;
   var canvasEl = null;
@@ -130,6 +131,7 @@
         border.scale.set(1.28, 1.2, 1.28);
         rings[i].add(border);
         rings[i].add(new THREE.Mesh(NS.Assets.geo.arrow, arrowMats[i]));
+        rings[i].scale.setScalar(ARROW_SCALE);
         rings[i].position.y = ARROW_Y;
         rings[i].visible = false;
         scene.add(rings[i]);

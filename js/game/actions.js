@@ -40,6 +40,7 @@
   var Actions = {
     lastTarget: null, // receiver of the last pass (so the cursor can follow it)
     passPower: -1,    // 0..1 from a human's hold time (-1 = normal pace, the CPU)
+    lob: false,       // the pass being played is a long through ball (ACT.THROUGH, lofted over the defenders)
 
     // Assisted pass: the team-mate nearest to where the ball is aimed (stick direction, or facing without input),
     // at a distance that suits the pass type (short / through / long), not marked tight, with a free lane.
@@ -50,6 +51,7 @@
       var t = type >= ACT.PASS && type <= ACT.LONG ? type : ACT.PASS;
       // a human's power bar says how far: a tap to the near one, a full bar to the one behind him
       var want = this.passPower >= 0 ? DEPTH0[t] + DEPTH1[t] * this.passPower : -1;
+      if (this.lob && want >= 0) want = 16 + 36 * this.passPower; // a long through ball: a tap = 16 m, a full bar = the far runner
       var best = this.scanTargets(passer, fx, fz, t, 0.34, want); // within ~70 degrees of the aim
       if (!best) best = this.scanTargets(passer, fx, fz, t, -0.2, want);
       return best;
@@ -58,7 +60,8 @@
     scanTargets: function (passer, fx, fz, t, minDot, want) {
       var players = World.players;
       var attack = NS.attack(passer.team);
-      var lofted = t === ACT.LONG;
+      var lofted = t === ACT.LONG || (t === ACT.THROUGH && this.lob);
+      var ideal = this.lob && t === ACT.THROUGH ? 30 : IDEAL_D[t];
       var best = null;
       var bestScore = -1e9;
       for (var i = 0; i < players.length; i++) {
@@ -79,7 +82,7 @@
           off = Math.abs(d - want) / Math.max(want, 8);
           score = -ang * 2.8 - off * 1.8;
         } else {
-          off = Math.abs(d - IDEAL_D[t]) / IDEAL_D[t];
+          off = Math.abs(d - ideal) / ideal;
           score = -ang * 2.8 - off * 0.6;
         }
         if (t !== ACT.PASS) score += (m.pos.x - passer.pos.x) * attack * 0.012; // through / long balls go forward
@@ -146,6 +149,7 @@
       ball.hard = type === ACT.SHOOT || type === ACT.CURVE;
       ball.chip = type === ACT.CHIP;
       ball.receiver = null;
+      ball.thru = false;
       ball.contester = null;
       ball.pen = false;
       ball.shotD = 0;
@@ -153,7 +157,7 @@
       p.dribbling = false;
       p.gkHands = false;
       p.kickT = p.throwT > 0 ? 0 : (type >= ACT.SHOOT ? 0.36 : 0.28); // kick animation (not on a throw-in)
-      p.kickHard = type >= ACT.SHOOT || type === ACT.LONG;
+      p.kickHard = type >= ACT.SHOOT || type === ACT.LONG || (type === ACT.THROUGH && this.lob);
       this.lastTarget = null;
       NS.Audio.kick(type >= ACT.SHOOT);
       if (NS.Stats) NS.Stats.kick(p, type >= ACT.SHOOT);
@@ -226,7 +230,7 @@
         var al = Math.sqrt(ax * ax + az * az);
         var kx = al > 0.1 ? ax / al : Math.sin(p.facing);
         var kz = al > 0.1 ? az / al : Math.cos(p.facing);
-        d = type === ACT.LONG ? 36 : (type === ACT.THROUGH ? 24 : 14);
+        d = type === ACT.LONG ? 36 : (type === ACT.THROUGH ? (this.lob ? 34 : 28) : 14);
         tx = p.pos.x + kx * d; tz = p.pos.z + kz * d;
       } else if (type === ACT.THROUGH) {
         if (forceTarget) {
@@ -238,8 +242,26 @@
           var lx = (al2 > 0.1 ? ax / al2 : Math.sin(p.facing)) * 0.6 + attack * 0.4;
           var lz = (al2 > 0.1 ? az / al2 : Math.cos(p.facing)) * 0.6;
           var ll = Math.sqrt(lx * lx + lz * lz) || 1;
-          tx = mate.pos.x + mate.vel.x * 0.4 + lx / ll * 6.5;
-          tz = mate.pos.z + mate.vel.z * 0.4 + lz / ll * 6.5;
+          // (deep: he runs onto it at full pace; a long through ball lands further still)
+          var lead = this.lob ? 14 : 11;
+          tx = mate.pos.x + mate.vel.x * 0.7 + lx / ll * lead;
+          tz = mate.pos.z + mate.vel.z * 0.7 + lz / ll * lead;
+          if (this.lob) {
+            // over the defenders: it comes down beyond the deepest outfield opponent near the line of the ball
+            var ldx2 = tx - p.pos.x, ldz2 = tz - p.pos.z, ldl = Math.sqrt(ldx2 * ldx2 + ldz2 * ldz2) || 1;
+            var deep = tx * attack;
+            for (var oi = 0; oi < World.players.length; oi++) {
+              var op = World.players[oi];
+              if (op.team === p.team || op.role === 'GK' || op.stun > 0) continue;
+              var ou = ((op.pos.x - p.pos.x) * ldx2 + (op.pos.z - p.pos.z) * ldz2) / ldl;
+              if (ou < 3 || ou > ldl + 10) continue;
+              var operp = Math.abs((op.pos.x - p.pos.x) * ldz2 - (op.pos.z - p.pos.z) * ldx2) / ldl;
+              if (operp < 9 && op.pos.x * attack + 4 > deep) deep = op.pos.x * attack + 4;
+            }
+            tx = deep * attack;
+            var lfd = Math.sqrt((tx - p.pos.x) * (tx - p.pos.x) + (tz - p.pos.z) * (tz - p.pos.z));
+            if (lfd > 52) { tx = p.pos.x + (tx - p.pos.x) * 52 / lfd; tz = p.pos.z + (tz - p.pos.z) * 52 / lfd; }
+          }
         }
         tx = clamp(tx, -HALF_W + 2, HALF_W - 2);
         tz = clamp(tz, -HALF_H + 2, HALF_H - 2);
@@ -351,6 +373,13 @@
         speed = airSpeed(d, T);
         ball.pos.y = NS.BALL_R + 0.15;
         if (mate) { mate.runToX = tx; mate.runToZ = tz; mate.runToT = T + 0.7; }
+      } else if (type === ACT.THROUGH && this.lob) {
+        // long through ball: lobbed, comes down on the space behind the defenders where the receiver runs to
+        var Tl = clamp(d / 26, 0.9, 1.8);
+        vy = 0.5 * G * Tl;
+        speed = airSpeed(d, Tl);
+        ball.pos.y = NS.BALL_R + 0.15;
+        if (mate) { mate.runToX = tx; mate.runToZ = tz; mate.runToT = Tl + 0.9; }
       } else if (type === ACT.THROUGH) {
         speed = forceTarget ? clamp(d * DRAG_K + 4, 11, 32) : clamp(d * DRAG_K + 8, 18, 38);
         vy = 0.8;
@@ -369,6 +398,8 @@
       }
       ball.vel.set(Math.sin(angle) * speed, vy, Math.cos(angle) * speed);
       ball.receiver = mate || null;
+      ball.thru = !!mate && type === ACT.THROUGH && !(p.throwT > 0.35);
+      ball.thruX = tx; ball.thruZ = tz;
       this.pickContester(p.team);
     },
 
@@ -546,7 +577,7 @@
       var T = d / speed;
       ball.vel.set(Math.sin(angle) * speed, (ty - y0) / T + 0.5 * G * T, Math.cos(angle) * speed);
       ball.spinY = 0;
-      if (mate) { ball.receiver = mate; mate.runToT = 0; }
+      if (mate) { ball.receiver = mate; ball.thru = false; mate.runToT = 0; }
       this.pickContester(p.team);
       this.lastTarget = mate;
     },
