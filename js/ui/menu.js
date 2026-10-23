@@ -154,6 +154,8 @@
     NS.Gamepad.touchPad(false); // (a menu: My PC's own pad serves it)
     if (matchRunning()) { World.match.paused = true; NS.Audio.crowd(false); }
     for (var i = 0; i < order.length; i++) screens[order[i]].classList.toggle('hidden', order[i] !== key);
+    root.classList.toggle('menu-wide', key === 'SETTINGS'); // the settings use the whole screen
+    trainDot();
     refs.badge.textContent = T('step.' + key.toLowerCase());
     refreshNav();
     if (key === 'MAIN') renderMain();
@@ -1006,11 +1008,20 @@
     foot.appendChild(btn('', T('set.buttons'), 'mapbtn', function () { show('BUTTONS'); }));
     refs.debugBtn = btn('', T('dbg.open'), 'dbgbtn', function () { show('DEBUG'); });
     foot.appendChild(refs.debugBtn);
-    foot.appendChild(btn('primary', T('set.done'), 'done', function () {
+    foot.appendChild(plusKey(btn('primary', T('set.done'), 'done', function () {
       if (NS.Aima && NS.Aima.training()) return;
       if (matchRunning()) show('PAUSE'); else show('MAIN');
-    }));
+    })));
     wrap.appendChild(foot);
+  }
+
+  // the green dot at the top right of the menu while a checkoAI training, recording or learning from data is running
+  var dotOn = false;
+  function trainDot() {
+    var on = !!(NS.Aima && NS.Aima.busy && NS.Aima.busy());
+    if (on === dotOn) return;
+    dotOn = on;
+    refs.dot.classList.toggle('hidden', !on);
   }
 
   /* ------------------------------ DEBUG MATCHES ------------------------------ */
@@ -1926,6 +1937,8 @@
     build: function () {
       root = document.getElementById('menu-root');
       refs.badge = document.getElementById('menu-step-badge');
+      refs.dot = document.getElementById('train-dot');
+      setInterval(function () { if (open) trainDot(); }, 1000);
       refs.statWins = document.getElementById('menu-stat-wins');
       refs.statCups = document.getElementById('menu-stat-cups');
       refs.statGoals = document.getElementById('menu-stat-goals');

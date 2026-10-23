@@ -2125,7 +2125,19 @@
     punishButton: function (down) { coach(down, -1); },
 
     // ---- training sessions. cfg: { brain: id, opp: 'EASY'..'LEGEND' | 'B:<id>', matches, teamSize, stadium, duration, hours }
-    training: function () { for (var i = 0; i < sessions.length; i++) if (sessions[i].state === 'running' || sessions[i].state === 'loading') return true; return false; },
+    // a training session or a recording is playing matches (the Settings page stays locked meanwhile)
+    training: function () {
+      var i;
+      for (i = 0; i < sessions.length; i++) if (sessions[i].state === 'running' || sessions[i].state === 'loading') return true;
+      for (i = 0; i < jobs.length; i++) if (jobs[i].kind === 'rec' && (jobs[i].state === 'running' || jobs[i].state === 'loading')) return true;
+      return false;
+    },
+    // anything is running: a training, a recording, or learning from data (the green dot)
+    busy: function () {
+      if (Aima.training()) return true;
+      for (var i = 0; i < jobs.length; i++) if (jobs[i].state === 'running' || jobs[i].state === 'loading') return true;
+      return false;
+    },
     sessions: function () { return sessions; },
     playing: function () { return training; },
     startSession: function (cfg) {
@@ -2167,7 +2179,10 @@
     removeSession: function (id) {
       sessions = sessions.filter(function (S) { return S.id !== id || S.state === 'running' || S.state === 'loading'; });
     },
-    stopTraining: function () { for (var i = 0; i < sessions.length; i++) Aima.stopSession(sessions[i].id); },
+    stopTraining: function () {
+      for (var i = 0; i < sessions.length; i++) Aima.stopSession(sessions[i].id);
+      for (i = 0; i < jobs.length; i++) if (jobs[i].kind === 'rec') Aima.stopJob(jobs[i].id);
+    },
 
     // ---- recorded data (Legend v Legend) and learning from it. A job: { id, kind: 'rec' | 'learn', cfg, state, ... }
     dataSets: function () { return dataIndex.sets; },
