@@ -1074,6 +1074,15 @@
   ];
   var dbgSel = { matches: 1, home: 1, away: 1, teams: 0, size: 0, stadium: 1, length: 0 };
   var dbgReport = '';
+  var dbgBrain = ['', ''];   // the brain of a checkoAI side ('' = the active one)
+
+  function dbgBrainName(side) {
+    var id = dbgBrain[side], list = NS.Aima.brains();
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i].name;
+    dbgBrain[side] = ''; // (deleted since)
+    var a = NS.Aima.brain();
+    return T('dbg.active') + (a ? ' (' + a.name + ')' : '');
+  }
 
   function buildDebug() {
     var wrap = screens.DEBUG;
@@ -1119,6 +1128,18 @@
       });
       if (busy) b.disabled = true;
       refs.dbgOpts.appendChild(b);
+      // a checkoAI side: which brain plays it (default: the active one)
+      var side = o[0] === 'home' ? 0 : (o[0] === 'away' ? 1 : -1);
+      if (side >= 0 && shown === 'checkoAI' && NS.Aima) {
+        var bb = btn('opt dbg-opt', T('dbg.brain') + ': ' + dbgBrainName(side), 'dbg:brain' + side, function () {
+          if (NS.Debug.running()) return;
+          var ids = [''].concat(NS.Aima.brains().map(function (e) { return e.id; }));
+          dbgBrain[side] = ids[(ids.indexOf(dbgBrain[side]) + 1) % ids.length];
+          renderDebug('dbg:brain' + side);
+        });
+        if (busy) bb.disabled = true;
+        refs.dbgOpts.appendChild(bb);
+      }
     });
     refs.dbgRun.textContent = busy ? T('dbg.stop') : T('dbg.run');
     refs.dbgRun.classList.toggle('danger', busy);
@@ -1134,6 +1155,21 @@
       matches: dbgVal('matches'), levels: [dbgVal('home'), dbgVal('away')], teams: dbgVal('teams'),
       teamSize: dbgVal('size'), stadium: dbgVal('stadium'), duration: dbgVal('length')
     };
+    // the picked brains are loaded first (from the cloud when not in memory)
+    var want = [0, 1].map(function (t) { return cfg.levels[t] === 'AIMA' && NS.Aima ? dbgBrain[t] : ''; });
+    if (want[0] || want[1]) {
+      refs.dbgStatus.textContent = T('dbg.loading');
+      Promise.all(want.map(function (id) { return id ? NS.Aima.getBrain(id) : null; })).then(function (bs) {
+        if (NS.Debug.running()) return;
+        cfg.brains = bs;
+        runDebug(cfg);
+      }, function (e) { refs.dbgStatus.textContent = T('dbg.loadfail') + ' ' + (e && e.message || e); });
+      return;
+    }
+    runDebug(cfg);
+  }
+
+  function runDebug(cfg) {
     NS.Debug.start(cfg, function (done, total, mins) {
       refs.dbgStatus.textContent = T('dbg.running').replace('%d', done + 1).replace('%t', total) + '  ' + Math.floor(mins) + "'";
     }, function (text) {

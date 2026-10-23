@@ -360,9 +360,10 @@
   }
 
   // a level's name; checkoAI with its brain and its Legend help
-  function lvName(l) {
-    if (l !== 'AIMA' || !NS.Aima || !NS.Aima.brain()) return l;
-    var b = NS.Aima.brain();
+  function lvName(l, t) {
+    if (l !== 'AIMA' || !NS.Aima) return l;
+    var b = NS.Aima.teamBrain(t);
+    if (!b) return l;
     return 'checkoAI "' + b.name + '" (' + b.cfg.size + ', Legend help ' + Math.round(b.help() * 100) + '%)';
   }
   function pct(a, b) { return b > 0 ? (100 * a / b).toFixed(0) + '%' : '-'; }
@@ -383,7 +384,7 @@
     out.push('REAL SOCCER 6 DEBUG REPORT  v' + NS.VERSION + '  ' + new Date().toISOString().slice(0, 16).replace('T', ' '));
     out.push('matches ' + run.done + (run.done < cfg.matches ? ' (stopped, ' + cfg.matches + ' planned)' : '') + ' | ' + cfg.teamSize + ' a side | stadium ' + cfg.stadium +
       ' | ' + cfg.duration + ' min | teams ' + (cfg.teams === 'RANDOM' ? 'random' : run.firstNames.join(' v ')) +
-      ' | HOME CPU ' + lvName(cfg.levels[0]) + ' v AWAY CPU ' + lvName(cfg.levels[1]) +
+      ' | HOME CPU ' + lvName(cfg.levels[0], 0) + ' v AWAY CPU ' + lvName(cfg.levels[1], 1) +
       ' | tactics home ' + World.session.tactics[0].join('-') + ' away ' + World.session.tactics[1].join('-') + ' (defence-midfield-attack: 0 def 1 bal 2 att; counter: 0 rarely 1 when on 2 always)');
     out.push('results: home won ' + w0 + ', drawn ' + dr + ', away won ' + w1 + ' | goals home ' + g0 + ' away ' + g1 +
       ' | ' + ((g0 + g1) / n).toFixed(2) + ' goals per match');
@@ -445,6 +446,7 @@
     var r = run;
     if (r.cur && !r.cur.ended && r.cur.steps > 0 && r.stop) r.log.push('#' + r.cur.n + ' stopped at ' + Math.floor(m.timeSeconds / 60) + "'");
     var text = report();
+    if (r.cfg.brains && NS.Aima) NS.Aima.setDebugBrains(null);
     unwrap();
     NS.Match.exitToMenu = saved.exit;
     // back to the player's settings, teams and sides
@@ -466,9 +468,11 @@
 
   NS.Debug = {
     running: function () { return !!run; },
-    // cfg: { matches, levels: [home, away], teams: 'SELECTED' | 'RANDOM', teamSize, stadium, duration }
+    // cfg: { matches, levels: [home, away], teams: 'SELECTED' | 'RANDOM', teamSize, stadium, duration,
+    //       brains: [home, away] (optional: the loaded checkoAI brain of each AIMA side, null = the active one) }
     start: function (cfg, onProgress, onDone) {
       if (run) return;
+      if (cfg.brains && NS.Aima) NS.Aima.setDebugBrains(cfg.brains);
       var s = World.session, st = World.settings;
       saved = { stadium: st.stadium, teamSize: st.teamSize, duration: st.durationMins, sideMode: s.sideMode,
         home: s.homeTeamId, away: s.awayTeamId, comp: s.compActive, exit: NS.Match.exitToMenu };

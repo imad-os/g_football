@@ -909,7 +909,8 @@
   var index = { brains: [], active: '' };   // [{ id, name, size, matches, updated, parent }]
   var loaded = {};                          // id -> Brain (with its weights)
   var active = null;                        // the brain that plays (and that everybody else gets)
-  var teamBrains = [null, null];            // training: the brain of each team (null = the active one)
+  var teamBrains = [null, null];            // training / debug matches: the brain of each team (null = the active one)
+  var debugBrains = null;                   // debug matches: [home, away] brains picked in the Debug screen
   var trainer = false, profile = { id: '', name: '' };
 
   // ---- one controller per outfield player of a checkoAI team (and per Legend player watched in a training), made
@@ -2172,8 +2173,19 @@
         var S = sessions[i];
         if ((S.state === 'running' || S.state === 'loading') && (S.cfg.brain === id || S.cfg.opp === 'B:' + id)) return true;
       }
+      if (debugBrains && ((debugBrains[0] && debugBrains[0].id === id) || (debugBrains[1] && debugBrains[1].id === id))) return true;
       return false;
     },
+    // debug matches: each team's brain (null = the active one); null clears both
+    setDebugBrains: function (arr) {
+      debugBrains = arr ? [arr[0] || null, arr[1] || null] : null;
+      for (var t = 0; t < 2; t++) {
+        teamBrains[t] = debugBrains ? debugBrains[t] : null;
+        World.aiSlots[t].brain = teamBrains[t] || active;
+      }
+    },
+    // the brain a team plays with (a training / debug pick, else the active one)
+    teamBrain: function (t) { return teamBrains[t] || active; },
     // anything is running: a training, a recording, or learning from data (the green dot)
     busy: function () {
       if (Aima.training()) return true;
