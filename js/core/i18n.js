@@ -909,6 +909,16 @@
   Object.assign(D.fr, { 'aima.k.agree': 'Meme direction que Legend' });
   Object.assign(D.es, { 'aima.k.agree': 'Misma direccion que Legend' });
 
+  // checkoAI plays the whole team: Legend's passes / shots / tackles and his odds of the same button
+  Object.assign(D.en, { 'aima.k.presssame': 'Same button as Legend at his passes / shots', 'aima.k.pressodds': 'his odds of it', 'aima.h100': 'Legend 100% (copy only)' });
+  Object.assign(D.fr, { 'aima.k.presssame': 'Meme bouton que Legend a ses passes / tirs', 'aima.k.pressodds': 'ses chances', 'aima.h100': 'Legend 100% (copie seule)' });
+  Object.assign(D.es, { 'aima.k.presssame': 'Mismo boton que Legend en sus pases / tiros', 'aima.k.pressodds': 'sus probabilidades', 'aima.h100': 'Legend 100% (solo copia)' });
+
+  // a training's time limit
+  Object.assign(D.en, { 'dbg.hours': 'Stop after (hours)', 'aima.tr.nolimit': 'No limit' });
+  Object.assign(D.fr, { 'dbg.hours': 'Arret apres (heures)', 'aima.tr.nolimit': 'Sans limite' });
+  Object.assign(D.es, { 'dbg.hours': 'Parar tras (horas)', 'aima.tr.nolimit': 'Sin limite' });
+
   var lang = 'en';
 
   NS.I18n = {

@@ -1215,16 +1215,8 @@
         if (slot.player) slot.player.isCtl = true;
         if (NS.Aima) NS.Aima.observe(slot, dt); // the trainer's play teaches AI.MA
       }
-      for (i = 0; i < 2; i++) {
-        var as = World.aiSlots[i];
-        if (!as.active || !as.player) continue;
-        // false: a spell played by the Legend CPU (AI.MA copies it)
-        if (NS.Aima.drive(as, dt)) {
-          as.player.isCtl = true;
-          Controls.update(as, dt);
-          if (as.player) as.player.isCtl = true;
-        }
-      }
+      // checkoAI: its network plays every outfield player of its team (each one with his own virtual controller)
+      if (NS.Aima) { NS.Aima.driveTeam(0, dt); NS.Aima.driveTeam(1, dt); }
       for (i = 0; i < 2; i++) {
         if (World.slots[i].active && World.slots[i].player) World.slots[i].player.isCtl = true;
       }
@@ -1471,7 +1463,7 @@
         var hs = s0.active && s0.team === t ? s0 : (s1.active && s1.team === t ? s1 : null);
         var as = t === 0 ? a0 : a1;
         if (hs) NS.HUD.plate(t, hs === s0 ? labels.p1 : labels.p2, hs.player, hs);
-        else if (as.active && as.player) NS.HUD.plate(t, 'checkoAI', as.player, as);
+        else if (as.active && as.player) NS.HUD.plate(t, 'checkoAI', as.player, as.player.aiv || as);
         else NS.HUD.plate(t, labels.cpu, featured(t), null);
       }
       NS.HUD.aima(a0.active || a1.active);

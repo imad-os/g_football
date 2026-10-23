@@ -114,27 +114,34 @@ with its goals and cards. The game reports its events through `NS.dbg` (js/game/
 
 ## checkoAI (CPU level "checkoAI")
 
-A learning player named after the owner's white rooster (js/game/aima.js). On a CPU team at level checkoAI it controls the
-selected player only (violet arrow), through a virtual controller with the same stick, sprint, buttons and hold times
-as a human; the other ten are the Legend CPU. A small box in the top-right corner shows what it is thinking.
+A learning team named after the owner's white rooster (js/game/aima.js). On a CPU team at level checkoAI one network
+plays every outfield player, each through his own virtual controller with the same stick, sprint, buttons and hold times
+as a human (the violet arrow shows the player with the ball, or nearest to it); the keeper is the game's. A small box in
+the top-right corner shows what it is thinking.
 
 - **Brains**: several networks, each with its own settings, stats and history (Settings > checkoAI > Brains: use, clone,
   rename, new, delete). The active brain (★) plays the matches and is the one every other profile gets. Sizes SMALL
   TINY 32-24, MEDIUM 64-48 (8.6k values), LARGE 256-128, HUGE 512-256 (PC); each brain has its own settings (style, speed,
-  foresight, memory, weight of the trainer's play, learning, exploring...); a clone copies them, a new brain has the defaults. 90 inputs: the play around him, his ratings (speed, dribble, shoot,
-  stamina, header, defense) and position, the nearest opponents' speed, the last seconds (option "Memory of the last
+  foresight, memory, weight of the trainer's play, learning, exploring...); a clone copies them, a new brain has the defaults. 96 inputs: the play around him, his ratings (speed, dribble, shoot,
+  stamina, header, defense), position and spot in the formation (and the team's back line), the nearest opponents' speed, the last seconds (option "Memory of the last
   seconds": who had the ball 1 s ago, his team's last pass / shot / tackle and how it went, recent shots, where the play
   is going, how long the ball has been on one foot) and the whole match situation (time left, score, numbers, cards,
-  possession, shots). A brain saved with the old 64 inputs gets the new ones with weights of 0: it plays as before, then
-  learns to use them.
-- **Learning** (the trainer's profile only): it copies the Legend CPU in spells the CPU plays for it (Auto: fewer as it
-  learns, never under 35%), copies the trainer's own play, and learns from rewards (actor-critic, 2 s returns): goals,
+  possession, shots). Not his own running speed: copying Legend with it, a brain learnt "keep running the way you run"
+  and, once stopped, never moved again. A brain saved with fewer inputs gets the new ones with weights of 0.
+- **Learning** (the trainer's profile only): it copies the Legend CPU in spells the CPU plays for each player (Auto: fewer
+  as it learns, never under 35%; "Legend 100%" = copying only), copies every Legend player of the other team in a training
+  against Legend, copies the trainer's own play, and learns from rewards (actor-critic, 2 s returns): goals,
   shots, passes, ball won / lost, fouls, and the trainer's **claps** (Buttons screen > Clap, default ZL; hold it: a quick
   tap is ~25%, a full 1 s hold 100%). A clap is for what he did in the 3.5 s before the button went down: his latest
   pass / shot / tackle / ball won there (else what he did ~0.8 s before), and the Legend moves he copied then count more;
-  his decisions wait 4.5 s before they are learnt so a late clap still reaches them. Restarts and penalties it takes are played by the Legend CPU.
+  his decisions wait 4.5 s before they are learnt so a late clap still reaches them. Penalties it takes are played by the
+  Legend CPU. Legend's passes, shots and tackles are ~1% of his decisions: they are kept in a memory of their own (with his
+  decisions in the 0.25 s before a kick, when a button would go down) and drawn for 8% of the copying steps; learning
+  steps are averaged 8 at a time. The stick goes where his odds point on average (not the single likeliest of the 9).
+  Stats: "Same button as Legend at his passes / shots" and his odds of it.
 - **Training** (Settings > checkoAI > Training): sessions. Each one is a brain (the one picked at the top), its own
-  opponent (the CPU at any level, or a brain, which learns too), number of matches and pitch, with its own progress bar,
+  opponent (the CPU at any level, or a brain, which learns too), number of matches, pitch and time limit ("Stop after
+  (hours)"), with its own progress bar,
   Stop, summary and full stats. Start as many as you like: the running ones take turns, one match each, and count only
   their own matches. Every brain is saved after each of its matches (a stopped session keeps what it played).
 - **Work** (Stats > Work): each brain counts the arithmetic operations it does (playing and learning), per second of

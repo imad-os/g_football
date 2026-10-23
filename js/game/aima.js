@@ -1,15 +1,18 @@
-/* checkoAI: a learning player (named after the owner's white rooster). On a team whose CPU level is checkoAI ("AIMA") it
- * controls the selected player only (violet arrow), through a virtual controller: the same stick, sprint, buttons and
- * hold times as a human. The other ten are the Legend CPU.
+/* checkoAI: a learning team (named after the owner's white rooster). On a team whose CPU level is checkoAI ("AIMA") one
+ * network plays every outfield player, each through his own virtual controller: the same stick, sprint, buttons and
+ * hold times as a human (the violet arrow shows the one with the ball, or nearest to it). The keeper is the game's.
  *
  * Brains: several networks, each with its own settings, stats and history (clone, rename, delete). One is active: it
  * plays in matches and is the one every other profile gets. Each team of a match may use a different brain (training:
  * brain v brain, or a brain v the CPU at any level).
  *
- * A brain is a small neural network (91 inputs: the play around him, his ratings and position, the last seconds and the
+ * A brain is a small neural network (96 inputs: the play around him, his ratings, position and formation spot, the last seconds and the
  * whole match situation; 2 hidden layers;
  * heads for stick, sprint, button, power and a value). It learns (the trainer's profile only):
- *  - by copying: the Legend CPU in spells it plays for him (fewer as he learns), and the trainer's own play
+ *  - by copying: the Legend CPU in spells it plays for each player (fewer as he learns), every Legend player of the
+ *    other team in a training against Legend, and the trainer's own play. Legend's passes and shots are rare moments,
+ *    so they are kept in a memory of their own (with the decisions just before them, when the button would go down)
+ *    and drawn more often than they happen
  *  - from rewards (actor-critic, n-step returns): goals, shots, passes, ball won / lost, fouls, and the trainer's claps
  * Store: the owner's Firebase project (REST): "aima/index" (the list, the active brain) and "aima/b_<id>" per brain.
  * The trainer signs in with Google once (the token is kept in his My PC save); everyone else anonymously, read only.
@@ -25,8 +28,8 @@
   var ALG = 'AIMA-AC 1.1 (actor-critic + imitation)';
   var SAVE_KEY = 'aima';
   var TRAINER = 'imad';
-  var F = 91;      // inputs (v1.20: 64 -> 90, v1.21: 91; an older brain gets the new ones with weights of 0, so it plays as before)
-  var OLD_FS = [64, 90];
+  var F = 96;      // inputs (v1.20: 64 -> 90, v1.21: 91, v1.23: 96; an older brain gets the new ones with weights of 0, so it plays as before)
+  var OLD_FS = [64, 90, 91];
   // brain sizes (hidden layers)
   var SIZES = { TINY: [32, 24], MEDIUM: [64, 48], LARGE: [256, 128], HUGE: [512, 256] }; // MEDIUM = the old SMALL (same layers)
   var LOCAL_SIZES = {};   // no model data in My PC's profile save: every brain lives in the cloud
@@ -35,7 +38,11 @@
   // per-brain options (index into these): decision speed, foresight, copied moves kept, weight of the trainer's play
   var TICKS = [0.08, 0.1, 0.15];
   var GAMMAS = [0.94, 0.97, 0.99];
-  var MEMS = [3000, 6000, 12000];
+  var MEMS = [20000, 50000, 100000];  // copied moves kept (20 players x 10 a second); passes / shots: a quarter more, apart
+  var PRESS_SHARE = 0.08;   // of the copying steps, this share is a pass / shot / tackle of Legend (they are ~1% of his decisions)
+  var PRE_PRESS = 0.25;     // Legend's decisions up to this long before his kick count as that press (a button goes down, then is held)
+  var BATCH = 8;            // learning steps averaged into one change of the weights
+  var IM_RATE = 150;        // copying steps per second of play (per team)
   var MINEW = [1.5, 3, 6];
   var NSTEP = 20;           // n-step returns: 20 decisions
   var TRAJ = 64;
@@ -51,7 +58,7 @@
   var EPS = [0.02, 0.06, 0.15];
   var CLAP_W = [0.6, 1.0, 1.6];
   var PUNISH = 3.0;         // a punishment: twice a clap's reward, negative
-  var HELP = { AUTO: -1, H0: 0, H30: 0.3, H60: 0.6 };
+  var HELP = { AUTO: -1, H0: 0, H30: 0.3, H60: 0.6, H100: 1 };
   var HIST_MAX = 80;
   // reward weights per style: goal, shot, pass, forward pass, won, lost, carry
   var STYLES = {
@@ -68,7 +75,7 @@
   function freshStats() {
     return {
       matches: 0, mins: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, goals: 0, shots: 0, onTarget: 0, passes: 0, passOk: 0,
-      fwdPass: 0, tackles: 0, won: 0, lost: 0, fouls: 0, claps: 0, clapSum: 0, punish: 0, reward: 0, decisions: 0, modelDec: 0,
+      fwdPass: 0, tackles: 0, won: 0, lost: 0, fouls: 0, pressN: 0, pressSame: 0, pressOdds: 0, claps: 0, clapSum: 0, punish: 0, reward: 0, decisions: 0, modelDec: 0,
       rl: 0, im: 0, humanSamples: 0, cpuSamples: 0, carryT: 0, sprintT: 0, playT: 0, xSum: 0, xN: 0, trainMatches: 0,
       opsP: 0, opsL: 0, opsT: 0, // arithmetic operations, and the seconds of play they were counted over: playing (its decisions) and learning (the same count on every device)
       btn: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], hist: []
@@ -105,12 +112,12 @@
     // ~14 per value (gradient reset, norm, Adam). Exact for the layers, the same on every device.
     this.MAC = F * H1 + H1 * H2 + NOUT * H2;
     this.fwdOps = 2 * this.MAC + 20 * (H1 + H2) + 12 * NOUT;
-    this.stepOps = this.fwdOps + 4 * this.MAC + 3 * (H1 + H2) + 14 * this.NP;
+    this.stepOps = this.fwdOps + 4 * this.MAC + 3 * (H1 + H2) + Math.round(14 * this.NP / BATCH);
     this.TENS = [[this.OW1, H1 * F], [this.OB1, H1], [this.OW2, H2 * H1], [this.OB2, H2], [this.OW3, NOUT * H2], [this.OB3, NOUT]];
     this.P = new Float32Array(this.NP); this.G = new Float32Array(this.NP);
     this.AM = new Float32Array(this.NP); this.AV = new Float32Array(this.NP);
     this.h1 = new Float32Array(H1); this.h2 = new Float32Array(H2); this.dh1 = new Float32Array(H1); this.dh2 = new Float32Array(H2);
-    this.adamT = 0;
+    this.adamT = 0; this.gN = 0; this.imAcc = 0;
     this.memX = null; this.memN = 0; this.memI = 0;
     this.init();
   };
@@ -123,12 +130,12 @@
     }
     this.P[this.OB3 + O_BT] = 3;    // a new brain mostly presses nothing
     this.P[this.OB3 + O_PW + 1] = 0.5;
-    this.AM.fill(0); this.AV.fill(0); this.adamT = 0;
+    this.AM.fill(0); this.AV.fill(0); this.G.fill(0); this.adamT = 0; this.gN = 0;
   };
   Brain.prototype.learns = function () { return trainer && this.cfg.learn && !this.frozen; };
   Brain.prototype.help = function () {
     var h = HELP[this.cfg.help];
-    if (h === undefined || h < 0) h = clamp(1 - this.st.decisions / 150000, 0.35, 1);
+    if (h === undefined || h < 0) h = clamp(1 - this.st.decisions / 1500000, 0.35, 1); // (10 players decide)
     return h;
   };
   Brain.prototype.log = function (k, data) {
@@ -164,11 +171,10 @@
     }
   }
 
-  // gradients of the loss w.r.t. the outputs are in dout: backprop, clip, one Adam step
+  // gradients of the loss w.r.t. the outputs are in dout: backprop into G (added up); every BATCH samples one Adam step
   function backward(b, x) {
-    var P = b.P, G = b.G, h1 = b.h1, h2 = b.h2, dh1 = b.dh1, dh2 = b.dh2, H1 = b.H1, H2 = b.H2, NP = b.NP;
+    var P = b.P, G = b.G, h1 = b.h1, h2 = b.h2, dh1 = b.dh1, dh2 = b.dh2, H1 = b.H1, H2 = b.H2;
     var i, j, o, d;
-    G.fill(0);
     for (j = 0; j < H2; j++) dh2[j] = 0;
     for (i = 0; i < NOUT; i++) {
       d = dout[i];
@@ -190,9 +196,17 @@
       o = b.OW1 + i * F;
       for (j = 0; j < F; j++) G[o + j] += d * x[j];
     }
-    var n2 = 0;
+    b.gN++;
+    if (b.gN >= BATCH) adamStep(b);
+    b.dirty = true;
+  }
+  // the average gradient of the batch, clipped, one Adam step
+  function adamStep(b) {
+    var P = b.P, G = b.G, NP = b.NP, i;
+    var inv = 1 / b.gN, n2 = 0;
     for (i = 0; i < NP; i++) n2 += G[i] * G[i];
-    var sc = n2 > 25 ? 5 / Math.sqrt(n2) : 1;
+    n2 *= inv * inv;
+    var sc = (n2 > 25 ? 5 / Math.sqrt(n2) : 1) * inv;
     b.adamT++;
     var lr = LR[b.cfg.lr] || LR[1];
     var c1 = 1 - Math.pow(0.9, b.adamT), c2 = 1 - Math.pow(0.999, b.adamT);
@@ -203,8 +217,9 @@
       AM[i] = 0.9 * AM[i] + 0.1 * g;
       AV[i] = 0.999 * AV[i] + 0.001 * g * g;
       P[i] -= a * AM[i] / (Math.sqrt(AV[i]) + 1e-8);
+      G[i] = 0;
     }
-    b.dirty = true;
+    b.gN = 0;
   }
 
   function softmax(off, n, mask, temp) {
@@ -224,6 +239,9 @@
     for (var i = 1; i < n; i++) if (prob[i] > prob[bi]) bi = i;
     return bi;
   }
+  var STAND = 0.3;   // he stands when his odds' average direction is shorter than this
+  var DIRX = [0], DIRZ = [0];
+  for (var di = 0; di < 8; di++) { DIRX.push(Math.cos(di * Math.PI / 4)); DIRZ.push(Math.sin(di * Math.PI / 4)); }
   var PRESS = 0.3;   // a button is pressed when its odds are above this (drawn from his odds when he tries something new)
   function pressPick(eps) {
     if (Math.random() < eps * 0.3) return sample(NBT);
@@ -317,7 +335,7 @@
     }
   }
 
-  // 91 inputs, in the team's frame (x towards the goal it attacks). b: the brain (its "memory of the last seconds" option)
+  // 96 inputs, in the team's frame (x towards the goal it attacks). b: the brain (its "memory of the last seconds" option)
   function features(p, x, b) {
     var ball = World.ball, m = World.match, players = World.players;
     var HW = NS.PITCH_HALF_W, HH = NS.PITCH_HALF_H;
@@ -326,7 +344,8 @@
     var o = ball.owner;
     var i, k, q, dx, dz;
     x[0] = px / HW; x[1] = pz / HH;
-    x[2] = p.vel.x * a / 12; x[3] = p.vel.z / 12;
+    // (not his own running: copying Legend, a brain learnt "keep running the way you run", and once stopped never moved again)
+    x[2] = 0; x[3] = 0;
     x[4] = p.stamina / 100;
     x[5] = o === p ? 1 : 0;
     x[6] = o && o !== p && o.team === p.team ? 1 : 0;
@@ -406,6 +425,12 @@
     x[70] = p.role === 'GK' ? 1 : 0; x[71] = p.role === 'DEF' ? 1 : 0; x[72] = p.role === 'MID' ? 1 : 0; x[73] = p.role === 'FWD' ? 1 : 0;
     // his team's end: +1 attacking towards the right of the screen, -1 towards the left (the ends swap at half time)
     x[90] = NS.attack(p.team);
+    // his spot in the team's formation (the left back is not the right back) and the team's defensive line
+    var hx = (p.homeX || 0) * a, hz = p.homeZ || 0;
+    x[91] = hx / HW; x[92] = hz / HH;
+    x[93] = clamp((hx - px) / 20, -2, 2); x[94] = clamp((hz - pz) / 20, -2, 2);
+    var TM = NS.AI && NS.AI.teams && NS.AI.teams[p.team];
+    x[95] = TM && TM.lineX !== undefined ? TM.lineX * a / HW : 0;
     // (74-76: above) the last seconds
     if (b && !b.cfg.past) { for (i = 77; i < 90; i++) x[i] = 0; return; }
     var t = p.team;
@@ -424,37 +449,56 @@
 
   /* ------------------------------------------------------------------ copying (imitation) */
 
-  function remember(b, x, stk, spr, btn, pw, ctx, w) {
+  // Two memories: every copied decision, and (apart, kept longer) the presses: Legend's passes, shots and tackles. A
+  // place in them is a code: i >= 0 the moves memory, -1 - i the presses memory.
+  function memInit(b) {
     var MEM = MEMS[b.cfg.mem] || MEMS[1];
-    if (!b.memX || b.memCap !== MEM) {
-      b.memCap = MEM; b.memN = 0; b.memI = 0;
-      b.memX = new Float32Array(MEM * F); b.memA = new Int8Array(MEM * 5); b.memW = new Float32Array(MEM);
-    }
-    var o = b.memI * F;
-    for (var j = 0; j < F; j++) b.memX[o + j] = x[j];
-    o = b.memI * 5;
-    b.memA[o] = stk; b.memA[o + 1] = spr; b.memA[o + 2] = btn; b.memA[o + 3] = pw; b.memA[o + 4] = ctx;
-    b.memW[b.memI] = w;
-    var at = b.memI;
-    b.memI = (b.memI + 1) % MEM;
-    if (b.memN < MEM) b.memN++;
+    if (b.memX && b.memCap === MEM) return;
+    b.memCap = MEM; b.memN = 0; b.memI = 0;
+    b.memX = new Float32Array(MEM * F); b.memA = new Int8Array(MEM * 5); b.memW = new Float32Array(MEM);
+    var PM = MEM >> 2;
+    b.pmCap = PM; b.pmN = 0; b.pmI = 0;
+    b.pmX = new Float32Array(PM * F); b.pmA = new Int8Array(PM * 5); b.pmW = new Float32Array(PM);
+  }
+  function remember(b, x, stk, spr, btn, pw, ctx, w) {
+    memInit(b);
+    var press = btn > 0;
+    var X = press ? b.pmX : b.memX, Ac = press ? b.pmA : b.memA, W = press ? b.pmW : b.memW;
+    var at = press ? b.pmI : b.memI;
+    var o = at * F;
+    for (var j = 0; j < F; j++) X[o + j] = x[j];
+    o = at * 5;
+    Ac[o] = stk; Ac[o + 1] = spr; Ac[o + 2] = btn; Ac[o + 3] = pw; Ac[o + 4] = ctx;
+    W[at] = w;
+    if (press) { b.pmI = (at + 1) % b.pmCap; if (b.pmN < b.pmCap) b.pmN++; return -1 - at; }
+    b.memI = (at + 1) % b.memCap;
+    if (b.memN < b.memCap) b.memN++;
     return at;
+  }
+  // the weight of a kept decision (by its code), changed by f(w)
+  function memWeight(b, code, f) {
+    if (!b.memW) return;
+    if (code >= 0) b.memW[code] = f(b.memW[code]);
+    else b.pmW[-1 - code] = f(b.pmW[-1 - code]);
   }
 
   function imitateOne(b) {
-    if (!b.memN) return;
-    var i = Math.floor(Math.random() * b.memN);
+    if (!b.memN && !b.pmN) return;
+    var press = b.pmN > 0 && (!b.memN || Math.random() < PRESS_SHARE);
+    var X = press ? b.pmX : b.memX, Ac = press ? b.pmA : b.memA;
+    var i = Math.floor(Math.random() * (press ? b.pmN : b.memN));
     var o = i * F;
-    for (var j = 0; j < F; j++) rx[j] = b.memX[o + j];
+    for (var j = 0; j < F; j++) rx[j] = X[o + j];
     o = i * 5;
-    var stk = b.memA[o], spr = b.memA[o + 1], btn = b.memA[o + 2], pw = b.memA[o + 3], ctx = b.memA[o + 4];
-    var w = b.memW[i];
+    var stk = Ac[o], spr = Ac[o + 1], btn = Ac[o + 2], pw = Ac[o + 3], ctx = Ac[o + 4];
+    var w = press ? b.pmW[i] : b.memW[i];
+    if (w <= 0) return;
     forward(b, rx);
     dout.fill(0);
     headGrad(O_ST, NST, null, stk, w, 0);
     headGrad(O_SP, NSP, null, spr, w * 0.5, 0);
     setMask(ctx);
-    if (bmask[btn]) headGrad(O_BT, NBT, bmask, btn, w * (btn ? 2.5 : 1), 0);
+    if (bmask[btn]) headGrad(O_BT, NBT, bmask, btn, w, 0);
     if (btn && pw >= 0) headGrad(O_PW, NPW, null, pw, w, 0);
     backward(b, rx);
     b.st.im++;
@@ -471,17 +515,39 @@
     return 1 + (k % 8);
   }
 
-  // a move made right now (by the CPU in a copying spell): the situation at that very moment
+  // a move made right now by Legend (a copying spell, or a Legend player watched): the situation at that very moment
   function copyMove(slot, p, mi, pw, w) {
     var b = slot.brain, c = slot.c;
-    if (!b.learns() || mi < 0) return;
+    if (mi < 0) return;
     var a = NS.attack(p.team);
+    var ctx = B.MOVES[mi].ctx;
     features(p, xs, b);
+    // would he press the same button here? (his odds of it, and his choice)
+    forward(b, xs);
+    setMask(ctx);
+    softmax(O_BT, NBT, bmask, 1);
+    var bi = 1;
+    for (var k = 2; k < NBT; k++) if (prob[k] > prob[bi]) bi = k;
+    b.st.pressN++; b.st.pressOdds += prob[mi + 1];
+    if (bi === mi + 1 && prob[bi] > PRESS) b.st.pressSame++;
+    if (!b.learns()) return;
     var sp = Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z);
+    var stk = sp < 1.5 ? 0 : stickClass(p.vel.x, p.vel.z, a), spr = sp > 10.2 ? 1 : 0;
     // (kept with its time: a clap soon after makes this copied move count more)
-    c.cp[c.cpi] = remember(b, xs, sp < 1.5 ? 0 : stickClass(p.vel.x, p.vel.z, a), sp > 10.2 ? 1 : 0, mi + 1, pw, B.MOVES[mi].ctx, w);
+    c.cp[c.cpi] = remember(b, xs, stk, spr, mi + 1, pw, ctx, w);
     c.cpt[c.cpi] = c.clock;
     c.cpi = (c.cpi + 1) % c.cp.length;
+    // a pass / shot: his last decisions before it (when the button would go down) are that press too
+    if (ctx !== 1 || !b.memX) return;
+    for (k = 0; k < c.lm.length; k++) {
+      var at = c.lm[k];
+      if (at < 0 || c.clock - c.lmt[k] > PRE_PRESS || b.memA[at * 5 + 4] !== 1) continue;
+      var o = at * F;
+      for (var j = 0; j < F; j++) ux[j] = b.memX[o + j];
+      remember(b, ux, b.memA[at * 5], b.memA[at * 5 + 1], mi + 1, pw, 1, w);
+      b.memW[at] = 0; // (not "nothing" any more)
+      c.lm[k] = -1;
+    }
   }
 
   /* ------------------------------------------------------------------ the checkoAI controller (one per team) */
@@ -496,14 +562,16 @@
     slot.ai = true;
     slot.brain = null;
     slot.c = {
-      t: 0, mode: 1, modeT: 0, cpu: true, stk: 0, spr: 0, btnMask: 0, holdLeft: 0, tBtn: 0,
+      t: 0, mode: 1, modeT: 0, cpu: true, stk: 0, ang: 0, spr: 0, btnMask: 0, holdLeft: 0, tBtn: 0,
       traj: new Float32Array(TRAJ * F), ta: new Int8Array(TRAJ * 4), tv: new Float32Array(TRAJ), tr: new Float32Array(TRAJ),
       tctx: new Int8Array(TRAJ), tn: 0, th: 0,
       ts: new Float64Array(TRAJ), tnote: new Int8Array(TRAJ),   // each decision's time, and "a move worth a clap" (a button, a ball won)
       clock: 0, grace: 0,                                       // his own clock (match time), the wait before a Legend spell drops his last decisions
-      cp: new Int32Array(8), cpt: new Float64Array(8), cpi: 0    // the last copied moves (where they are kept, when)
+      cp: new Int32Array(8), cpt: new Float64Array(8), cpi: 0,   // the last copied moves (where they are kept, when)
+      lm: new Int32Array(3), lmt: new Float64Array(3), lmi: 0    // his last copied decisions (for the press just after)
     };
     slot.c.cpt.fill(-1e9);
+    slot.c.lm.fill(-1);
   }
 
   // n-step update of the oldest step of the slot's trajectory: its next NSTEP rewards, then the value NSTEP steps on
@@ -553,15 +621,17 @@
   }
 
   var matchReward = [0, 0];
+  // a reward for player p's last decision (his own move), or (no p) for the whole team's: every player's last decision.
   // own: the result of his own move (in a Legend spell only those still reach his last decisions)
-  function addReward(team, r, own) {
+  function addReward(team, r, own, p) {
     var s = World.aiSlots[team];
     if (!s || !s.active || !s.brain) return;
     s.brain.st.reward += r;
     matchReward[team] += r;
-    var c = s.c;
-    if (c.tn && (own || !c.cpu)) c.tr[(c.th + c.tn - 1) % TRAJ] += r;
+    if (p) { var v = slotOf(p); if (v && !v.watch) rewardTo(v.c, r, own); return; }
+    for (var i = 0; i < vlist.length; i++) if (vlist[i].team === team && !vlist[i].watch) rewardTo(vlist[i].c, r, own);
   }
+  function rewardTo(c, r, own) { if (c.tn && (own || !c.cpu)) c.tr[(c.th + c.tn - 1) % TRAJ] += r; }
 
   // a clap: for the best move he made in the CLAP_BACK seconds before the button went down (at t0 on his clock): his
   // latest pass / shot / tackle / ball won there, else what he was doing ~0.8 s before; and the Legend moves he copied
@@ -581,7 +651,7 @@
     if (b.memW) {
       for (k = 0; k < c.cp.length; k++) {
         if (c.cpt[k] < t0 - CLAP_BACK || c.cpt[k] > t0 + 0.05) continue;
-        b.memW[c.cp[k]] = r < 0 ? Math.max(0.02, b.memW[c.cp[k]] * (1 - 0.8 * strength)) : Math.min(4, b.memW[c.cp[k]] * (1 + strength));
+        memWeight(b, c.cp[k], function (w) { return r < 0 ? Math.max(0.02, w * (1 - 0.8 * strength)) : Math.min(4, w * (1 + strength)); });
         c.cpt[k] = -1e9; // (once)
         copied++;
       }
@@ -593,6 +663,23 @@
     } else if (!copied) addReward(s.team, r, true);
   }
 
+  // the player a clap is for: the last one who made a move (a button, a ball won) just before it, else the featured one
+  function clapSlot(t, t0) {
+    var best = null, bt = -1e9;
+    for (var i = 0; i < vlist.length; i++) {
+      var v = vlist[i], c = v.c;
+      if (v.team !== t || v.watch) continue;
+      for (var k = 0; k < c.tn; k++) {
+        var idx = (c.th + k) % TRAJ;
+        if (c.tnote[idx] && c.ts[idx] <= t0 + 0.05 && c.ts[idx] >= t0 - CLAP_BACK && c.ts[idx] > bt) { bt = c.ts[idx]; best = v; }
+      }
+      for (k = 0; k < c.cp.length; k++) if (c.cpt[k] <= t0 + 0.05 && c.cpt[k] >= t0 - CLAP_BACK && c.cpt[k] > bt) { bt = c.cpt[k]; best = v; }
+    }
+    if (best) return best;
+    var f = World.aiSlots[t].player;
+    return f ? slotOf(f) : null;
+  }
+
   // one decision of the brain: stick, sprint, maybe a button with its hold time
   function decide(slot, p) {
     var b = slot.brain, c = slot.c;
@@ -601,7 +688,16 @@
     var temp = TEMP[b.cfg.explore] || 1;
     var eps = EPS[b.cfg.explore] || EPS[1];
     softmax(O_ST, NST, null, temp);
-    var stk = pick(NST, eps);
+    // the stick: where his odds point on average (the single likeliest of the 9 is too often "stand": Legend's players
+    // often walk to their spot, so "stand" can win while the 8 directions together say "go that way")
+    var ex = 0, ez = 0, k;
+    for (k = 1; k < NST; k++) { ex += prob[k] * DIRX[k]; ez += prob[k] * DIRZ[k]; }
+    var stk;
+    if (Math.random() < eps) { stk = sample(NST); c.ang = stk ? (stk - 1) * Math.PI / 4 : 0; }
+    else if (ex * ex + ez * ez > STAND * STAND) {
+      c.ang = Math.atan2(ez, ex);
+      stk = 1 + ((Math.round(c.ang / (Math.PI / 4)) + 8) % 8);
+    } else stk = 0;
     softmax(O_SP, NSP, null, temp);
     var spr = pick(NSP, eps);
     var btn = -1, pw = -1;
@@ -656,7 +752,11 @@
       for (var k = 1; k < NST; k++) if (out[O_ST + k] > out[O_ST + best]) best = k;
       b.st.agree = (b.st.agree || 0) * 0.998 + (best === lab ? 0.002 : 0);
       b.st.agreeN = (b.st.agreeN || 0) + 1;
-      if (b.learns()) remember(b, xs, lab, sp > 10.2 ? 1 : 0, 0, -1, ctxOf(p), 0.6);
+      if (b.learns()) {
+        c.lm[c.lmi] = remember(b, xs, lab, sp > 10.2 ? 1 : 0, 0, -1, ctxOf(p), 0.6);
+        c.lmt[c.lmi] = c.clock;
+        c.lmi = (c.lmi + 1) % c.lm.length;
+      }
     }
     b.st.cpuSamples++;
     think(slot, p, 0, 0, 0);
@@ -670,8 +770,9 @@
   var modelPass = false;   // the ball in play was last passed by a brain itself (not in a Legend spell)
   var tackleT = [0, 0];
 
-  function slotOf(p) { var s = World.aiSlots[p.team]; return s && s.active && s.player === p && s.brain ? s : null; }
-  function aiOf(p) { var s = slotOf(p); return !!s && !s.c.cpu; }
+  // a player's controller this match (a checkoAI team's outfield player, or a Legend player watched in a training)
+  function slotOf(p) { var v = p.aiv; return v && v.gen === matchGen && v.brain ? v : null; }
+  function aiOf(p) { var s = slotOf(p); return !!s && !s.watch && !s.c.cpu; }
   function brainOfTeam(t) { var s = World.aiSlots[t]; return s && s.active ? s.brain : null; }
 
   // kick / tackle / shoulder hooks (wrapped once on load; debug matches wrap on top of them)
@@ -691,7 +792,7 @@
     var st = sc.brain.st;
     if (type >= ACT.SHOOT) {
       st.shots++; pendShot = p; pendShotT = 4; pendShotOn = false;
-      addReward(p.team, 0.15 * sc.brain.styleW(1));
+      addReward(p.team, 0.15 * sc.brain.styleW(1), false, p);
     } else {
       st.passes++;
     }
@@ -729,14 +830,14 @@
         addReward(t, 1.0 * (b ? b.styleW(0) : 1));
         addReward(1 - t, -0.8);
         if (actK[t] === ACT_SHOT && actT[t] < 5) actRes[t] = 1;
-        if (pendShot && pendShot.team === t && b) { b.st.goals++; b.st.onTarget++; addReward(t, 0.5 * b.styleW(0), true); pendShot = null; }
+        if (pendShot && pendShot.team === t && b) { b.st.goals++; b.st.onTarget++; addReward(t, 0.5 * b.styleW(0), true, pendShot); pendShot = null; }
       }
       if (tackleT[t] > 0) tackleT[t] -= dt;
     }
     if (pendShot) {
       pendShotT -= dt;
       b = brainOfTeam(pendShot.team);
-      if (b && !pendShotOn && (ball.gkTried & (1 << (1 - pendShot.team)))) { pendShotOn = true; b.st.onTarget++; addReward(pendShot.team, 0.1, true); }
+      if (b && !pendShotOn && (ball.gkTried & (1 << (1 - pendShot.team)))) { pendShotOn = true; b.st.onTarget++; addReward(pendShot.team, 0.1, true, pendShot); }
       if (pendShotT <= 0) pendShot = null;
     }
     if (o && o !== lastOwner) {
@@ -744,16 +845,16 @@
         var lt = lastOwner.team, a = NS.attack(lt);
         b = brainOfTeam(lt);
         if (lastOwnerAi && b) {
-          if (o.team !== lt) { b.st.lost++; addReward(lt, -0.25 * b.styleW(5)); }
+          if (o.team !== lt) { b.st.lost++; addReward(lt, -0.25 * b.styleW(5), false, lastOwner); }
           else if (modelPass) {
             b.st.passOk++;
             var gain = (o.pos.x - lastOwner.pos.x) * a;
-            addReward(lt, 0.08 * b.styleW(2) + (gain > 5 ? 0.12 * b.styleW(3) : 0), true);
+            addReward(lt, 0.08 * b.styleW(2) + (gain > 5 ? 0.12 * b.styleW(3) : 0), true, lastOwner);
             if (gain > 5) b.st.fwdPass++;
           }
         }
         var bo = brainOfTeam(o.team);
-        if (bo && aiOf(o) && o.team !== lt) { bo.st.won++; addReward(o.team, 0.25 * bo.styleW(4)); markNote(World.aiSlots[o.team]); }
+        if (bo && aiOf(o) && o.team !== lt) { bo.st.won++; addReward(o.team, 0.25 * bo.styleW(4), false, o); markNote(slotOf(o)); }
       }
       lastOwner = o;
       lastOwnerAi = aiOf(o);
@@ -761,7 +862,7 @@
     if (o && aiOf(o)) {
       b = brainOfTeam(o.team);
       b.st.carryT += dt;
-      addReward(o.team, 0.004 * b.styleW(6) * o.vel.x * NS.attack(o.team) * dt);
+      addReward(o.team, 0.004 * b.styleW(6) * o.vel.x * NS.attack(o.team) * dt, false, o);
     }
     if (m.setPiece !== lastSetPiece) {
       var ft = 1 - m.setTeam;
@@ -776,8 +877,8 @@
 
   var thought = 'watch', thoughtT = 0, happyT = 0, sorryT = 0;
   function think(slot, p, btn, stk, spr) {
-    // the status box follows the trainer's opponent (or team 1 when the CPU plays both)
-    if (slot.team !== showTeam()) return;
+    // the status box follows the trainer's opponent (or team 1 when the CPU plays both): its featured player
+    if (slot.team !== showTeam() || slot.watch || World.aiSlots[slot.team].player !== p) return;
     var m = World.match, o = World.ball.owner;
     var key;
     var frac = m.timeSeconds / 5400, my = m.score[p.team], th = m.score[1 - p.team];
@@ -807,6 +908,85 @@
   var active = null;                        // the brain that plays (and that everybody else gets)
   var teamBrains = [null, null];            // training: the brain of each team (null = the active one)
   var trainer = false, profile = { id: '', name: '' };
+
+  // ---- one controller per outfield player of a checkoAI team (and per Legend player watched in a training), made
+  // when the match starts (matchGen tells this match's from an older one)
+  var vlist = [], matchGen = 0, teamClock = [0, 0];
+  function vslotOf(p, b) {
+    var v = p.aiv;
+    if (!v || v.gen !== matchGen) {
+      v = p.aiv = {
+        idx: -1, active: true, team: p.team, player: p, ai: true, gen: matchGen, watch: false, brain: null,
+        chargeMove: -1, chargeFrac: -1, pressing: false, teamPress: false, evPlayer: null, burstT: 0, lockT: 0,
+        sprPrev: false, sprTaps: 0, sprTapT: 9, knockT: 0,
+        evActive: false, evMask: 0, evT: 0, evSettle: 0, evCtx: 0, evMove: -1, evPrev: 0,
+        gkLeft: 0, manual: false, manualOwner: null, shCd: 0
+      };
+      makeCtl(v);
+      v.c.t = Math.random() * 0.1; // (the players' decisions are spread over the ticks)
+      vlist.push(v);
+    }
+    v.brain = b;
+    return v;
+  }
+  // a training against the Legend CPU: Legend's players on the other team are watched and copied too
+  function watched(t) {
+    var S = training;
+    return !!S && !S.ob && S.cfg.opp === 'LEGEND' && !World.aiSlots[t].active && World.aiSlots[1 - t].active && S.b.learns();
+  }
+  // one player of a checkoAI team, this step: true = the brain plays him (Controls.update reads v.pad); false = the
+  // Legend CPU does (a copying spell, a penalty he takes)
+  function driveOne(v, p, b, help, dt) {
+    var c = v.c, pad = v.pad, m = World.match;
+    c.clock = teamClock[v.team];
+    c.modeT -= dt;
+    if (c.modeT <= 0) {
+      c.modeT = 1.5 + Math.random();
+      var newMode = Math.random() < help ? 0 : 1;
+      if (newMode !== c.mode) {
+        // to a Legend spell: his last decisions wait CLAP_KEEP s (a clap may still come); back to him: learnt now
+        if (newMode === 1) flush(v); else c.grace = CLAP_KEEP;
+        c.holdLeft = 0; pad.cur = 0;
+      }
+      c.mode = newMode;
+    }
+    c.cpu = c.mode === 0 || (m.penalty && World.ball.owner === p);
+    c.t -= dt;
+    if (c.t <= 0) {
+      var TICK = TICKS[b.cfg.tick] || TICKS[1];
+      c.t += TICK;
+      if (c.t <= 0) c.t = TICK;
+      b.st.decisions++;
+      b.st.xSum += p.pos.x * NS.attack(p.team) / NS.PITCH_HALF_W; b.st.xN++;
+      if (!c.cpu) decide(v, p);
+      else copyCpu(v, p);
+    }
+    if (c.cpu) {
+      if (c.tn) { c.grace -= dt; if (c.grace <= 0) flush(v); }
+      pad.cur = 0; pad.x = 0; pad.y = 0; c.holdLeft = 0;
+      return false;
+    }
+    var a2 = NS.attack(p.team);
+    if (c.stk) {
+      var ang = c.ang;
+      pad.x = Math.cos(ang) * a2; pad.y = Math.sin(ang);
+      // never runs himself off the pitch (the lines are walls for his stick)
+      var HW = NS.PITCH_HALF_W - 1.2, HH = NS.PITCH_HALF_H - 1.2;
+      if ((p.pos.x > HW && pad.x > 0) || (p.pos.x < -HW && pad.x < 0)) pad.x = 0;
+      if ((p.pos.z > HH && pad.y > 0) || (p.pos.z < -HH && pad.y < 0)) pad.y = 0;
+    } else { pad.x = 0; pad.y = 0; }
+    if (c.spr) b.st.sprintT += dt / 10;
+    var cur = c.spr ? B.sprintMask() : 0;
+    if (c.holdLeft > 0) { c.holdLeft -= dt; if (c.holdLeft > 0) cur |= c.btnMask; }
+    pad.cur = cur;
+    return true;
+  }
+  // copying steps: IM_RATE a second of play, from the memories
+  function imitate(b, dt) {
+    if (!b.learns() || (!b.memN && !b.pmN)) return;
+    b.imAcc += dt * IM_RATE;
+    while (b.imAcc >= 1) { b.imAcc -= 1; imitateOne(b); }
+  }
   var lastSave = 0;
 
   function b64(bytes) {
@@ -1097,7 +1277,7 @@
   function coach(down, sign) {
     if (!trainer || !World.match.running || World.match.paused || !anyAi()) { clapOn = false; return; }
     if (down) {
-      if (!clapOn) { clapOn = true; clapSign = sign; clapDown = performance.now(); clapAt[0] = World.aiSlots[0].c.clock; clapAt[1] = World.aiSlots[1].c.clock; }
+      if (!clapOn) { clapOn = true; clapSign = sign; clapDown = performance.now(); clapAt[0] = teamClock[0]; clapAt[1] = teamClock[1]; }
       return;
     }
     if (!clapOn || clapSign !== sign) return;
@@ -1108,7 +1288,9 @@
       var s = World.aiSlots[t];
       if (!s.active || !s.brain) continue;
       var w = CLAP_W[s.brain.cfg.clap] || 1;
-      clapCredit(s, clapAt[t], sign > 0 ? 1.5 * strength * w : -PUNISH * strength * w, strength);
+      var v = clapSlot(t, clapAt[t]);
+      if (!v) continue;
+      clapCredit(v, clapAt[t], sign > 0 ? 1.5 * strength * w : -PUNISH * strength * w, strength);
       if (sign > 0) { s.brain.st.claps++; s.brain.st.clapSum += strength; } else s.brain.st.punish++;
     }
     if (sign > 0) { happyT = 1.5 + strength; sorryT = 0; thought = 'happy'; }
@@ -1190,7 +1372,10 @@
         if (S.log.length > LOG_KEEP) S.log.splice(0, S.log.length - LOG_KEEP); // (a continuous session keeps the latest)
       }
       if (S.stopReq) S.state = 'stopped';
-      else if (S.cfg.matches > 0 && S.done >= S.cfg.matches) { S.state = 'done'; if (NS.Audio.chime) NS.Audio.chime(); }
+      else if ((S.cfg.matches > 0 && S.done >= S.cfg.matches) || (S.cfg.hours > 0 && Date.now() - S.started >= S.cfg.hours * 3600000)) {
+        S.state = 'done'; // its number of matches played, or its time limit reached
+        if (NS.Audio.chime) NS.Audio.chime();
+      }
       if (S.state !== 'running') { S.ended = Date.now(); for (var id in S.runs) { trainProgress(S.runs[id]); saveBrain(S.runs[id].b); } }
       setActive(active);
       notify(S);
@@ -1211,10 +1396,9 @@
     var st = b.st, T = st.opsT || 0;
     var tick = TICKS[b.cfg.tick] || TICKS[1];
     var own = 1 - b.help();                       // share of decisions it makes itself
-    var learnSteps = own + 3;                     // per decision: one reward step (its own play) + 3 copied moves
-    var playExp = own * b.fwdOps / tick;
-    var learnExp = learnSteps * b.stepOps / tick;
-    var memBytes = b.NP * 4 * 4 + (b.memX ? b.memCap * (F * 4 + 9) : (MEMS[b.cfg.mem] || MEMS[1]) * (F * 4 + 9));
+    var playExp = 10 * own * b.fwdOps / tick;    // 10 outfield players
+    var learnExp = (10 * own / tick + IM_RATE) * b.stepOps; // a reward step per own decision, IM_RATE copied ones a second
+    var memBytes = b.NP * 4 * 5 + Math.round((b.memX ? b.memCap : (MEMS[b.cfg.mem] || MEMS[1])) * 1.25 * (F * 4 + 9));
     return {
       measured: T > 0, perSec: T > 0 ? (st.opsP + st.opsL) / T : 0, playPerSec: T > 0 ? st.opsP / T : 0,
       learnPerSec: T > 0 ? st.opsL / T : 0,
@@ -1257,6 +1441,8 @@
       T('aima.k.wonlost') + ' ' + d.won + ' / ' + d.lost + ', ' + d.tackles + ' ' + T('aima.tr.tackles') + ', ' + d.fouls + ' ' + T('aima.tr.fouls'));
     if (d.opsT > 0) L.push(T('aima.w.title') + ': ' + fmtOps((d.opsP + d.opsL) / d.opsT) + ' ' + T('aima.w.persec') + '  (' +
       T('aima.w.play') + ' ' + fmtOps(d.opsP / d.opsT) + ', ' + T('aima.w.learn') + ' ' + fmtOps(d.opsL / d.opsT) + ')');
+    if (d.pressN) L.push(T('aima.k.presssame') + ': ' + pct(d.pressSame, d.pressN) + '   ' + T('aima.k.pressodds') + ' ' +
+      Math.round(d.pressOdds * 100 / d.pressN) + '%   (' + d.pressN + ')');
     L.push(T('aima.tr.learning') + ': ' + d.rl + ' RL + ' + d.im + ' ' + T('aima.k.copy') + '   ' + T('aima.k.own') + ' ' + pct(d.modelDec, d.decisions) +
       '   ' + T('aima.k.help') + ' ' + Math.round(run.help0 * 100) + '% -> ' + Math.round(b.help() * 100) + '%');
     L.push(T('aima.tr.reward') + ': ' + r1(a1) + ' -> ' + r1(a2) + ' ' + T('aima.tr.permatch') + '   ' + trend);
@@ -1397,6 +1583,7 @@
         if (S.ob && S.ob !== S.b) S.runs[S.ob.id].opps['checkoAI ' + S.b.name] = 1;
         for (var rid in S.runs) S.runs[rid].snap = JSON.parse(JSON.stringify(S.runs[rid].b.st));
       }
+      matchGen++; vlist.length = 0; teamClock[0] = teamClock[1] = 0;
       poss[0] = poss[1] = 0; shotsT[0] = shotsT[1] = 0;
       lastOwner = null; lastOwnerAi = false; lastScore[0] = lastScore[1] = 0; matchOn = false;
       matchReward[0] = matchReward[1] = 0;
@@ -1407,11 +1594,12 @@
     // full time (finished) or abandoned: results, the last rewards, history, save
     matchEnd: function (finished) {
       var m = World.match, done = {};
+      for (var k0 = 0; k0 < vlist.length; k0++) if (!vlist[k0].watch) flush(vlist[k0]);
       for (var t = 0; t < 2; t++) {
         var s = World.aiSlots[t];
         if (!s.brain) continue;
-        flush(s);
         var b = s.brain;
+        if (b.gN) adamStep(b);
         if (!finished || !s.active || !matchOn || done[b.id]) continue;
         done[b.id] = true; // brain v itself: one result
         var my = m.score[t], th = m.score[1 - t];
@@ -1452,62 +1640,41 @@
       poll(dt);
     },
 
-    // drives the slot: true = the brain plays this step (Controls.update reads slot.pad); false = the Legend CPU plays
-    // him (a copying spell, a restart, a penalty)
-    drive: function (slot, dt) {
-      var p = slot.player, pad = slot.pad, c = slot.c;
-      var b = slot.brain = teamBrains[slot.team] || active;
-      c.clock += dt;
-      c.modeT -= dt;
-      if (c.modeT <= 0) {
-        c.modeT = 2;
-        var newMode = Math.random() < b.help() ? 0 : 1;
-        if (newMode !== c.mode) {
-          // to a Legend spell: his last decisions wait CLAP_KEEP s (a clap may still come); back to him: learnt now
-          if (newMode === 1) flush(slot); else c.grace = CLAP_KEEP;
-          c.holdLeft = 0; pad.cur = 0;
+    // a team's step (js/game/match.js, before the CPU moves the others): a checkoAI team's outfield players are each
+    // played by the brain (or by Legend in a copying spell); in a training against Legend, Legend's players are copied
+    driveTeam: function (t, dt) {
+      var as = World.aiSlots[t], players = World.players, i, p, v, b;
+      if (as.active) {
+        b = as.brain = teamBrains[t] || active;
+        if (!b) return;
+        var help = b.help();
+        teamClock[t] += dt;
+        b.st.playT += dt; b.st.opsT += dt;
+        for (i = 0; i < players.length; i++) {
+          p = players[i];
+          if (p.team !== t || p.role === 'GK') continue;
+          v = vslotOf(p, b);
+          if (p.stun > 0 || p.tackleT > 0) { v.c.t -= dt; continue; }
+          if (driveOne(v, p, b, help, dt)) {
+            p.isCtl = true;
+            NS.Controls.update(v, dt);
+            v.player = p; // (a pass / switch moves a human's cursor; each of these stays on his own player)
+            p.isCtl = true;
+          }
         }
-        c.mode = newMode;
+        imitate(b, dt);
+      } else if (watched(t)) {
+        b = training.b;
+        teamClock[t] += dt;
+        for (i = 0; i < players.length; i++) {
+          p = players[i];
+          if (p.team !== t || p.role === 'GK') continue;
+          v = vslotOf(p, b);
+          v.watch = true; v.c.cpu = true; v.c.clock = teamClock[t];
+          v.c.t -= dt;
+          if (v.c.t <= 0) { v.c.t += TICKS[b.cfg.tick] || TICKS[1]; if (v.c.t <= 0) v.c.t = 0.1; copyCpu(v, p); }
+        }
       }
-      var m = World.match;
-      c.cpu = c.mode === 0 || m.penalty || (m.restart && World.ball.owner === p);
-      c.t -= dt;
-      var tick = c.t <= 0;
-      if (slot.team === showTeam()) {
-        if (thoughtT > 0) thoughtT -= dt;
-        if (happyT > 0) happyT -= dt;
-        if (sorryT > 0) sorryT -= dt;
-      }
-      if (tick) {
-        var TICK = TICKS[b.cfg.tick] || TICKS[1];
-        c.t = TICK;
-        b.st.decisions++;
-        b.st.playT += TICK;
-        b.st.opsT += TICK;
-        b.st.xSum += p.pos.x * NS.attack(p.team) / NS.PITCH_HALF_W; b.st.xN++;
-        if (!c.cpu) decide(slot, p);
-        else copyCpu(slot, p);
-        if (b.learns() && b.memN) { imitateOne(b); imitateOne(b); imitateOne(b); }
-      }
-      if (c.cpu) {
-        if (c.tn) { c.grace -= dt; if (c.grace <= 0) flush(slot); }
-        pad.cur = 0; pad.x = 0; pad.y = 0; c.holdLeft = 0;
-        return false;
-      }
-      var a2 = NS.attack(p.team);
-      if (c.stk) {
-        var ang = (c.stk - 1) * Math.PI / 4;
-        pad.x = Math.cos(ang) * a2; pad.y = Math.sin(ang);
-        // never runs himself off the pitch (the lines are walls for his stick)
-        var HW = NS.PITCH_HALF_W - 1.2, HH = NS.PITCH_HALF_H - 1.2;
-        if ((p.pos.x > HW && pad.x > 0) || (p.pos.x < -HW && pad.x < 0)) pad.x = 0;
-        if ((p.pos.z > HH && pad.y > 0) || (p.pos.z < -HH && pad.y < 0)) pad.y = 0;
-      } else { pad.x = 0; pad.y = 0; }
-      if (c.spr) b.st.sprintT += dt;
-      var cur = c.spr ? B.sprintMask() : 0;
-      if (c.holdLeft > 0) { c.holdLeft -= dt; if (c.holdLeft > 0) cur |= c.btnMask; }
-      pad.cur = cur;
-      return true;
     },
 
     // the trainer's own play teaches the active brain ("learn from my play"): a sample every 0.1 s
@@ -1550,7 +1717,7 @@
     // the punishment: "that was bad" (the same timing as a clap, a reward of -PUNISH x the strength)
     punishButton: function (down) { coach(down, -1); },
 
-    // ---- training sessions. cfg: { brain: id, opp: 'EASY'..'LEGEND' | 'B:<id>', matches, teamSize, stadium, duration }
+    // ---- training sessions. cfg: { brain: id, opp: 'EASY'..'LEGEND' | 'B:<id>', matches, teamSize, stadium, duration, hours }
     training: function () { for (var i = 0; i < sessions.length; i++) if (sessions[i].state === 'running' || sessions[i].state === 'loading') return true; return false; },
     sessions: function () { return sessions; },
     playing: function () { return training; },

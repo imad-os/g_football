@@ -1122,7 +1122,7 @@
     ['lr', 'aima.o.lr', [[0, 'opt.low'], [1, 'opt.normal'], [2, 'opt.high']]],
     ['explore', 'aima.o.explore', [[0, 'opt.low'], [1, 'opt.normal'], [2, 'opt.high']]],
     ['clap', 'aima.o.clap', [[0, 'opt.low'], [1, 'opt.normal'], [2, 'opt.high']]],
-    ['help', 'aima.o.help', [['AUTO', 'opt.auto'], ['H0', 'aima.h0'], ['H30', 'aima.h30'], ['H60', 'aima.h60']]],
+    ['help', 'aima.o.help', [['AUTO', 'opt.auto'], ['H0', 'aima.h0'], ['H30', 'aima.h30'], ['H60', 'aima.h60'], ['H100', 'aima.h100']]],
     ['tick', 'aima.o.tick', [[0, 'aima.fast'], [1, 'opt.normal'], [2, 'aima.slow']]],
     ['look', 'aima.o.look', [[0, 'aima.short'], [1, 'opt.normal'], [2, 'aima.long']]],
     ['mineW', 'aima.o.mineW', [[0, 'opt.low'], [1, 'opt.normal'], [2, 'opt.high']]],
@@ -1139,9 +1139,10 @@
     ['matches', [5, 10, 20, 30, 50, 100, 200, 500, 1000, 0]], // 0 = continuous
     ['size', [11, 7]],
     ['stadium', ['COMPACT', 'CLASSIC', 'GRAND', 'MEGA', 'ULTRA']],
-    ['length', [3, 5, 10]]
+    ['length', [3, 5, 10]],
+    ['hours', [0, 1, 2, 5, 8, 12]] // a time limit: the session stops by itself (0 = none)
   ];
-  var trSel = { matches: 1, size: 0, stadium: 1, length: 0, brain: '', opp: 'NORMAL' };
+  var trSel = { matches: 1, size: 0, stadium: 1, length: 0, hours: 0, brain: '', opp: 'NORMAL' };
   var trView = { id: 0, full: false };   // the session whose summary / full stats are open
   var trMsg = '';
   var sesRefs = {};                       // session id -> its card's live elements (progress, text)
@@ -1200,6 +1201,7 @@
     kv(g, T('aima.k.wonlost'), s.won + ' / ' + s.lost);
     kv(g, T('aima.k.fouls'), String(s.fouls));
     if (s.agreeN > 500) kv(g, T('aima.k.agree'), Math.round(s.agree / (1 - Math.pow(0.998, s.agreeN)) * 100) + '%');
+    if (s.pressN > 0) kv(g, T('aima.k.presssame'), Math.round(s.pressSame * 100 / s.pressN) + '%  (' + T('aima.k.pressodds') + ' ' + Math.round(s.pressOdds * 100 / s.pressN) + '%)');
     kv(g, T('aima.k.claps'), s.claps + (s.claps ? '  (' + T('aima.k.avg') + ' ' + pct(s.clapSum / s.claps) + ')' : ''));
     kv(g, T('aima.k.punish'), String(s.punish || 0));
     kv(g, T('aima.k.reward'), String(Math.round(s.reward * 10) / 10));
@@ -1475,14 +1477,14 @@
     });
     TR_OPTS.forEach(function (o) {
       var v = o[1][trSel[o[0]]];
-      cyc(o[0], T('dbg.' + o[0]), o[0] === 'matches' && !v ? T('aima.tr.forever') : String(v), function () { trSel[o[0]] = (trSel[o[0]] + 1) % o[1].length; });
+      cyc(o[0], T('dbg.' + o[0]), !v && o[0] === 'matches' ? T('aima.tr.forever') : (!v && o[0] === 'hours' ? T('aima.tr.nolimit') : String(v)), function () { trSel[o[0]] = (trSel[o[0]] + 1) % o[1].length; });
     });
     form.appendChild(opts);
     var row = el('div', 'row aima-actions');
     row.appendChild(btn('primary', T('aima.ss.start'), 'tr:start', function () {
       if (!me) return;
       var S = A.startSession({ brain: me.id, opp: trSel.opp, matches: TR_OPTS[0][1][trSel.matches], teamSize: TR_OPTS[1][1][trSel.size],
-        stadium: TR_OPTS[2][1][trSel.stadium], duration: TR_OPTS[3][1][trSel.length] });
+        stadium: TR_OPTS[2][1][trSel.stadium], duration: TR_OPTS[3][1][trSel.length], hours: TR_OPTS[4][1][trSel.hours] });
       trMsg = S ? '' : T('aima.tr.busy');
       again('tr:start');
     }));
