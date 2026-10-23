@@ -156,6 +156,7 @@
       p.kickHard = type >= ACT.SHOOT || type === ACT.LONG;
       this.lastTarget = null;
       NS.Audio.kick(type >= ACT.SHOOT);
+      if (NS.Stats) NS.Stats.kick(p, type >= ACT.SHOOT);
       if (this.onKick) this.onKick(p, type);
     },
 
@@ -512,6 +513,7 @@
         if (!(ax * ax + az * az > 0.01) || ax * attack < 0) { ax = attack; az = 0; }
       }
       this.release(p, shot ? ACT.SHOOT : type);
+      if (shot && NS.Stats) NS.Stats.headed();
       ball.headed = true;
       p.kickT = 0;
       p.headT = 0.55; // header animation: the jump

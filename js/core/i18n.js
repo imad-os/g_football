@@ -665,6 +665,45 @@
     'tac.m0': 'دفاعي', 'tac.m1': 'متوازن', 'tac.m2': 'هجومي' });
 
 
+  // v1.29: replays, the full-time screen
+  Object.assign(D.en, { 'set.replay': 'Replay length', 'set.replay.h': 'How many seconds a replay shows: the last moments (pause menu) and each goal.',
+    'opt.s10': '10 s', 'opt.s15': '15 s', 'opt.s20': '20 s',
+    'set.goalrep': 'Goal replays', 'set.goalrep.h': 'The goal again after each goal (B or + skips it).',
+    'pause.replay': 'Replay', 'pause.replay.d': 'Watch the last moments again',
+    'rp.title': 'REPLAY', 'rp.goal': 'GOAL REPLAY', 'rp.pause': 'Pause / play', 'rp.speed': 'Speed / rewind', 'rp.exit': 'Exit',
+    'step.result': 'FULL TIME', 'res.ft': 'Full time', 'res.poss': 'Possession', 'res.xg': 'Expected goals (xG)', 'res.shots': 'Shots',
+    'res.ont': 'Shots on target', 'res.passes': 'Passes', 'res.passacc': 'Pass accuracy', 'res.fouls': 'Fouls', 'res.yellow': 'Yellow cards',
+    'res.red': 'Red cards', 'res.cards': 'Cards', 'res.corners': 'Corners', 'res.offsides': 'Offsides', 'res.saves': 'Saves',
+    'res.full': 'Full stats', 'res.summary': 'Summary', 'res.goals': 'Replay goals', 'res.again': 'Play again', 'res.teams': 'Change teams',
+    'res.exit': 'Exit', 'res.cont': 'Continue', 'res.nogoals': 'No goals in this match.', 'res.pen': '(pen)', 'res.og': '(OG)', 'res.noclip': 'no replay kept' });
+  Object.assign(D.fr, { 'set.replay': 'Duree du ralenti', 'set.replay.h': 'Secondes montrees par un ralenti : les derniers instants (menu pause) et chaque but.',
+    'set.goalrep': 'Ralenti des buts', 'set.goalrep.h': 'Le but revu apres chaque but (B ou + pour passer).',
+    'pause.replay': 'Ralenti', 'pause.replay.d': 'Revoir les derniers instants',
+    'rp.title': 'RALENTI', 'rp.goal': 'RALENTI DU BUT', 'rp.pause': 'Pause / lecture', 'rp.speed': 'Vitesse / retour', 'rp.exit': 'Quitter',
+    'step.result': 'FIN DU MATCH', 'res.ft': 'Fin du match', 'res.poss': 'Possession', 'res.xg': 'Buts attendus (xG)', 'res.shots': 'Tirs',
+    'res.ont': 'Tirs cadres', 'res.passes': 'Passes', 'res.passacc': 'Passes reussies', 'res.fouls': 'Fautes', 'res.yellow': 'Cartons jaunes',
+    'res.red': 'Cartons rouges', 'res.cards': 'Cartons', 'res.corners': 'Corners', 'res.offsides': 'Hors-jeu', 'res.saves': 'Arrets',
+    'res.full': 'Toutes les stats', 'res.summary': 'Resume', 'res.goals': 'Revoir les buts', 'res.again': 'Rejouer', 'res.teams': 'Changer d\'equipes',
+    'res.exit': 'Quitter', 'res.cont': 'Continuer', 'res.nogoals': 'Aucun but dans ce match.', 'res.pen': '(pen.)', 'res.og': '(csc)', 'res.noclip': 'ralenti non garde' });
+  Object.assign(D.es, { 'set.replay': 'Duracion de la repeticion', 'set.replay.h': 'Segundos de una repeticion: los ultimos momentos (menu de pausa) y cada gol.',
+    'set.goalrep': 'Repeticion de goles', 'set.goalrep.h': 'El gol otra vez despues de cada gol (B o + para saltar).',
+    'pause.replay': 'Repeticion', 'pause.replay.d': 'Ver otra vez los ultimos momentos',
+    'rp.title': 'REPETICION', 'rp.goal': 'REPETICION DEL GOL', 'rp.pause': 'Pausa / seguir', 'rp.speed': 'Velocidad / atras', 'rp.exit': 'Salir',
+    'step.result': 'FINAL', 'res.ft': 'Final del partido', 'res.poss': 'Posesion', 'res.xg': 'Goles esperados (xG)', 'res.shots': 'Tiros',
+    'res.ont': 'Tiros a puerta', 'res.passes': 'Pases', 'res.passacc': 'Precision de pase', 'res.fouls': 'Faltas', 'res.yellow': 'Tarjetas amarillas',
+    'res.red': 'Tarjetas rojas', 'res.cards': 'Tarjetas', 'res.corners': 'Corners', 'res.offsides': 'Fueras de juego', 'res.saves': 'Paradas',
+    'res.full': 'Todas las estadisticas', 'res.summary': 'Resumen', 'res.goals': 'Ver los goles', 'res.again': 'Jugar otra vez', 'res.teams': 'Cambiar equipos',
+    'res.exit': 'Salir', 'res.cont': 'Continuar', 'res.nogoals': 'No hubo goles en este partido.', 'res.pen': '(pen.)', 'res.og': '(p.p.)', 'res.noclip': 'repeticion no guardada' });
+  Object.assign(D.ar, { 'set.replay': 'مدة الإعادة', 'set.replay.h': 'عدد ثواني الإعادة: آخر اللحظات (قائمة الإيقاف) وكل هدف.',
+    'set.goalrep': 'إعادة الأهداف', 'set.goalrep.h': 'إعادة الهدف بعد كل هدف (B أو + للتخطي).',
+    'pause.replay': 'إعادة', 'pause.replay.d': 'شاهد آخر اللحظات مرة أخرى',
+    'rp.title': 'إعادة', 'rp.goal': 'إعادة الهدف', 'rp.pause': 'إيقاف / تشغيل', 'rp.speed': 'السرعة / الرجوع', 'rp.exit': 'خروج',
+    'step.result': 'نهاية المباراة', 'res.ft': 'نهاية المباراة', 'res.poss': 'الاستحواذ', 'res.xg': 'الأهداف المتوقعة (xG)', 'res.shots': 'التسديدات',
+    'res.ont': 'على المرمى', 'res.passes': 'التمريرات', 'res.passacc': 'دقة التمرير', 'res.fouls': 'الأخطاء', 'res.yellow': 'البطاقات الصفراء',
+    'res.red': 'البطاقات الحمراء', 'res.cards': 'البطاقات', 'res.corners': 'الركنيات', 'res.offsides': 'التسلل', 'res.saves': 'التصديات',
+    'res.full': 'كل الإحصائيات', 'res.summary': 'ملخص', 'res.goals': 'إعادة الأهداف', 'res.again': 'العب مجددا', 'res.teams': 'تغيير الفرق',
+    'res.exit': 'خروج', 'res.cont': 'متابعة', 'res.nogoals': 'لا أهداف في هذه المباراة.', 'res.pen': '(ج)', 'res.og': '(ع)', 'res.noclip': 'لا توجد إعادة' });
+
   // debug matches (a developer tool: the report itself is in English)
   Object.assign(D.en, { 'step.debug': 'DEBUG MATCHES', 'dbg.open': 'Debug matches', 'dbg.run': 'Run', 'dbg.stop': 'Stop', 'dbg.copy': 'Copy report',
     'dbg.matches': 'Matches', 'dbg.home': 'Home CPU', 'dbg.away': 'Away CPU', 'dbg.teams': 'Teams', 'dbg.size': 'Players', 'dbg.stadium': 'Stadium',

@@ -6,7 +6,7 @@
   "type": "game",
   "entry": "index.html",
   "icon": "icon.svg",
-  "version": "1.28.2",
+  "version": "1.29.0",
   "scores": true,
   "config": {
     "difficulty": "NORMAL",

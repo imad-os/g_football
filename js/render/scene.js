@@ -12,6 +12,7 @@
   var nets = [null, null];  // goal nets (-x, +x)
   var netT = [0, 0];        // net bulge, 1 when the ball hits it
   var rings = [null, null, null, null]; // controlled-player arrows (P1, P2, AI.MA of team 0 / 1)
+  var ringWas = [false, false, false, false]; // (shown before a replay)
   var arrowMats = [null, null];
   var ARROW_COLORS = [0x93c5fd, 0xfca5a5, 0xc084fc, 0xc084fc]; // light blue (P1), light red (P2), violet (AI.MA)
   var ARROW_BLINK = 0xfde047;              // yellow flash while receiving a pass
@@ -224,6 +225,34 @@
       camera.lookAt(lookTarget);
     },
     render: function () { renderer.render(scene, camera); },
+    // replays (js/game/replay.js): what the camera, the ball and the nets look like now, 13 numbers from out[o]
+    camState: function (out, o) {
+      out[o] = camera.position.x; out[o + 1] = camera.position.y; out[o + 2] = camera.position.z;
+      out[o + 3] = lookTarget.x; out[o + 4] = lookTarget.y; out[o + 5] = lookTarget.z;
+      out[o + 6] = ballMesh.position.x; out[o + 7] = ballMesh.position.y; out[o + 8] = ballMesh.position.z;
+      out[o + 9] = ballMesh.rotation.x; out[o + 10] = ballMesh.rotation.z;
+      out[o + 11] = nets[0] ? nets[0].scale.x - 1 : 0; out[o + 12] = nets[1] ? nets[1].scale.x - 1 : 0;
+    },
+    setCamState: function (a, o) {
+      camera.position.set(a[o], a[o + 1], a[o + 2]);
+      lookTarget.set(a[o + 3], a[o + 4], a[o + 5]);
+      camera.lookAt(lookTarget);
+      ballMesh.position.set(a[o + 6], a[o + 7], a[o + 8]);
+      ballMesh.rotation.x = a[o + 9]; ballMesh.rotation.z = a[o + 10];
+      for (var n = 0; n < 2; n++) {
+        if (!nets[n]) continue;
+        var bulge = a[o + 11 + n];
+        nets[n].scale.set(1 + bulge, 1, 1);
+        nets[n].position.x = (n === 1 ? 1 : -1) * (NS.PITCH_HALF_W + NS.GOAL_DEPTH * (1 + bulge) / 2);
+      }
+    },
+    // a replay on screen: no arrows, no shot streak (put back as they were after it)
+    replayMode: function (on) {
+      for (var i = 0; i < 4; i++) {
+        if (on) { ringWas[i] = rings[i].visible; rings[i].visible = false; } else rings[i].visible = ringWas[i];
+      }
+      for (i = 0; i < TRAIL_N; i++) trail[i].visible = on ? false : i > 0 && i < trailCount;
+    },
     // A new match: another mowing pattern for the grass, drawn at random (the same pitch otherwise)
     newPitchDesign: function () {
       var n = NS.PITCH_DESIGNS.length, d = Math.floor(Math.random() * (n - 1));

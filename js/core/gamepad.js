@@ -66,6 +66,7 @@
 
   function onButton(i, pressed, value, dev) {
     var n = playerOf(dev);
+    if (NS.Replay && NS.Replay.active()) { NS.Replay.button(i, pressed); return; } // (any controller drives a replay)
     if (n < 0) return;
     if (i >= 12 && i <= 15) {
       var db = DPAD_BIT[i - 12], B = NS.Bindings;
@@ -82,6 +83,12 @@
 
   // an action of the game's own touch pad (player 1)
   function onTouch(action, down) {
+    if (NS.Replay && NS.Replay.active()) {
+      if (action === 'pause') { if (down) NS.Replay.stop(); return; }
+      if (action === 'left' || action === 'right') { NS.Replay.button(action === 'left' ? 14 : 15, down); return; }
+      if (action.charAt(0) === 'b') NS.Replay.button(+action.slice(1), down);
+      return;
+    }
     if (action in TOUCH_DIR) { dpad[0][TOUCH_DIR[action]] = down ? 1 : 0; push(0); return; }
     if (action === 'pause') { if (down && NS.App) NS.App.input('menu', true, false); return; }
     var i = action.charAt(0) === 'b' ? +action.slice(1) : -1;
@@ -93,10 +100,11 @@
 
   function onAxes(axes, dev) {
     var n = playerOf(dev);
-    if (n < 0) return;
     var x = axes[0] || 0, y = axes[1] || 0;
     var m = Math.sqrt(x * x + y * y);
     if (m < DEAD) { x = 0; y = 0; }
+    if (NS.Replay && NS.Replay.active()) { NS.Replay.stick(x); return; }
+    if (n < 0) return;
     stick[n][0] = x; stick[n][1] = y;
     push(n);
   }

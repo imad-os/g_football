@@ -9,7 +9,7 @@
 
   var root;
   var screens = {};
-  var order = ['MAIN', 'SIDES', 'TEAMS', 'GAMEPLAN', 'COMPPICK', 'COMPHUB', 'PAUSE', 'SETTINGS', 'HELP', 'BUTTONS', 'DEBUG'];
+  var order = ['MAIN', 'SIDES', 'TEAMS', 'GAMEPLAN', 'COMPPICK', 'COMPHUB', 'PAUSE', 'SETTINGS', 'HELP', 'BUTTONS', 'DEBUG', 'RESULT'];
   var current = 'MAIN';
   var open = true;
   var focused = null;
@@ -202,6 +202,7 @@
     if (key === 'BUTTONS') renderButtons();
     if (key === 'DEBUG') renderDebug();
     if (key === 'PAUSE') updatePauseSummary();
+    if (key === 'RESULT') renderResult();
     NS.UI.refreshStats();
     NS.Input.clearEdges();
     focused = null;
@@ -228,6 +229,7 @@
   function back() {
     if (current === 'BUTTONS') { show('SETTINGS'); return; }
     if (current === 'DEBUG') { if (!NS.Debug.running()) show('SETTINGS'); return; }
+    if (current === 'RESULT') { if (resView !== 'sum') { resView = 'sum'; renderResult(); } else resultExit(); return; }
     if (current === 'SETTINGS' && NS.Aima && NS.Aima.training()) return; // a checkoAI training is running
     var running = matchRunning();
     if (running) {
@@ -996,6 +998,10 @@
       ['settings', 'amber', '⚙️', function () { show('SETTINGS'); }],
       ['sides', 'purple', '🎮', function () { show('SIDES'); }],
       ['controls', 'teal', '❓', function () { helpReturn = 'PAUSE'; show('HELP'); }],
+      ['replay', 'green', '🎬', function () {
+        hide();
+        if (!NS.Replay.playLast(function () { show('PAUSE'); })) show('PAUSE');
+      }],
       ['restart', 'orange', '🔄', function () { startMatch(); }],
       ['quit', 'rose', '🏠', function () { NS.Match.exitToMenu(); }]
     ];
@@ -1010,6 +1016,194 @@
       grid.appendChild(b);
     });
     wrap.appendChild(grid);
+  }
+
+  /* ------------------------------ FULL TIME: the result and the statistics ------------------------------ */
+
+  var resView = 'sum';      // 'sum' the main numbers, 'full' every statistic, 'goals' the goals to watch again
+  var resFocus = '';
+  var resMatch = -1;
+
+  function buildResult() {
+    var wrap = screens.RESULT;
+    var head = el('div', 'res-head');
+    refs.resChip = el('span', 'chip res-chip', '');
+    head.appendChild(refs.resChip);
+    wrap.appendChild(head);
+    var main = el('div', 'res-main');  // (a TV: the score on the left, the statistics on the right)
+    refs.resHero = el('div', 'res-hero');
+    main.appendChild(refs.resHero);
+    refs.resBody = el('div', 'res-body');
+    main.appendChild(refs.resBody);
+    wrap.appendChild(main);
+    var foot = el('div', 'foot res-foot');
+    var left = el('div', 'row');
+    refs.resStats = btn('', '', 'rs:stats', function () { resView = resView === 'full' ? 'sum' : 'full'; renderResult('rs:stats'); });
+    refs.resGoals = btn('', '', 'rs:goals', function () {
+      resView = resView === 'goals' ? 'sum' : 'goals';
+      renderResult(resView === 'goals' && NS.Stats.goals().length ? 'rg:0' : 'rs:goals'); // (the remote lands on the first goal)
+    });
+    left.appendChild(refs.resStats);
+    left.appendChild(refs.resGoals);
+    foot.appendChild(left);
+    var right = el('div', 'row');
+    refs.resTeams = btn('', T('res.teams'), 'rs:teams', function () { show('TEAMS'); });
+    refs.resAgain = plusKey(btn('primary', T('res.again'), 'rs:again', function () { startMatch(); }));
+    refs.resAgain.setAttribute('data-default', '1');
+    refs.resExit = btn('', '', 'rs:exit', resultExit);
+    right.appendChild(refs.resTeams);
+    right.appendChild(refs.resAgain);
+    right.appendChild(refs.resExit);
+    foot.appendChild(right);
+    wrap.appendChild(foot);
+  }
+
+  function resultExit() {
+    resView = 'sum';
+    show(NS.Comp.active() ? 'COMPHUB' : 'MAIN');
+  }
+
+  function kitCss(t) {
+    var k = World.kitColors;
+    var s = World.session, tm = NS.Teams.byId(t === 0 ? s.homeTeamId : s.awayTeamId);
+    return NS.Assets.hexToCss(k ? k[t] : tm.c1);
+  }
+
+  // one line of statistics, TV style: home value | name | away value, the two shares as a bar under it
+  function statRow(label, a, b, txtA, txtB, lowerBetter) {
+    var row = el('div', 'res-row');
+    var top = el('div', 'res-line');
+    var lead = a === b ? -1 : ((a > b) !== !!lowerBetter ? 0 : 1);
+    var va = el('span', 'res-v' + (lead === 0 ? ' lead' : ''));
+    var vb = el('span', 'res-v r' + (lead === 1 ? ' lead' : ''));
+    if (typeof txtA === 'string') va.textContent = txtA; else va.appendChild(txtA);
+    if (typeof txtB === 'string') vb.textContent = txtB; else vb.appendChild(txtB);
+    top.appendChild(va);
+    top.appendChild(el('span', 'res-k', label));
+    top.appendChild(vb);
+    row.appendChild(top);
+    var bar = el('div', 'res-bar');
+    var tot = a + b;
+    var fa = el('i', 'l'), fb = el('i', 'r');
+    fa.style.width = (tot > 0 ? a / tot * 100 : 50) + '%';
+    fb.style.width = (tot > 0 ? b / tot * 100 : 50) + '%';
+    fa.style.background = kitCss(0);
+    fb.style.background = kitCss(1);
+    bar.appendChild(fa);
+    bar.appendChild(fb);
+    row.appendChild(bar);
+    return row;
+  }
+
+  function cardsEl(y, r) {
+    var s = el('span', 'res-cards');
+    s.appendChild(el('i', 'mc y'));
+    s.appendChild(document.createTextNode(String(y)));
+    s.appendChild(el('i', 'mc r'));
+    s.appendChild(document.createTextNode(String(r)));
+    return s;
+  }
+
+  function goalText(g) {
+    return g.mins + "'  " + g.who + (g.pen ? ' ' + T('res.pen') : '') + (g.own ? ' ' + T('res.og') : '');
+  }
+
+  function renderResult(keepKey) {
+    var S = NS.Stats, s = World.session, m = World.match;
+    var comp = NS.Comp.active();
+    if (resMatch !== S.id()) { resMatch = S.id(); resView = 'sum'; delete lastFocusKey.RESULT; keepKey = null; resFocus = ''; } // a new match
+    var home = NS.Teams.byId(s.homeTeamId), away = NS.Teams.byId(s.awayTeamId);
+    var goals = S.goals();
+    refs.resChip.textContent = T('res.ft') + '  •  ' + T('comp.' + s.compType);
+
+    // the score, the teams in their kit colours, the scorers under each
+    var hero = refs.resHero;
+    clear(hero);
+    [0, 1].forEach(function (t) {
+      var tm = t === 0 ? home : away;
+      var side = el('div', 'res-team ' + (t === 0 ? 'home' : 'away'));
+      var badge = el('div', 'res-badge', tm.code);
+      badge.style.background = kitCss(t);
+      side.appendChild(badge);
+      side.appendChild(el('div', 'res-name', tm.name));
+      var ul = el('div', 'res-scorers');
+      goals.forEach(function (g) { if (g.team === t) ul.appendChild(el('div', 'res-scorer', '⚽ ' + goalText(g))); });
+      side.appendChild(ul);
+      hero.appendChild(side);
+      if (t === 0) {
+        var mid = el('div', 'res-mid');
+        var won = m.score[0] === m.score[1] ? -1 : (m.score[0] > m.score[1] ? 0 : 1);
+        var sc = el('div', 'res-score');
+        var a = el('span', won === 0 ? 'w' : '', String(m.score[0]));
+        var b = el('span', won === 1 ? 'w' : '', String(m.score[1]));
+        sc.appendChild(a);
+        sc.appendChild(el('span', 'dash', '–'));
+        sc.appendChild(b);
+        mid.appendChild(sc);
+        mid.appendChild(el('div', 'res-xg', 'xG ' + S.get('xg', 0).toFixed(2) + ' – ' + S.get('xg', 1).toFixed(2)));
+        hero.appendChild(mid);
+      }
+    });
+
+    var body = refs.resBody;
+    clear(body);
+    body.className = 'res-body view-' + resView;
+    if (resView === 'goals') {
+      if (!goals.length) body.appendChild(el('div', 'muted res-empty', T('res.nogoals')));
+      goals.forEach(function (g, i) {
+        var tm = g.team === 0 ? home : away;
+        var b = btn('res-goal', '', 'rg:' + i, function () {
+          resFocus = 'rg:' + i;
+          hide();
+          var played = NS.Replay.play(g.clip, { auto: true, title: T('rp.goal'), sub: tm.code + '  ' + goalText(g),
+            onEnd: function () { show('RESULT'); } });
+          if (!played) show('RESULT');
+        });
+        var dot = el('span', 'res-gdot');
+        dot.style.background = kitCss(g.team);
+        b.appendChild(dot);
+        b.appendChild(el('span', 'res-gteam', tm.code));
+        b.appendChild(el('span', 'res-gtxt', goalText(g)));
+        b.appendChild(el('span', 'res-gplay', g.clip ? '▶' : T('res.noclip')));
+        if (!g.clip) b.disabled = true;
+        body.appendChild(b);
+      });
+    } else {
+      var p0 = S.possPct(0);
+      body.appendChild(statRow(T('res.poss'), p0, 100 - p0, p0 + '%', (100 - p0) + '%'));
+      body.appendChild(statRow(T('res.xg'), S.get('xg', 0), S.get('xg', 1), S.get('xg', 0).toFixed(2), S.get('xg', 1).toFixed(2)));
+      body.appendChild(statRow(T('res.shots'), S.get('shots', 0), S.get('shots', 1), String(S.get('shots', 0)), String(S.get('shots', 1))));
+      body.appendChild(statRow(T('res.ont'), S.get('onT', 0), S.get('onT', 1), String(S.get('onT', 0)), String(S.get('onT', 1))));
+      if (resView === 'full') {
+        var acc = function (t) { var n = S.get('passes', t); return n ? Math.round(S.get('passOk', t) * 100 / n) : 0; };
+        body.appendChild(statRow(T('res.passes'), S.get('passes', 0), S.get('passes', 1), String(S.get('passes', 0)), String(S.get('passes', 1))));
+        body.appendChild(statRow(T('res.passacc'), acc(0), acc(1), acc(0) + '%', acc(1) + '%'));
+        [['res.corners', 'corners'], ['res.saves', 'saves']].forEach(function (r) {
+          body.appendChild(statRow(T(r[0]), S.get(r[1], 0), S.get(r[1], 1), String(S.get(r[1], 0)), String(S.get(r[1], 1))));
+        });
+        [['res.fouls', 'fouls'], ['res.offsides', 'offsides'], ['res.yellow', 'yellow'], ['res.red', 'red']].forEach(function (r) {
+          body.appendChild(statRow(T(r[0]), S.get(r[1], 0), S.get(r[1], 1), String(S.get(r[1], 0)), String(S.get(r[1], 1)), true));
+        });
+      } else {
+        var c0 = S.get('yellow', 0) + S.get('red', 0) * 2, c1 = S.get('yellow', 1) + S.get('red', 1) * 2;
+        body.appendChild(statRow(T('res.cards'), c0, c1, cardsEl(S.get('yellow', 0), S.get('red', 0)), cardsEl(S.get('yellow', 1), S.get('red', 1)), true));
+      }
+    }
+
+    refs.resStats.textContent = resView === 'full' ? T('res.summary') : T('res.full');
+    var kept = 0;
+    goals.forEach(function (g) { if (g.clip) kept++; });
+    refs.resGoals.textContent = resView === 'goals' ? T('res.summary') : T('res.goals') + (goals.length ? ' (' + goals.length + ')' : '');
+    refs.resGoals.disabled = !kept && resView !== 'goals';
+    refs.resTeams.classList.toggle('hidden', comp);
+    refs.resAgain.classList.toggle('hidden', comp);
+    refs.resExit.textContent = comp ? T('res.cont') : T('res.exit');
+    if (comp) refs.resExit.setAttribute('data-default', '1'); else refs.resExit.removeAttribute('data-default');
+    var want = keepKey || resFocus;
+    resFocus = '';
+    if (focused) focused.classList.remove('focus');
+    focused = null;
+    if (!(want && focusByKey(want))) focusDefault();
   }
 
   /* ------------------------------ SETTINGS ------------------------------ */
@@ -2037,6 +2231,7 @@
       buildHelp();
       buildButtons();
       buildDebug();
+      buildResult();
       NS.Match.syncRosters();
       updateSideSlots();
       lastFocusKey.TEAMS = 'h:' + World.session.homeTeamId;

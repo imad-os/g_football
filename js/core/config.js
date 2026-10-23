@@ -2,7 +2,7 @@
 (function (NS) {
   'use strict';
 
-  NS.VERSION = '1.28.2';
+  NS.VERSION = '1.29.0';
 
   // Pitch geometry (world units; x = length, z = width, y = up). The players and the goal are drawn ~1.5x real size,
   // so the markings around the goal are the real ones scaled to the goal (BOX_K), not to the pitch: the boxes look
@@ -72,7 +72,9 @@
     soundEnabled: true,
     crowdChants: true,
     showRadar: true,
-    showFPS: false
+    showFPS: false,
+    replayLen: 10,
+    goalReplay: true
   };
 
   // Settings groups (the tabs of the Settings screen)
@@ -113,7 +115,12 @@
     { key: 'showRadar', group: 'video', label: 'set.radar', hint: 'set.radar.h',
       options: [[true, 'opt.show'], [false, 'opt.hide']] },
     { key: 'showFPS', group: 'video', label: 'set.fps', hint: 'set.fps.h',
-      options: [[true, 'opt.show'], [false, 'opt.hide']] }
+      options: [[true, 'opt.show'], [false, 'opt.hide']] },
+    // replays: seconds shown (the last moments, each goal), and the replay after a goal
+    { key: 'replayLen', group: 'video', label: 'set.replay', hint: 'set.replay.h',
+      options: [[10, 'opt.s10'], [15, 'opt.s15'], [20, 'opt.s20']] },
+    { key: 'goalReplay', group: 'video', label: 'set.goalrep', hint: 'set.goalrep.h',
+      options: [[true, 'opt.on'], [false, 'opt.off']] }
   ];
 
   // Returns the validated value for a setting, or undefined when it is not allowed.

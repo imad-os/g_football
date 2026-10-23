@@ -100,6 +100,19 @@ corners are hard. The keeper catches (hands) shots and balls played by the oppon
 team-mate must be played with the feet. A keeper may hold the ball 5 seconds at most: after that it is kicked long anyway.
 Player 2: the second controller or phone controller connected.
 
+## Replays and the full-time screen
+
+- **Replays** (js/game/replay.js) use the match camera. The last 10, 15 or 20 seconds (Settings > Video > Replay length)
+  are kept while playing; the pause menu's **Replay** shows them, and each goal is shown again after the celebration
+  (Settings > Video > Goal replays). Controls: **left stick** = speed (a little right: slow motion, all the way: x3;
+  left: rewind), **A** = pause / play, **B** or **+** = exit. TV remote: OK pause, left / right speed, up exit.
+  Recording copies what is on screen 30 times a second into one buffer made once (Int16, ~430 KB); each goal keeps its
+  own clip (up to 12 per match). Nothing is recorded in debug matches.
+- **Full time** (js/game/stats.js + the RESULT screen): the score, the scorers, possession, xG (from the distance and
+  the angle of each shot), shots, shots on target and cards; **Full stats** adds passes, pass accuracy, corners, saves,
+  fouls, offsides and the cards; **Replay goals** plays any goal of the match again. Then **Play again** (same teams),
+  **Change teams** or **Exit** (in a competition: **Continue**).
+
 ## Debug matches (Settings > Debug matches)
 
 CPU v CPU matches at full speed to find problems in the gameplay: choose the number of matches, each team's CPU level, the

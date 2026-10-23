@@ -31,12 +31,19 @@
     if (elapsed > 250) elapsed = 250;
     var m = World.match;
 
-    if (m.running) {
+    if (NS.Replay.active()) {
+      // a replay on screen: the game waits, the recorded frames are shown
+      acc = 0;
+      NS.Replay.frame(elapsed / 1000);
+      NS.Quality.frame(elapsed / 1000);
+      NS.Scene.render();
+    } else if (m.running) {
       if (!m.paused) {
         acc += elapsed;
         var dt = NS.STEP * World.settings.gameSpeed;
-        while (acc >= STEP_MS && !m.paused) {
+        while (acc >= STEP_MS && !m.paused && !NS.Replay.active()) {
           NS.Match.update(dt);
+          NS.Replay.step(dt);
           acc -= STEP_MS;
         }
       } else {
@@ -73,6 +80,8 @@
     // My PC's actions drive the menus only (remote, keyboard and controllers); matches are played with the controllers
     // themselves (js/core/gamepad.js)
     input: function (action, pressed, repeat, dev) {
+      if (NS.Replay.active()) { NS.Replay.action(action, pressed, repeat, dev); return; }
+      if (NS.Replay.justEnded()) return; // (the rest of the press that closed the replay)
       if (NS.UI.isOpen()) NS.UI.onInput(action, pressed, repeat, dev);
       else if (action === 'menu' && pressed && !repeat) NS.Match.requestMenu();
     },

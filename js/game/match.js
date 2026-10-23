@@ -272,6 +272,7 @@
   function takeBall(p) {
     var ball = World.ball;
     if (Actions.touch(p)) return false; // he was offside when it was played
+    if (NS.Stats) NS.Stats.gain(p);
     ball.owner = p;
     ball.lastTouchTeam = p.team;
     ball.lastToucher = p.name;
@@ -337,6 +338,10 @@
     var who = k ? k.name : ball.lastToucher;
     var mins = Math.min(90, Math.floor(m.timeSeconds / 60) + 1);
     if (NS.dbg) NS.dbg('goal', team, { own: own, who: who, mins: mins, k: k });
+    if (NS.Stats) {
+      var g = NS.Stats.goal(team, who, mins, own, !!ball.pen);
+      if (NS.Replay) NS.Replay.goal(g);
+    }
     NS.HUD.goalFx(NS.I18n.t('hud.goalword'), (own ? NS.I18n.t('hud.owngoal') + ' ' : '') + who + '  ' + mins + "'", team);
     if (World.slots[0].active && team === World.slots[0].team) NS.Storage.addResult(0, 1, 0);
     ball.owner = null;
@@ -469,6 +474,7 @@
     if (m.setPieceTimer > 0 || m.penalty || breakKind) return;
     var card = book(tackler);
     if (NS.dbg) NS.dbg('foul_committed', tackler.team, card, tackler.name);
+    if (NS.Stats) NS.Stats.foul(tackler.team, card);
     m.sendOff = card === 3 ? tackler : null;
     var ownGoalX = -NS.attack(tackler.team) * HALF_W;
     var inBox = Math.abs(victim.pos.x - ownGoalX) < NS.BOX_D && Math.abs(victim.pos.z) < NS.BOX_HW;
@@ -600,6 +606,7 @@
     if (m.setPieceTimer > 0 || breakKind) return;
     var last = ball.lastTouchTeam;
     stopPlay();
+    if (NS.Stats) NS.Stats.out();
     m.setTaker = null;
     m.setZ = ball.pos.z;
     if (code === -3) {
@@ -618,6 +625,7 @@
       m.setTeam = 1 - defending;
       m.setPieceTimer = 0.8;
       if (NS.dbg) NS.dbg('corner_won', m.setTeam);
+      if (NS.Stats) NS.Stats.corner(m.setTeam);
       NS.Audio.whistle(0);
       NS.HUD.banner(NS.I18n.t('hud.corner'), '', 1.0);
     } else {
@@ -634,6 +642,7 @@
     if (m.setPieceTimer > 0 || breakKind || m.penalty) return;
     stopPlay();
     if (NS.dbg) NS.dbg('offside_caught', q.team);
+    if (NS.Stats) NS.Stats.offside(q.team);
     World.ball.vel.set(0, 0, 0);
     m.setPiece = 6;
     m.setTeam = 1 - q.team;
@@ -929,6 +938,7 @@
         }
       }
       NS.HUD.setTeams(homeT, awayT, kits.home.c1, kits.away.c1);
+      World.kitColors = [kits.home.c1, kits.away.c1]; // (the full-time screen)
       if (ref) { NS.Scene.remove(ref.mesh.root); NS.Assets.disposePlayer(ref.mesh); }
       var rm = NS.Assets.createPlayer('SOLID', kits.ref, kits.ref, 0x111111, SKIN[1], lit);
       NS.Scene.add(rm.root);
@@ -1022,6 +1032,14 @@
       m.dir[0] = World.settings.randomEnds && Math.random() < 0.5 ? -1 : 1; m.dir[1] = -m.dir[0];
       if (NS.Aima) NS.Aima.matchStart();
       this.rebuildTeams();
+      // the match's statistics, and its replays (not in debug matches: they are never watched)
+      if (NS.Stats) NS.Stats.begin();
+      if (NS.Replay) {
+        var films = [];
+        for (var fi = 0; fi < World.players.length; fi++) films.push(World.players[fi].mesh);
+        if (ref) films.push(ref.mesh);
+        NS.Replay.begin(films, !(NS.Debug && NS.Debug.running()));
+      }
       m.score[0] = 0; m.score[1] = 0;
       m.timeSeconds = 0;
       m.half = 1;
@@ -1066,12 +1084,12 @@
       NS.Scene.setRing(2, false, 0, 0);
       NS.Scene.setRing(3, false, 0, 0);
       if (NS.Aima && finished !== true) NS.Aima.matchEnd(false);
-      if (NS.Comp && NS.Comp.active()) {
-        if (finished === true) NS.Comp.recordUserMatch(m.score[0], m.score[1]);
-        NS.UI.show('COMPHUB');
-      } else {
-        NS.UI.show('MAIN');
-      }
+      if (NS.Replay && NS.Replay.active()) NS.Replay.stop();
+      var inComp = NS.Comp && NS.Comp.active();
+      if (inComp && finished === true) NS.Comp.recordUserMatch(m.score[0], m.score[1]);
+      // full time: the result and the match's statistics (then the competition / the main menu from there)
+      if (finished === true) NS.UI.show('RESULT');
+      else NS.UI.show(inComp ? 'COMPHUB' : 'MAIN');
     },
 
     // Controller sides changed from the pause menu: apply to the running match.
@@ -1098,7 +1116,15 @@
       if (m.celebrationTimer > 0) {
         m.celebrationTimer -= dt;
         breakStep(dt, settings.cameraMode);
-        if (m.celebrationTimer <= 0) { NS.HUD.hideBanner(); NS.HUD.hideGoalFx(); breakKind = 0; this.resetKickoff(); }
+        if (m.celebrationTimer <= 0) {
+          var goalBreak = breakKind === 1, self = this;
+          NS.HUD.hideBanner(); NS.HUD.hideGoalFx(); breakKind = 0;
+          // the goal again (Settings > Goal replays), then the kick-off
+          if (!(goalBreak && NS.Replay && NS.Replay.afterGoal(function () {
+            self.resetKickoff();
+            if (m.running && !m.paused) NS.Audio.crowd(true);
+          }))) this.resetKickoff();
+        }
         return;
       }
       if (m.fullTimeTimer > 0) {
@@ -1333,6 +1359,7 @@
               if (ball.chip) chance *= 0.4;
               if (ball.pen) chance *= 0.55;
               if (Math.random() < chance) {
+                if (NS.Stats) NS.Stats.save(p.team);
                 if (speed < (p.diveT > 0 ? 30 : 25) - (ball.pos.y > 2.3 ? 4 : 0)) { // a diving keeper holds on to harder shots; high ones are tipped
                   if (NS.dbg) NS.dbg('gk_catch', p.team);
                   takeBall(p);
@@ -1427,6 +1454,7 @@
       }
 
       // ----- ball, goal, camera -----
+      if (NS.Stats) NS.Stats.tick(dt);
       var scored = World.stepBall(dt);
       // rolling without slipping: angle = distance / radius
       ballRotX += ball.vel.z * dt / R;
