@@ -44,6 +44,11 @@
     var other = otherPlayer(slot);
     var o = ball.owner;
     if (o && o.team === slot.team && o !== p && o !== other) { slot.player = o; return; }
+    if (o && o.team !== slot.team) {
+      // defending: the man between the carrier and our goal (pressed again: the next best placed one)
+      var gs = lastManPick(slot.team, other, p, o);
+      if (gs) { slot.player = gs; slot.manual = true; slot.manualOwner = o; return; }
+    }
     var n = fastestToBall(slot.team, other);
     if (n === p) n = Actions.nearestToBall(slot.team, p, other);
     if (n) {
@@ -52,6 +57,58 @@
       slot.manual = true;
       slot.manualOwner = o;
     }
+  }
+
+  // Defending: how well q stands between the opponent carrier c and q's own goal (lower = better, -1 = not goal-side).
+  // Distance to the carrier plus how far he is off the line carrier -> goal.
+  function goalSideCost(q, c) {
+    var att = NS.attack(q.team);
+    if ((c.pos.x - q.pos.x) * att < -0.5) return -1;
+    var lx = -att * NS.PITCH_HALF_W - c.pos.x, lz = -c.pos.z;
+    var ll = Math.sqrt(lx * lx + lz * lz) || 1;
+    var vx = q.pos.x - c.pos.x, vz = q.pos.z - c.pos.z;
+    if ((vx * lx + vz * lz) / ll < -1) return -1;
+    var d = Math.sqrt(vx * vx + vz * vz);
+    return d > 45 ? -1 : d + Math.abs(vx * lz - vz * lx) / ll * 1.5;
+  }
+  // The team-mate best placed between the carrier c and the goal he defends (not ex1 / ex2, not the keeper), or null.
+  function lastManPick(team, ex1, ex2, c) {
+    var players = World.players;
+    var best = null, bc = 1e9;
+    for (var i = 0; i < players.length; i++) {
+      var q = players[i];
+      if (q.team !== team || q.role === 'GK' || q === ex1 || q === ex2 || q.stun > 0) continue;
+      var cost = goalSideCost(q, c);
+      if (cost >= 0 && cost < bc) { bc = cost; best = q; }
+    }
+    return best;
+  }
+
+  // Right stick without the ball: the team-mate nearest in the direction it points, seen from the current player.
+  function stickSwitch(slot, dx, dz) {
+    var p = slot.player;
+    var other = otherPlayer(slot);
+    var l = Math.sqrt(dx * dx + dz * dz) || 1;
+    dx /= l; dz /= l;
+    var players = World.players;
+    var best = null, bc = 1e9;
+    for (var i = 0; i < players.length; i++) {
+      var q = players[i];
+      if (q.team !== p.team || q === p || q === other || q.role === 'GK' || q.stun > 0) continue;
+      var vx = q.pos.x - p.pos.x, vz = q.pos.z - p.pos.z;
+      var d = Math.sqrt(vx * vx + vz * vz);
+      if (d < 0.5 || d > 50) continue;
+      var dot = (vx * dx + vz * dz) / d;
+      if (dot < 0.35) continue; // within ~70 degrees of where the stick points
+      var cost = d * (1.8 - dot);
+      if (cost < bc) { bc = cost; best = q; }
+    }
+    if (!best) return;
+    slot.player = best;
+    slot.manual = true; // auto-switch leaves the choice alone until the ball changes hands
+    slot.manualOwner = World.ball.owner;
+    slot.lockT = 0;
+    endEvent(slot);
   }
 
   // Tackle when an opponent carries the ball close, otherwise switch to the player nearest the ball.
@@ -246,10 +303,19 @@
         }
         if (auto) {
           // the team-mate who gets to the ball first (where it is going, not only where it is)
-          var n = fastestToBall(s.team, other);
-          if (n && n !== cur) {
-            var tn = timeTo(n), tc = timeTo(cur);
-            if (cur.stun > 0 || tn < tc * 0.75 - 0.15) s.player = n;
+          var dm = o && o.team !== s.team ? lastManPick(s.team, other, null, o) : null;
+          if (dm) {
+            // defending: the man between the carrier and our goal; kept while he is still goal-side and not much worse
+            if (dm !== cur) {
+              var cc = goalSideCost(cur, o);
+              if (cur.stun > 0 || cc < 0 || goalSideCost(dm, o) < cc - 5) s.player = dm;
+            }
+          } else {
+            var n = fastestToBall(s.team, other);
+            if (n && n !== cur) {
+              var tn = timeTo(n), tc = timeTo(cur);
+              if (cur.stun > 0 || tn < tc * 0.75 - 0.15) s.player = n;
+            }
           }
         }
       }
@@ -365,6 +431,36 @@
       // ---- movement ----
       if (pad.burst) { pad.burst = false; if (p.stamina > 20) slot.burstT = 0.8; }
       if (slot.burstT > 0) slot.burstT -= dt;
+
+      // right stick (human pads only): without the ball it picks the team-mate in its direction (seen from the current
+      // player); with the ball it pushes it ~2 m that way (a knock-on, repeated while held); while a pass is coming to
+      // him it sets the direction of his first touch (the ball is pushed that way as soon as he has it)
+      if (!slot.ai) {
+        var rsx = pad.rx || 0, rsz = pad.ry || 0;
+        var rsOn = rsx * rsx + rsz * rsz > 0.36;
+        var rise = rsOn && !slot.rsOn;
+        slot.rsOn = rsOn;
+        if (slot.rsCd > 0) slot.rsCd -= dt;
+        if (slot.preT > 0) slot.preT -= dt;
+        if (rsOn && has) {
+          if ((rise || slot.rsCd <= 0) && p.stamina > 10 && !World.match.restart) {
+            Actions.knockOn(p, rsx, rsz);
+            slot.knockT = 1.0;
+            slot.rsCd = 0.5;
+            has = false;
+          }
+        } else if (rsOn && ball.receiver === p && !ball.owner) {
+          slot.preX = rsx; slot.preZ = rsz; slot.preT = 1.5;
+        } else if (rise) {
+          stickSwitch(slot, rsx, rsz);
+          p = slot.player;
+          has = ball.owner === p;
+        }
+        if (has && slot.preT > 0 && !World.match.restart) {
+          slot.preT = 0;
+          if (p.stamina > 10) { Actions.knockOn(p, slot.preX, slot.preZ); slot.knockT = 1.0; has = false; }
+        }
+      }
 
       // knock-on (FIFA / PES): sprint tapped again and again on the ball: every second tap he pushes it a few metres
       // ahead (where the stick points) and runs onto it, faster than dribbling

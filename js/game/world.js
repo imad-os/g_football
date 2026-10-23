@@ -180,6 +180,7 @@
       evActive: false, evMask: 0, evT: 0, evSettle: 0, evCtx: 0, evMove: -1, evPrev: 0,
       gkLeft: 0, // keeper countdown shown (seconds left)
       manual: false, manualOwner: null, // switched by button: auto-switch waits until the ball changes hands
+      rsOn: false, rsCd: 0, preT: 0, preX: 0, preZ: 0, // right stick: pushed, knock-on repeat, first-touch direction
       shCd: 0 // shoulder challenge while pressing
     };
   }
