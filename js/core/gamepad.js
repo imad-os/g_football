@@ -107,6 +107,10 @@
     if (n < 0) return;
     stick[n][0] = x; stick[n][1] = y;
     push(n);
+    // the right stick (standard axes 2 / 3)
+    var rx = axes[2] || 0, ry = axes[3] || 0;
+    if (rx * rx + ry * ry < DEAD * DEAD) { rx = 0; ry = 0; }
+    NS.Input.rstick(n, rx, ry);
   }
 
   function onPads(list) {

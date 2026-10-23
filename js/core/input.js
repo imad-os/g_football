@@ -11,6 +11,7 @@
   function makePad() {
     return {
       x: 0, y: 0,
+      rx: 0, ry: 0, // the right stick (switch player / knock-on, see js/game/controls.js)
       cur: 0,
       latch: 0,
       ign: 0,    // buttons ignored until released (the press that closed a menu)
@@ -49,6 +50,7 @@
       edge(p, 2, y < -0.6);
       edge(p, 3, y > 0.6);
     },
+    rstick: function (n, x, y) { pads[n].rx = x; pads[n].ry = y; },
     // player n pressed / released a button (bit)
     button: function (n, bit, pressed) {
       var p = pads[n];
@@ -70,7 +72,7 @@
     releaseAll: function () {
       for (var i = 0; i < 2; i++) {
         var p = pads[i];
-        p.x = 0; p.y = 0; p.cur = 0; p.latch = 0; p.ign = 0; p.burst = false;
+        p.x = 0; p.y = 0; p.rx = 0; p.ry = 0; p.cur = 0; p.latch = 0; p.ign = 0; p.burst = false;
         p.dir[0] = p.dir[1] = p.dir[2] = p.dir[3] = false;
       }
     }
