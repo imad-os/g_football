@@ -917,6 +917,10 @@
   // a training's time limit
   Object.assign(D.en, { 'dbg.hours': 'Stop after (hours)', 'aima.tr.nolimit': 'No limit' });
   Object.assign(D.en, { 'aima.c.all': 'ALL BRAINS', 'aima.inuse': 'in use (training / learning)', 'aima.sel': 'Show' });
+  Object.assign(D.en, { 'aima.d.cont': 'Going on', 'aima.d.before': 'already learnt', 'aima.d.newdec': 'new decisions to catch up', 'aima.d.chunks': 'chunks learnt',
+    'aima.d.newchunks': 'new chunks', 'aima.d.never': 'nothing learnt from this set yet' });
+  Object.assign(D.fr, { 'aima.d.cont': 'On continue', 'aima.d.before': 'deja appris', 'aima.d.newdec': 'nouvelles decisions a rattraper', 'aima.d.chunks': 'blocs appris', 'aima.d.newchunks': 'nouveaux blocs', 'aima.d.never': 'rien appris de ce jeu' });
+  Object.assign(D.es, { 'aima.d.cont': 'Sigue', 'aima.d.before': 'ya aprendidas', 'aima.d.newdec': 'decisiones nuevas por igualar', 'aima.d.chunks': 'bloques aprendidos', 'aima.d.newchunks': 'bloques nuevos', 'aima.d.never': 'nada aprendido de este conjunto' });
   Object.assign(D.fr, { 'aima.c.all': 'TOUS LES CERVEAUX', 'aima.inuse': 'utilise (entrainement)', 'aima.sel': 'Voir' });
   Object.assign(D.es, { 'aima.c.all': 'TODOS LOS CEREBROS', 'aima.inuse': 'en uso (entrenamiento)', 'aima.sel': 'Ver' });
   Object.assign(D.fr, { 'dbg.hours': 'Arret apres (heures)', 'aima.tr.nolimit': 'Sans limite' });

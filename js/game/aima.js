@@ -98,6 +98,7 @@
     for (var k in CFG_DEF) this.cfg[k] = CFG_DEF[k];
     this.st = freshStats();
     this.hist = [];
+    this.data = {};   // per recorded data set it learnt from: { name, chunks (how many it had), passes (done over them), steps }
     this.frozen = false;  // an opponent in training: plays, does not learn
     this.dirty = false;
     this.build(size || 'MEDIUM');
@@ -1043,7 +1044,7 @@
 
   function toDoc(b) {
     return { v: 2, alg: ALG, id: b.id, name: b.name, created: b.created, saved: b.saved, parent: b.parent, from: b.from,
-      cfg: b.cfg, st: b.st, hist: b.hist, m: packWeights(b) };
+      cfg: b.cfg, st: b.st, hist: b.hist, data: b.data, m: packWeights(b) };
   }
   function fromDoc(d) {
     if (!d || d.v !== 2 || !d.m) return null;
@@ -1055,6 +1056,7 @@
     for (k in SIZES) if (SIZES[k][0] === b.H1 && SIZES[k][1] === b.H2) b.cfg.size = k;
     if (d.st) for (k in d.st) if (Object.prototype.hasOwnProperty.call(b.st, k)) b.st[k] = d.st[k];
     b.hist = d.hist || [];
+    b.data = d.data || {};
     if (b.upgraded) { b.log('inputs', { from: b.upgraded, to: F }); b.upgraded = 0; } // (saved with the new inputs next time)
     return b;
   }
@@ -1771,12 +1773,26 @@
     J.score = v;
     J.scores.push([J.steps, v.n ? v.dir / v.n : 0, v.pn ? v.same / v.pn : 0]);
   }
+  // what the brain has learnt from the set so far: kept in the brain, so the next run goes on from here
+  function noteData(J, b) {
+    var id = J.cfg.sets[0], meta = findSet(id), size = J.move.length + J.press.length;
+    if (!meta || !size) return;
+    var d = b.data[id] || (b.data[id] = { name: meta.name, chunks: 0, passes: 0, steps: 0 });
+    d.name = meta.name;
+    d.passes = Math.round((d.passes + J.steps / size) * 100) / 100;  // (new data caught up to the old, so one average)
+    d.chunks = J.chunksSeen; d.steps += J.steps; d.when = Date.now();
+  }
   function learnSlice(J) {
     if (J.state !== 'running') return;
     var b = J.b, t0 = performance.now(), PS = J.press.length, MS = J.move.length;
     while (performance.now() - t0 < 25) {
       for (var k = 0; k < 64; k++) {
-        var ref = PS && (!MS || Math.random() < PRESS_SHARE) ? J.press[Math.floor(Math.random() * PS)] : J.move[Math.floor(Math.random() * MS)];
+        // data this brain has not seen yet (or seen fewer times) is drawn in proportion to what it still owes
+        var nw = J.remNew > 0 && Math.random() * (J.remNew + J.remOld) < J.remNew;
+        var pl = nw && J.npress.length ? J.npress : J.press, ml = nw && J.nmove.length ? J.nmove : J.move;
+        var PL = pl.length, ML2 = ml.length;
+        if (nw) J.remNew--; else J.remOld--;
+        var ref = PL && (!ML2 || Math.random() < PRESS_SHARE) ? pl[Math.floor(Math.random() * PL)] : ml[Math.floor(Math.random() * ML2)];
         sampleOf(J.ch[ref >> 16], ref & 0xffff);
         if (dataStep(b)) J.learnt++;
         J.steps++;
@@ -1791,6 +1807,7 @@
       J.state = J.stopReq ? 'stopped' : 'done';
       J.ended = Date.now();
       var sc = J.score || {};
+      noteData(J, b);
       b.log('data', { set: J.setName, steps: J.steps, dir: sc.n ? Math.round(sc.dir * 100 / sc.n) : 0, same: sc.pn ? Math.round(sc.same * 100 / sc.pn) : 0 });
       saveBrain(b);
       if (J.state === 'done' && NS.Audio.chime) NS.Audio.chime();
@@ -1809,8 +1826,10 @@
       b.frozen = false;
       if (!b.learns()) throw new Error(NS.I18n.t('aima.d.nolearn'));
       // every decision of the sets: (chunk << 16) | index; one in 20 for the score only
-      J.ch = []; J.press = []; J.move = []; J.val = [];
-      var g = 0;
+      J.ch = []; J.press = []; J.move = []; J.val = []; J.nmove = []; J.npress = [];
+      var g = 0, prev = b.data[ids[0]] || null, nOld = 0, nNew = 0;
+      J.prev = prev ? prev.passes : 0;
+      J.chunksSeen = (findSet(ids[0]) || {}).chunks || 0;
       ids.forEach(function (id) {
         var list = dsets[id] || [];
         for (var c = 0; c < list.length; c++) {
@@ -1819,14 +1838,21 @@
           J.ch.push(ch);
           for (i = 0; i < ch.n; i++, g++) {
             var ref = (ci << 16) | i;
+            var fresh = !prev || c >= prev.chunks;  // (a chunk the brain has not learnt from yet)
             if (g % 20 === 0) J.val.push(ref);
-            else if (ch.a[i * DA + 2] > 0) J.press.push(ref);
-            else J.move.push(ref);
+            else {
+              if (fresh) nNew++; else nOld++;
+              if (ch.a[i * DA + 2] > 0) { J.press.push(ref); if (fresh) J.npress.push(ref); }
+              else { J.move.push(ref); if (fresh) J.nmove.push(ref); }
+            }
           }
         }
       });
       if (!J.move.length && !J.press.length) throw new Error(NS.I18n.t('aima.d.empty'));
-      J.total = J.cfg.passes * (J.move.length + J.press.length);
+      // old data: the passes asked for; new data: those too, plus the ones the old data already had (it catches up)
+      J.newN = nNew;
+      J.remOld = J.cfg.passes * nOld; J.remNew = (J.cfg.passes + J.prev) * nNew;
+      J.total = J.remOld + J.remNew;
       J.state = 'running';
       J.loadMsg = '';
       validate(J, b);
@@ -1848,6 +1874,7 @@
     } else {
       L.push(T('aima.d.learn') + ': ' + (J.b ? J.b.name : '?') + '  <-  "' + J.setName + '"  (' + J.cfg.passes + ' ' + T('aima.d.passes') + ')  ' + T('aima.ss.' + J.state));
       if (J.loadMsg) L.push(T('aima.d.loading') + ' ' + J.loadMsg);
+      if (J.total && (J.prev || J.newN)) L.push(T('aima.d.cont') + ': ' + J.prev + ' ' + T('aima.d.passes') + ' ' + T('aima.d.before') + (J.newN ? '   +' + J.newN + ' ' + T('aima.d.newdec') : ''));
       if (J.total) L.push(T('aima.d.steps') + ': ' + J.steps + ' / ' + J.total + '   ' + T('aima.d.learnt') + ' ' + pctOf(J.learnt, J.steps) +
         '   (' + T('aima.d.sets') + ': ' + J.move.length + ' + ' + J.press.length + ' ' + T('aima.d.presses') + ', ' + J.val.length + ' ' + T('aima.d.check') + ')');
       s = J.score;
@@ -1952,6 +1979,7 @@
       b = b || active;
       if (!SIZES[size] || (!LOCAL_SIZES[size] && !cloudCfg()) || Aima.inUse(b.id)) return false;
       b.build(size);
+      b.data = {};
       b.st = freshStats();
       b.log('size', { v: size });
       saveBrain(b);
@@ -1962,6 +1990,7 @@
       b = b || active;
       if (Aima.inUse(b.id)) return;
       b.init();
+      b.data = {};
       b.st = freshStats();
       b.memN = 0; b.memI = 0;
       b.log('reset');
@@ -2199,6 +2228,8 @@
 
     // ---- recorded data (Legend v Legend) and learning from it. A job: { id, kind: 'rec' | 'learn', cfg, state, ... }
     dataSets: function () { return dataIndex.sets; },
+    // what a brain has already learnt from a set: { passes, chunks } or null
+    learnt: function (b, setId) { return b && b.data && b.data[setId] || null; },
     dataState: function () { return dataState; },
     loadDataIndex: loadDataIndex,
     dataJobs: function () { return jobs; },
