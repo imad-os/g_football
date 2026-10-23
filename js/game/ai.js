@@ -1,7 +1,9 @@
 /* CPU football brain.
  *
  * Team level (teamUpdate, once per step): phase (attack / defend / loose ball) and the moment of the game (build-up,
- * progression, final third, counter-attack, securing the ball, counter-pressing, the defensive block), game state
+ * progression, final third, counter-attack, securing the ball, counter-pressing, the defensive block), counter-attacks
+ * (when a won ball becomes one, with how many, when it is over: from the level, the Counter tactic, the score and the
+ * time; the team caught open sprints back), game state
  * (urgency when losing late, caution when winning late), who presses (pressing triggers), who covers, man-marking near
  * the ball, the block's height and its lines, and the in-possession shape: players behind the ball (rest defence) and
  * the attackers spread over the five vertical lanes, staggered (wide high, half-spaces between the lines, the centre
@@ -53,6 +55,12 @@
     return tac && tac[t] ? tac[t][block] - 1 : 0;
   }
   function mood(p) { return moodOf(p.team, p.role === 'DEF' ? 0 : (p.role === 'MID' ? 1 : 2)); }
+  // the Counter tactic (Game plan): 0 rarely, 1 when it is on (default), 2 always
+  function counterPlan(t) {
+    var tac = World.session.tactics;
+    var v = tac && tac[t] ? tac[t][3] : undefined;
+    return v === undefined ? 1 : v;
+  }
 
   // the moment of the game (a team's plan for it)
   var M_LOOSE = 0, M_BUILD = 1, M_PROG = 2, M_FINAL = 3, M_COUNTER = 4, M_SECURE = 5, M_CPRESS = 6, M_BLOCK = 7;
@@ -69,7 +77,8 @@
   function makeTeam() {
     return {
       phase: 0,          // 1 attack (we have the ball), 2 defend, 0 loose
-      moment: M_LOOSE, block: B_MID, has: false, wonT: 99, lostT: 99, countering: false, iq: 1,
+      moment: M_LOOSE, block: B_MID, has: false, wonT: 99, lostT: 99, iq: 1,
+      cntLevel: 0, cntT: 0, cntBest: 0, cntStall: 0, // a counter-attack: 0 none, 1 a quick break, 2 everyone
       trigT: 0, switchT: 0, pressN: 1, press3: null, shapeT: 0, lastOwner: null, oppMidX: 0,
       urgency: 0,        // 0..1: losing late, take more risks
       caution: 0,        // 0..1: winning late, keep the ball
@@ -315,11 +324,34 @@
       // who had it last (a loose ball keeps the moment of the team that played it)
       if (owner && owner.team === t && !T.has) {
         T.has = true; T.wonT = 0; T.shapeT = 0;
-        T.countering = T.iq >= 1 && counterOn(t, owner);
+        // the score and the time first (the counter decision depends on them)
+        var df0 = m.score[t] - m.score[1 - t];
+        T.urgency = df0 < 0 ? clamp((mins - 45) / 40, 0, 1) * (df0 < -1 ? 1 : 0.75) : 0;
+        T.caution = df0 > 0 ? clamp((mins - 55) / 35, 0, 1) : 0;
+        T.cntLevel = counterDecide(t, T, owner);
+        T.cntT = 0; T.cntStall = 0; T.cntBest = owner.pos.x * a;
+        if (T.cntLevel) {
+          if (owner.aiCd > 0.12) owner.aiCd = 0.12; // the first pass goes quickly
+          if (NS.dbg) NS.dbg(T.cntLevel === 2 ? 'counter_attack_started_everyone' : 'counter_attack_started_quick_break', t);
+        }
       } else if (owner && owner.team !== t && T.has) {
         T.has = false; T.lostT = 0;
+        if (T.cntLevel && NS.dbg) NS.dbg('counter_attack_end_ball_lost', t);
+        T.cntLevel = 0;
       }
       T.wonT += dt; T.lostT += dt;
+      // a counter lives while the ball keeps going forward; it ends when it stalls, after 10 s, or (Hard and Legend)
+      // when they have got enough men back
+      if (T.has && T.cntLevel) {
+        T.cntT += dt;
+        var cbx = ball.pos.x * a;
+        if (cbx > T.cntBest + 1) { T.cntBest = cbx; T.cntStall = 0; } else T.cntStall += dt;
+        var why = '';
+        if (T.cntStall > (T.iq >= 2 ? 1.8 : 2.5)) why = 'stalled';
+        else if (T.cntT > 10) why = 'time';
+        else if (T.iq >= 2 && T.cntT > (T.cntLevel === 2 ? 1.5 : 2.5) && counterClosed(t, T.cntLevel === 2 ? 2 : 3)) why = 'they_got_back';
+        if (why) { T.cntLevel = 0; if (NS.dbg) NS.dbg('counter_attack_end_' + why, t); }
+      }
       if (T.trigT > 0) T.trigT -= dt;
       if (T.switchT > 0) T.switchT -= dt;
       var diff = m.score[t] - m.score[1 - t];
@@ -391,18 +423,56 @@
     }
   }
 
-  // just won it: a counter-attack when their team is open (few of them goal-side of the ball) and we are not already in
-  // the last third
-  function counterOn(t, c) {
-    var a = NS.attack(t), players = World.players, n = 0, out = 0;
-    if (c.pos.x * a > HALF_W * 0.45) return false;
+  // Just won it: a counter-attack? 0 no, 1 a quick break (the forwards and the most advanced run, the rest keeps its
+  // place), 2 everyone but the last two or three. "Cut": we broke up their attack (won it in our half, or a good part of
+  // their team is in our half). "Open": the share of their outfield players still goal-side of the ball.
+  //  Easy     a quick break (the forwards run) when we break up their attack and they are not all back
+  //  Normal   the standard: every attack of theirs we break up turns into a counter with everyone
+  //  Hard /   only when it is on, with as many as it deserves
+  //  Legend
+  // The Counter tactic sets how readily (rarely / when it is on / always); losing pushes towards always (all in when
+  // losing late), winning late towards rarely and fewer runners (the others keep the lead safe).
+  var OPEN_MAX = [0.4, 0.6, 0.8];
+  function counterDecide(t, T, c) {
+    var a = NS.attack(t), players = World.players, behind = 0, inOurHalf = 0, out = 0;
+    var cx = c.pos.x * a;
+    if (cx > HALF_W * 0.45) return 0; // already near their box: a normal attack
     for (var i = 0; i < players.length; i++) {
       var o = players[i];
       if (o.team === t || o.role === 'GK') continue;
       out++;
-      if ((o.pos.x - c.pos.x) * a > 0) n++;
+      if ((o.pos.x - c.pos.x) * a > 0) behind++;
+      if (o.pos.x * a < 0) inOurHalf++;
     }
-    return n <= Math.max(2, Math.round(out * 0.5));
+    if (!out) return 0;
+    var open = behind / out;
+    var cut = cx < HALF_W * 0.15 || inOurHalf >= out * 0.4;
+    var plan = counterPlan(t);
+    var sv = clamp(plan + (T.urgency > 0.25 ? 1 : 0) - (T.caution > 0.5 ? 1 : 0), 0, 2);
+    var iq = T.iq, lv;
+    if (iq === 0) return sv >= 1 && cut && open <= 0.75 ? 1 : 0;
+    if (iq === 1) {
+      if (sv === 0) lv = open <= 0.4 ? 2 : 0;
+      else lv = cut || open <= 0.5 ? 2 : 0;
+    } else {
+      if (!cut && sv < 2) return 0;
+      if (open > OPEN_MAX[sv]) return 0;
+      lv = open <= OPEN_MAX[sv] * 0.6 || T.urgency > 0.5 || sv === 2 ? 2 : 1;
+    }
+    if (lv === 2 && T.caution > 0.5 && plan < 2) lv = 1; // winning late: a few go, the rest stays
+    return lv;
+  }
+
+  // they have got enough men back: more of them goal-side of the ball than our players up there (plus a margin: two\n  // on a counter with everyone, three on a quick break, which only ever has a few)
+  function counterClosed(t, margin) {
+    var a = NS.attack(t), players = World.players, bx = World.ball.pos.x, them = 0, us = 0;
+    for (var i = 0; i < players.length; i++) {
+      var o = players[i];
+      if (o.role === 'GK') continue;
+      var ahead = (o.pos.x - bx) * a;
+      if (o.team === t) { if (ahead > -2) us++; } else if (ahead > 0) them++;
+    }
+    return them >= us + margin;
   }
 
   function momentOf(t, T, owner) {
@@ -443,7 +513,7 @@
       if (gdx * gdx + gdz * gdz < 900) T.pressN = Math.max(T.pressN, 2);
     }
     if (T.has) {
-      if (T.wonT < 4 && T.countering) T.moment = M_COUNTER;
+      if (T.cntLevel) T.moment = M_COUNTER;
       else if (T.wonT < 1.2 && iq >= 1) T.moment = M_SECURE;
       else T.moment = bx < -HALF_W / 3 ? M_BUILD : (bx > HALF_W / 3 ? M_FINAL : M_PROG);
     } else {
@@ -468,7 +538,7 @@
     for (i = 0; i < players.length; i++) {
       p = players[i];
       if (p.team !== t || p.role === 'GK') continue;
-      SH_P.push(p); p.slRest = 0; p.slPick = false; n++;
+      SH_P.push(p); p.slRest = 0; p.slPick = false; p.cntRun = 0; n++;
     }
     if (n < 3) return;
     var am = moodOf(t, 2), dm = moodOf(t, 0), M = T.moment;
@@ -477,7 +547,11 @@
     if (T.iq === 0) { rest = 0; for (i = 0; i < n; i++) if (SH_P[i].role === 'DEF') rest++; rest = clamp(rest, 1, n - 2); }
     else {
       rest = n >= 8 ? 5 : (n >= 5 ? 3 : 1); // (11-a-side 3+2; 7-a-side 2+1)
-      rest += (dm < 0 ? 1 : 0) + (am < 0 ? 1 : 0) - (am > 0 ? 1 : 0) - (T.urgency > 0.5 ? 1 : 0) + (T.caution > 0.5 ? 1 : 0) - (M === M_COUNTER ? 1 : 0);
+      rest += (dm < 0 ? 1 : 0) + (am < 0 ? 1 : 0) - (am > 0 ? 1 : 0) - (T.urgency > 0.5 ? 1 : 0) + (T.caution > 0.5 ? 1 : 0);
+      // a counter with everyone: only the last two (Normal) or three (Hard, Legend) stay; 7-a-side two (one when losing late)
+      if (M === M_COUNTER && T.cntLevel === 2) {
+        rest = (n >= 8 ? 2 + (T.iq >= 2 ? 1 : 0) : 2) + (T.caution > 0.5 ? 1 : 0) - (T.urgency > 0.5 ? 1 : 0);
+      }
       rest = clamp(rest, 1, n - 2);
     }
     var back = rest >= 6 ? 4 : (rest >= 4 ? 3 : rest);
@@ -533,6 +607,7 @@
     var oppMidA = on ? omid / on : lineA - 14;
     if (oppMidA > lineA - 6) oppMidA = lineA - 6;
     var between = clamp((lineA + oppMidA) / 2, -HALF_W + 12, lim);
+    if (M === M_COUNTER && T.cntLevel) counterRunners(T, a, bxA, bz, lim);
     SH_A.sort(byHomeZ);
     var k2 = SH_A.length, wa = HALF_H - 5, nonWide = 0;
     var lz = SH_L;
@@ -546,9 +621,18 @@
       var z = lz[j], wide = Math.abs(z) > HALF_H * 0.6, high;
       if (wide) high = true;
       else { high = nonWide === 1 ? true : (q % 2 === 1); q++; }
+      if (p.cntRun) continue; // (a counter runner: his lane is set)
       var xa;
       var mid = M === M_BUILD ? Math.min(between, bxA + 22) : between;
-      if (M === M_COUNTER) xa = high ? lim : Math.max(bxA + 10, mid);
+      if (M === M_COUNTER && T.cntLevel === 2) {
+        // following the counter just behind the ball: a pass back, a cut-back, the second ball
+        xa = Math.min(bxA + 5, lim - 4);
+        z = (k2 > 1 ? (j < k2 / 2 ? -1 : 1) * HALF_H * 0.28 : 0) + bz * 0.3;
+        p.slX = a * clamp(xa, -HALF_W + 10, HALF_W - 6);
+        p.slZ = clamp(z, -HALF_H + 3, HALF_H - 3);
+        continue;
+      }
+      if (M === M_COUNTER) xa = wide ? Math.min(Math.max(bxA + 8, mid), lim) : (high ? lim : mid); // (a quick break: the others as usual)
       else if (M === M_BUILD) xa = wide ? Math.min(bxA + 16, lim) : (high ? lim : mid);
       else if (M === M_SECURE) xa = wide ? Math.min(bxA + 5, lim) : (high ? lim : mid);
       else if (M === M_FINAL) xa = wide ? lim - 1 : (high ? lim : (z * bz > 0 || nonWide < 3 ? mid : lim - 0.5));
@@ -557,6 +641,30 @@
       if (!wide) z += bz * 0.18;
       p.slX = a * clamp(xa, -HALF_W + 10, HALF_W - 6);
       p.slZ = clamp(z, -HALF_H + 3, HALF_H - 3);
+    }
+  }
+
+  // A counter's runners: the most advanced attackers (three when everyone goes, two on a quick break) sprint in three
+  // lanes, both channels and the middle (the middle one on the far side from the ball), on their last line; each keeps
+  // his side (sorted by where they are now, nobody crosses). Sets their slot and p.cntRun.
+  var SH_C = [];
+  function byAhead(u, v) { return v.ahead - u.ahead; }
+  function byPosZ(u, v) { return u.pos.z - v.pos.z; }
+  function counterRunners(T, a, bxA, bz, lim) {
+    var i, p, n = SH_A.length;
+    for (i = 0; i < n; i++) { p = SH_A[i]; p.cntRun = 0; p.ahead = p.pos.x * a + (p.role === 'FWD' ? 6 : 0); }
+    SH_A.sort(byAhead);
+    var nr = Math.min(T.cntLevel === 2 ? 3 : 2, n);
+    SH_C.length = 0;
+    for (i = 0; i < nr; i++) SH_C.push(SH_A[i]);
+    SH_C.sort(byPosZ);
+    var side = bz > 0 ? -1 : 1;
+    for (i = 0; i < nr; i++) {
+      p = SH_C[i];
+      p.cntRun = 1;
+      var z = nr === 3 ? [-0.45, side * 0.08, 0.45][i] : (nr === 2 ? (i ? 0.3 : -0.3) : side * 0.1);
+      p.slX = a * clamp(lim, -HALF_W + 10, HALF_W - 6);
+      p.slZ = clamp(z * HALF_H, -HALF_H + 3, HALF_H - 3);
     }
   }
 
@@ -699,7 +807,7 @@
       sc = 0.12 + 0.32 * ahead + 0.3 * space + (space > 0.75 && ahead > 0.8 ? 0.12 : 0);
       if (Math.abs(tz) > HALF_H - 3) sc -= 0.35;
       if (tx * a > HALF_W - 3) sc -= 0.35; // not on to the goal line
-      sc += cnt * 0.12 * ahead;
+      sc += cnt * 0.2 * ahead;
       if (pressure < 2.4) sc -= 0.2;
       if (gdist0 < 30 && pressure < 4.5) sc -= 0.12;
       if (p.drX * dx + p.drZ * dz > 0.9) sc += 0.05; // keep a direction once chosen
@@ -748,6 +856,7 @@
         var gain = (sx - px) * a;
         var val = 0.26 + 1.2 * gain / 35 + 0.32 * rspace + 0.5 * shotQuality(sx, sz, p.team) + cnt * 0.3 * gain / 35;
         if (gain < -3 && pressure > 4) val -= 0.1; // nobody on him: no need to go back
+        if (cnt && gain < -2) val -= 0.15;         // a counter does not go backwards
         if (prof.iq >= 1 && rspace <= 0.05) val -= 0.12; // he has a man on him: a pass into traffic
         if (cutback && Math.abs(mt.pos.z) < 10 && Math.abs(a * HALF_W - mt.pos.x) > 6 && Math.abs(a * HALF_W - mt.pos.x) < 17) val += 0.22;
         sc = (1 - risk) * val - risk * loss * 1.5 + (Math.random() - 0.5) * noise;
@@ -775,7 +884,7 @@
           var race = 1 / (1 + Math.exp(-(mateT - oppArrival(lx, lz, p.team) - 0.15) * 5));
           if (race > trisk) trisk = race;
           var tval = 0.32 + 0.5 * (lx - px) * a / 35 + 0.7 * shotQuality(lx, lz, p.team) + ((lx - oppLine) * a > 0 ? 0.25 : 0) +
-            (mt.runT > 0.9 ? 0.15 : 0);
+            (mt.runT > 0.9 ? 0.15 : 0) + cnt * (mt.cntRun ? 0.2 : 0.08); // (a counter: into the runner's path)
           sc = (1 - trisk) * tval - trisk * loss * 1.5 + (Math.random() - 0.5) * noise;
           if (sc > best) { best = sc; bType = ACT.THROUGH; bMate = mt; bx = lx; bz = lz; }
         }
@@ -829,7 +938,11 @@
     }
 
     if (bKind === 'switch' && bType === ACT.LONG) T.switchT = 15;
-    if (NS.dbg) { NS.dbg('cpu_decision', p.team, bType); if (bType === ACT.LONG) NS.dbg('cpu_long_ball_' + bKind, p.team); }
+    if (NS.dbg) {
+      NS.dbg('cpu_decision', p.team, bType);
+      if (bType === ACT.LONG) NS.dbg('cpu_long_ball_' + bKind, p.team);
+      if (cnt && bType === ACT.SHOOT) NS.dbg('counter_attack_shots', p.team);
+    }
     if (bType === -2 && Math.abs(-a * HALF_W - px) < 8 && Math.abs(pz) > 8 && pressure < 1.6 && Math.random() < 0.35) {
       // pinned on his own goal line: he hacks it behind for a corner rather than lose it there
       Actions.release(p, ACT.LONG);
@@ -912,7 +1025,10 @@
     if (p.drX === 0 && p.drZ === 0) { p.drX = a; p.drZ = 0; }
 
     var pressure = oppDist(p.pos.x, p.pos.z, p.team);
-    var speed = (pressure < 4 ? 8.8 : 9.8) * prof.speedMul;
+    var Tc = TEAMS[p.team];
+    var counter = Tc.moment === M_COUNTER;
+    // (on a counter with room in front of him he runs with it at pace)
+    var speed = (pressure < 4 ? 8.8 : (counter ? 10.4 : 9.8)) * prof.speedMul;
     // stay on the pitch: steer away from the touchlines and the goal lines, looking where he will be in half a second
     var dx = p.drX, dz = p.drZ;
     var fz = p.pos.z + p.vel.z * 0.5, fx = p.pos.x + p.vel.x * 0.5;
@@ -941,6 +1057,7 @@
 
     p.aiCd -= dt;
     if (pressure < 2.2 && p.aiCd > prof.react * 0.5) p.aiCd = prof.react * 0.5; // a defender arrives: think faster
+    if (counter && p.aiCd > prof.react * 0.6) p.aiCd = prof.react * 0.6;          // a counter: look up quickly
     if (p.aiCd > 0) return;
     p.aiCd = prof.react + Math.random() * 0.12;
     decide(p, prof);
@@ -1058,7 +1175,8 @@
 
       if (p.runT > 0) {
         p.tgtX = p.runX; p.tgtZ = p.runZ; p.tgtS = 12;
-      } else if ((p === T.sup1 || (p === T.sup2 && (T.iq === 0 || !carrierFree))) && supportNear(p, carrier)) {
+      } else if ((p === T.sup1 || (p === T.sup2 && (T.iq === 0 || !carrierFree))) && supportNear(p, carrier) &&
+          !(T.moment === M_COUNTER && (p.cntRun || carrierFree))) {
         // offer a passing angle near the carrier (the nearest one short, the second one further)
         var bestS = -1e9, sx = p.pos.x, sz = p.pos.z;
         // (the second one only ahead of the ball or level: one safe option behind is enough)
@@ -1081,7 +1199,8 @@
         // the team's shape for this moment (lanes, staggering, rest defence)
         shapeTarget(p, T, carrier);
         var sdx = p.tgtX - p.pos.x, sdz = p.tgtZ - p.pos.z;
-        p.tgtS = T.moment === M_COUNTER && !p.slRest ? 11 : (sdx * sdx + sdz * sdz > 64 ? 10 : 8.6);
+        // a counter: the runners sprint flat out, the ones following run hard
+        p.tgtS = T.moment === M_COUNTER && !p.slRest ? (p.cntRun ? 11.8 : 10.6) : (sdx * sdx + sdz * sdz > 64 ? 10 : 8.6);
       } else {
         // shape: the formation moved up with the ball, wide players wide, forwards on the offside line (never
         // beyond it), defenders a line behind the ball
@@ -1167,8 +1286,11 @@
       moveToward(p, tx, tz, (d > 4 ? 10.8 : 8.6) * prof.speedMul, dt);
       return;
     }
+    // they are countering and he is not goal-side of the ball: a recovery sprint (Easy only jogs back faster)
+    var recover = TEAMS[1 - p.team].moment === M_COUNTER && (p.pos.x - ball.pos.x) * a > -1;
+    var rs = recover ? (T.iq ? 11 : 9.8) : 0;
     if (p === T.cover) {
-      moveToward(p, c.pos.x + gx * 6.5, c.pos.z * 0.85 + gz * 6.5, 9.6 * prof.speedMul, dt);
+      moveToward(p, c.pos.x + gx * 6.5, c.pos.z * 0.85 + gz * 6.5, Math.max(9.6, rs) * prof.speedMul, dt);
       return;
     }
     var o = p.mark;
@@ -1184,12 +1306,12 @@
       var mx = o.pos.x + ox / ol * tight + bxv / bl * 0.45 + o.vel.x * 0.2;
       var mz = o.pos.z + oz / ol * tight + bzv / bl * 0.45 + o.vel.z * 0.2;
       var fast = o.vel.x * o.vel.x + o.vel.z * o.vel.z > 60;
-      moveToward(p, mx, mz, (fast ? 11 : 9.6) * prof.speedMul, dt);
+      moveToward(p, mx, mz, Math.max(fast ? 11 : 9.6, rs) * prof.speedMul, dt);
       return;
     }
     // zonal: one compact block behind the ball
     zoneSpot(p, T, ball);
-    moveToward(p, ZX, ZZ, 9 * prof.speedMul, dt);
+    moveToward(p, ZX, ZZ, Math.max(9, rs) * prof.speedMul, dt);
   }
 
   /* ------------------------------------------------------------------ goalkeeper */
@@ -1371,10 +1493,15 @@
           moveToward(p, p.icX, p.icZ, 10.8 * prof.speedMul, dt);
           return;
         }
-        // loose ball: keep the shape around it (the team that played it: its in-possession places)
-        if (T.has && T.iq >= 1 && p.slX !== undefined) { moveToward(p, p.slX, p.slZ, 9 * prof.speedMul, dt); return; }
+        // loose ball: keep the shape around it (the team that played it: its in-possession places; on a counter the
+        // runners keep sprinting); the team caught open sprints back
+        if (T.has && T.iq >= 1 && p.slX !== undefined) {
+          moveToward(p, p.slX, p.slZ, (T.moment === M_COUNTER && p.cntRun ? 11.8 : 9) * prof.speedMul, dt);
+          return;
+        }
+        var rec = TEAMS[1 - p.team].moment === M_COUNTER && (p.pos.x - ball.pos.x) * attackOf(p) > -1;
         zoneSpot(p, T, ball);
-        moveToward(p, ZX, ZZ, 9 * prof.speedMul, dt);
+        moveToward(p, ZX, ZZ, (rec ? (T.iq ? 11 : 9.8) : 9) * prof.speedMul, dt);
         return;
       }
       if (phase === 1) { attackOffBall(p, T, prof, dt); return; }

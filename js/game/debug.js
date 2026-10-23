@@ -59,6 +59,7 @@
       var how = value.own ? 'own goal' : (sh && sh.team === team ? sh.desc : 'other');
       if (World.ball.pen) how = 'penalty';
       add('goals', team);
+      if (NS.AI && NS.AI.teams && NS.AI.teams[team] && NS.AI.teams[team].cntLevel) add('counter_attack_goals', team);
       if (value.own) add('goals_own_goal_for', team);
       else if (sh && sh.team === team) { add('shot_result_goal', team); add('shots_' + sh.bucket + '_goals', team); sh.done = true; run.shot = null; }
       run.cur.goals.push(value.mins + "' " + sideName(team) + ' ' + (value.who || '?') + ' (' + how + ')');
@@ -383,7 +384,7 @@
     out.push('matches ' + run.done + (run.done < cfg.matches ? ' (stopped, ' + cfg.matches + ' planned)' : '') + ' | ' + cfg.teamSize + ' a side | stadium ' + cfg.stadium +
       ' | ' + cfg.duration + ' min | teams ' + (cfg.teams === 'RANDOM' ? 'random' : run.firstNames.join(' v ')) +
       ' | HOME CPU ' + lvName(cfg.levels[0]) + ' v AWAY CPU ' + lvName(cfg.levels[1]) +
-      ' | tactics home ' + World.session.tactics[0].join('-') + ' away ' + World.session.tactics[1].join('-') + ' (0 def 1 bal 2 att: defence-midfield-attack)');
+      ' | tactics home ' + World.session.tactics[0].join('-') + ' away ' + World.session.tactics[1].join('-') + ' (defence-midfield-attack: 0 def 1 bal 2 att; counter: 0 rarely 1 when on 2 always)');
     out.push('results: home won ' + w0 + ', drawn ' + dr + ', away won ' + w1 + ' | goals home ' + g0 + ' away ' + g1 +
       ' | ' + ((g0 + g1) / n).toFixed(2) + ' goals per match');
     out.push('');

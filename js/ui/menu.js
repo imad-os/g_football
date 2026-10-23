@@ -757,14 +757,15 @@
       forms.appendChild(b);
     });
     top.appendChild(forms);
-    // tactics: what each block (defence, midfield, attack) is told to do; confirm cycles defensive / balanced / attacking
+    // tactics: what each block (defence, midfield, attack) is told to do; confirm cycles defensive / balanced / attacking;
+    // the 4th: counter-attacks (rarely / when it is on / always)
     var tac = el('div', 'row');
     tac.appendChild(el('span', 'muted', T('tac.title')));
     refs.tacBtns = [];
-    [0, 1, 2].forEach(function (b) {
+    [0, 1, 2, 3].forEach(function (b) {
       var bt = btn('tac', '', 'tac:' + b, function () {
         var row = World.session.tactics[World.session.editingSquadIdx];
-        row[b] = (row[b] + 1) % 3;
+        row[b] = ((row[b] === undefined ? 1 : row[b]) + 1) % 3;
         renderGamePlan('tac:' + b);
       });
       refs.tacBtns.push(bt);
@@ -934,8 +935,9 @@
     for (var i = 0; i < fb.length; i++) fb[i].classList.toggle('sel', fb[i].getAttribute('data-form') === formKey);
     refs.gpTitle.textContent = teamObj.name + ' (' + formKey + ')';
     var trow = s.tactics[idx], hint = [];
-    for (var tb = 0; tb < 3; tb++) {
-      refs.tacBtns[tb].textContent = T('tac.b' + tb) + ': ' + T('tac.m' + trow[tb]);
+    if (trow[3] === undefined) trow[3] = 1;
+    for (var tb = 0; tb < 4; tb++) {
+      refs.tacBtns[tb].textContent = T('tac.b' + tb) + ': ' + T((tb === 3 ? 'tac.c' : 'tac.m') + trow[tb]);
       for (var mk = 0; mk < 3; mk++) refs.tacBtns[tb].classList.toggle('m' + mk, trow[tb] === mk);
       hint.push(T('tac.h' + tb + trow[tb]));
     }

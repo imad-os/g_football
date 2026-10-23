@@ -917,6 +917,12 @@
   // a training's time limit
   Object.assign(D.en, { 'dbg.hours': 'Stop after (hours)', 'aima.tr.nolimit': 'No limit' });
   // what each tactics choice makes the CPU do (Game plan)
+  Object.assign(D.en, { 'tac.b3': 'Counter', 'tac.c0': 'Rarely', 'tac.c1': 'When on', 'tac.c2': 'Always',
+    'tac.h30': 'Counter: only when they are wide open', 'tac.h31': 'Counter: when we break up their attack', 'tac.h32': 'Counter: every ball won goes forward fast' });
+  Object.assign(D.fr, { 'tac.b3': 'Contre', 'tac.c0': 'Rarement', 'tac.c1': 'Si possible', 'tac.c2': 'Toujours',
+    'tac.h30': 'Contre : seulement s\'ils sont tres ouverts', 'tac.h31': 'Contre : quand on casse leur attaque', 'tac.h32': 'Contre : chaque ballon gagne part vite devant' });
+  Object.assign(D.es, { 'tac.b3': 'Contra', 'tac.c0': 'Rara vez', 'tac.c1': 'Si se puede', 'tac.c2': 'Siempre',
+    'tac.h30': 'Contra: solo si estan muy abiertos', 'tac.h31': 'Contra: al cortar su ataque', 'tac.h32': 'Contra: cada balon ganado sale rapido' });
   Object.assign(D.en, { 'tac.h00': 'Defence: low block, protects the box', 'tac.h01': 'Defence: mid block around halfway', 'tac.h02': 'Defence: high press in their half',
     'tac.h10': 'Midfield: only the nearest presses', 'tac.h11': 'Midfield: presses on triggers, counter-presses a lost ball', 'tac.h12': 'Midfield: an extra presser',
     'tac.h20': 'Attack: one more stays behind the ball, fewer runs', 'tac.h21': 'Attack: runs in behind and into the box', 'tac.h22': 'Attack: one more goes forward, more runs' });

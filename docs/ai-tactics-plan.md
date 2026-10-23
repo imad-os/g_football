@@ -163,6 +163,22 @@ The slot is a **target zone**, not a spot: each player then picks the best point
       far side / the forward
 - [ ] the keeper is an outlet in BUILD and joins the 3-2
 
+## Step 5b — counter-attacks  · release 1.28.0
+
+- [x] a **Counter** tactic (Game plan, 4th button): Rarely / When on (default) / Always
+- [x] the decision when the ball is won, from the level: Easy a quick break with the forwards; **Normal the standard:
+      every attack of theirs broken up becomes a counter with everyone** but the last two; Hard / Legend only when the
+      opponents are open, with everyone or a quick break, depending on how open
+- [x] match situation: losing pushes towards Always (all in when losing late), winning late sends fewer and keeps more back
+- [x] runners in three lanes (both channels, the middle on the far side from the ball), followers just behind the ball,
+      the carrier runs with it, decides quickly, plays forward into the runners' path, never backwards
+- [x] a counter lasts while the ball goes forward; ends when it stalls, after 10 s, on a lost ball, or when they got back
+- [x] the team caught open sprints back goal-side (recovery runs)
+- [x] debug: counters started (everyone / quick break), how they ended, counter shots and goals
+
+Measured (3 min, 11-a-side): Normal v Normal about 20 counters per team per match, about a third of the goals from
+counters; Legend 8-9 (half quick breaks); Rarely v Always (Legend) 1 v 13 per match; Easy about 1.
+
 ## Step 6 — levels and tactics  · release 1.31.0
 
 What each level understands (speed / accuracy stay as now; this is about the brain):

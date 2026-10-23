@@ -201,7 +201,7 @@
       awayTeamId: 'RCA',
       formations: ['4-4-2', '4-4-2'], // both sides alike by default (4-3-3 is a strong attacking choice in 7-a-side)
       // Tactics per block (defence, midfield, attack): 0 defensive, 1 balanced, 2 attacking
-      tactics: [[1, 1, 1], [1, 1, 1]],
+      tactics: [[1, 1, 1, 1], [1, 1, 1, 1]], // defence, midfield, attack (0 defensive, 1 balanced, 2 attacking), counter (0 rarely, 1 when on, 2 always)
       awayCategory: 'LEAGUE_MAR', // the away side's league / group on the Teams screen
       rosters: [[], []],
       editingSquadIdx: 0,

@@ -277,6 +277,16 @@ The game plan shows every player's overall rating and the six bars of the select
 * **Out of possession**: a compact block (lines a fixed gap apart, narrow, shifted to the ball side), man-marking only in
   a player's own zone, pressing triggers (a pass back, the carrier facing his own goal, the ball near the touchline, the
   keeper), a second man closing the shooter near the box, counter-pressing with 1-3 players for 2-3 s.
+* **Counter-attacks** (1.28.0): when a team wins the ball, the level, the **Counter** tactic (Game plan: Rarely / When on
+  / Always), the score and the time decide whether it breaks. EASY: a quick break with the forwards when it breaks up an
+  attack. NORMAL (the standard): every attack of theirs it breaks up becomes a counter with **everyone** but the last two
+  (two in 7-a-side). HARD / LEGEND: only when the opponents are open, with everyone or a quick break of two or three,
+  depending on how open. Losing pushes towards Always (all in when losing late); winning late sends fewer and keeps more
+  back. The runners sprint in three lanes (both channels and the middle) on the last line, the others follow just behind
+  the ball, the carrier runs with it, looks up quickly and plays forward (into the runners' path), never backwards. A
+  counter lasts while the ball keeps going forward: it ends when it stalls, after 10 s, when the ball is lost, or (HARD /
+  LEGEND) when the opponents have got enough men back. The team caught upfield sprints back goal-side. The debug report
+  counts counters started (everyone / quick break), how they ended, and their shots and goals.
 * **Never off the pitch**: every CPU target is inside the lines, the carrier looks ahead and turns along a line, nobody
   jogs on over the line after a ball going out.
 * **Ball carrier** scores every option: dribble in 5 directions, short pass / through ball / long ball to each team-mate, or
