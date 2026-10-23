@@ -193,6 +193,28 @@
     return d2 < 14 * 14 && dx * ball.vel.x + dz * ball.vel.z > 0;
   }
 
+  // A ball played to this player (or coming back to him from his own side) on the ground / low: a pass or shot button
+  // pressed now is played first time, without controlling it.
+  function ftComing(p) {
+    var ball = World.ball;
+    if (ball.owner) return false;
+    if (ball.receiver === p) return true;
+    var dx = p.pos.x - ball.pos.x, dz = p.pos.z - ball.pos.z;
+    return ball.lastTouchTeam === p.team && dx * dx + dz * dz < 196 && dx * ball.vel.x + dz * ball.vel.z > 0;
+  }
+  // The ball is within a stride of him and low enough to strike with the foot.
+  function ftReach(p) {
+    var ball = World.ball;
+    if (ball.owner || ball.pos.y > 1.6) return false;
+    var dx = ball.pos.x - p.pos.x, dz = ball.pos.z - p.pos.z;
+    return dx * dx + dz * dz < 4;
+  }
+  // The queued move is played now, straight off the pass / bounce (offside is called first, as for a first touch).
+  function playFirstTime(slot, p, mv, power, pad) {
+    if (Actions.touch(p)) return;
+    fireAttack(slot, p, mv, power * fullCharge(), pad);
+  }
+
   // The ball is at head height, in reach, and this player is the closest one to it.
   function inHeadZone(p) { return Actions.canHead(p); }
 
@@ -327,6 +349,7 @@
       if (!p) return;
       var ball = World.ball;
       if (slot.lockT > 0) slot.lockT -= dt;
+      if (p.ftT > 0) p.ftT -= dt;
 
       var rel = B.relevant();
       var cur = pad.cur & rel;
@@ -358,7 +381,10 @@
           slot.evMove = -1;
           // 1 = with the ball, 3 = a pass / shot button pressed while a ball in the air is right next to us (header
           // only), 2 = everything else without the ball
-          slot.evCtx = has ? 1 : (airComing(p) && B.resolve(1, held) >= 0 ? 3 : 2);
+          var fm = has ? -1 : B.resolve(1, held);
+          if (fm === I_ONETWO) fm = -1;
+          slot.evCtx = has ? 1 : (fm >= 0 && airComing(p) ? 3 : (fm >= 0 && ftComing(p) ? 4 : 2));
+          slot.ftPow = 0;
           slot.evPlayer = p;
           slot.evSettle = B.needsSettle(held) ? 0.06 : 0;
         }
@@ -401,6 +427,30 @@
             endEvent(slot);
             p = slot.player;
             has = false;
+          } else if (ftReach(p)) {
+            // a dropping ball at foot height: volley it
+            playFirstTime(slot, p, mv, Math.min(1, slot.evT / fullCharge()), pad);
+            endEvent(slot);
+            p = slot.player;
+            has = ball.owner === p;
+          }
+        } else if (slot.evCtx === 4) {
+          // a first-time pass / shot: the press is kept until the ball is in reach (the hold so far is its power, even
+          // if the button is let go before)
+          mv = B.resolve(1, slot.evMask);
+          if (mv < 0) mv = I_LOW;
+          if (!ended) slot.ftPow = Math.min(1, slot.evT / fullCharge());
+          slot.chargeMove = mv;
+          slot.chargeFrac = slot.ftPow > 0.06 ? slot.ftPow : -1;
+          if (ball.owner || !ftComing(p) || slot.evT > 2.5) {
+            endEvent(slot);
+          } else if (ftReach(p)) {
+            playFirstTime(slot, p, mv, slot.ftPow, pad);
+            endEvent(slot);
+            p = slot.player;
+            has = ball.owner === p;
+          } else {
+            p.ftT = 0.2; // he does not take the ball in the meantime
           }
         } else if (has) {
           endEvent(slot);
@@ -524,11 +574,10 @@
       // height when a header was asked for). The stick is ignored until somebody has the ball.
       if (!has && receiving(p)) {
         var chase = slot.knockT > 0 ? 14.4 : 0; // his own knock-on: flat out after it
-        // a through ball: he runs on towards the goal into the space and waits for it there (he never drops back to
-        // meet a ball that comes from behind him)
-        var thruRun = ball.thru && ball.receiver === p && (p.pos.x - ball.pos.x) * NS.attack(p.team) > 0;
-        if (thruRun) { World.icX = ball.thruX; World.icZ = ball.thruZ; }
-        else World.intercept(p, chase || (sprint ? 12.5 : 11), slot.evActive && slot.evCtx === 3 ? 3.1 : 1.9);
+        // a through ball: he meets it as usual, but where meeting it would take him back towards his own goal he runs on
+        // into the space instead and lets it come
+        World.intercept(p, chase || (sprint ? 12.5 : 11), slot.evActive && slot.evCtx === 3 ? 3.1 : 1.9);
+        if (ball.thru && ball.receiver === p && (World.icX - p.pos.x) * NS.attack(p.team) < 0) { World.icX = ball.thruX; World.icZ = ball.thruZ; }
         var ix = World.icX - p.pos.x;
         var iz = World.icZ - p.pos.z;
         var il = Math.sqrt(ix * ix + iz * iz);
