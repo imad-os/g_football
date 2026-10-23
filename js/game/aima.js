@@ -1929,7 +1929,7 @@
       return getBrain(id).then(function (b) { b.log('renamed', { from: b.name, to: name }); b.name = name; saveBrain(b); return b; });
     },
     remove: function (id) {
-      if (id === index.active || index.brains.length < 2) return false;
+      if (id === index.active || index.brains.length < 2 || Aima.inUse(id)) return false;
       index.brains = index.brains.filter(function (e) { return e.id !== id; });
       delete loaded[id];
       cloudDelete('b_' + id);
@@ -1950,7 +1950,7 @@
     // a new brain size: a new network (it starts again from zero, its settings and history stay)
     setSize: function (size, b) {
       b = b || active;
-      if (!SIZES[size] || (!LOCAL_SIZES[size] && !cloudCfg())) return false;
+      if (!SIZES[size] || (!LOCAL_SIZES[size] && !cloudCfg()) || Aima.inUse(b.id)) return false;
       b.build(size);
       b.st = freshStats();
       b.log('size', { v: size });
@@ -1960,6 +1960,7 @@
     sizeNeedsCloud: function (size) { return !LOCAL_SIZES[size]; },
     reset: function (b) {
       b = b || active;
+      if (Aima.inUse(b.id)) return;
       b.init();
       b.st = freshStats();
       b.memN = 0; b.memI = 0;
@@ -2132,6 +2133,18 @@
       for (i = 0; i < jobs.length; i++) if (jobs[i].kind === 'rec' && (jobs[i].state === 'running' || jobs[i].state === 'loading')) return true;
       return false;
     },
+    // a brain a learning from data is changing right now (it cannot be reset, resized or deleted meanwhile)
+    inUse: function (id) {
+      for (var i = 0; i < jobs.length; i++) {
+        var J = jobs[i];
+        if (J.kind === 'learn' && (J.state === 'running' || J.state === 'loading') && J.cfg.brain === id) return true;
+      }
+      for (i = 0; i < sessions.length; i++) {
+        var S = sessions[i];
+        if ((S.state === 'running' || S.state === 'loading') && (S.cfg.brain === id || S.cfg.opp === 'B:' + id)) return true;
+      }
+      return false;
+    },
     // anything is running: a training, a recording, or learning from data (the green dot)
     busy: function () {
       if (Aima.training()) return true;
@@ -2210,7 +2223,7 @@
     },
     // cfg: { brain: id, sets: [id], passes, hours }
     startLearn: function (cfg) {
-      if (!trainer || !cfg.sets.length) return null;
+      if (!trainer || !cfg.sets.length || Aima.inUse(cfg.brain)) return null;
       var meta = findSet(cfg.sets[0]);
       if (!meta || meta.F !== F) return null;
       var J = { id: ++jobSeq, kind: 'learn', cfg: cfg, setName: meta.name, state: 'loading', started: Date.now(), steps: 0, learnt: 0, total: 0,

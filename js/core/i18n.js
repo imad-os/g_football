@@ -916,6 +916,9 @@
 
   // a training's time limit
   Object.assign(D.en, { 'dbg.hours': 'Stop after (hours)', 'aima.tr.nolimit': 'No limit' });
+  Object.assign(D.en, { 'aima.c.all': 'ALL BRAINS', 'aima.inuse': 'in use (training / learning)', 'aima.sel': 'Show' });
+  Object.assign(D.fr, { 'aima.c.all': 'TOUS LES CERVEAUX', 'aima.inuse': 'utilise (entrainement)', 'aima.sel': 'Voir' });
+  Object.assign(D.es, { 'aima.c.all': 'TODOS LOS CEREBROS', 'aima.inuse': 'en uso (entrenamiento)', 'aima.sel': 'Ver' });
   Object.assign(D.fr, { 'dbg.hours': 'Arret apres (heures)', 'aima.tr.nolimit': 'Sans limite' });
   Object.assign(D.es, { 'dbg.hours': 'Parar tras (horas)', 'aima.tr.nolimit': 'Sin limite' });
 

@@ -107,6 +107,15 @@
     if (!list.length) return;
     if (!focused || list.indexOf(focused) < 0) { focusDefault(); return; }
     var r = focused.getBoundingClientRect();
+    if (dir === 2 || dir === 3) {
+      // the focused button was scrolled out of view: go on from the edge of the view
+      var vs = scroller(focused);
+      if (vs) {
+        var vr = vs.getBoundingClientRect();
+        if (r.bottom < vr.top) r = { left: r.left, right: r.right, top: vr.top, bottom: vr.top };
+        else if (r.top > vr.bottom) r = { left: r.left, right: r.right, top: vr.bottom, bottom: vr.bottom };
+      }
+    }
     var cx = (r.left + r.right) / 2;
     var cy = (r.top + r.bottom) / 2;
     var best = null;
@@ -140,7 +149,31 @@
     }
     // same row / column first; otherwise the closest element in that direction
     if (bestOverlap) best = bestOverlap;
+    // up / down: a list longer than the screen is read by scrolling first (text between the buttons has no button to land on)
+    if ((dir === 2 || dir === 3) && scrollStep(focused, dir === 3 ? 1 : -1, best)) return;
     if (best) setFocus(best);
+  }
+
+  // the nearest ancestor that scrolls vertically
+  function scroller(node) {
+    for (var n = node.parentNode; n && n !== document.body && n.nodeType === 1; n = n.parentNode) {
+      var oy = getComputedStyle(n).overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight + 2) return n;
+    }
+    return null;
+  }
+  // scrolls the focused item's list a page-step when there is more of it that way and the next button is not in view; true = scrolled
+  function scrollStep(from, sign, next) {
+    var sc = scroller(from);
+    if (!sc) return false;
+    var room = sign > 0 ? sc.scrollHeight - sc.clientHeight - sc.scrollTop : sc.scrollTop;
+    if (room < 2) return false;
+    if (next && sc.contains(next)) {
+      var cr = sc.getBoundingClientRect(), nr = next.getBoundingClientRect();
+      if (nr.top >= cr.top && nr.bottom <= cr.bottom) return false; // the next button is in view: just go to it
+    }
+    sc.scrollTop += sign * Math.max(40, Math.round(sc.clientHeight * 0.6));
+    return true;
   }
 
   /* ------------------------------ screens ------------------------------ */
@@ -1387,6 +1420,7 @@
     list.appendChild(cols);
 
     if (!trainer) return;
+    // every brain, each with its own buttons (the name box is used by Rename, Clone and New brain)
     var act = el('div', 'row aima-actions');
     var name = document.createElement('input');
     name.className = 'aima-code';
@@ -1394,40 +1428,46 @@
     name.maxLength = 24;
     act.appendChild(name);
     function nm() { return name.value.trim().slice(0, 24); }
-    if (brainSel !== A.activeId()) {
-      act.appendChild(btn('primary', T('aima.use'), 'ai:use', function () {
-        A.use(brainSel).then(function (b) { aimaMsg = T('aima.used') + ' ' + b.name; again('ai:use'); });
-      }));
-    }
     act.appendChild(btn('', T('aima.sub.settings'), 'ai:brset', function () {
       aimaSub = 'settings'; aimaMsg = ''; aimaConfirm = '';
       again('as:settings');
-    }));
-    act.appendChild(btn('', T('aima.clone'), 'ai:clone', function () {
-      var src = A.loadedBrain(brainSel);
-      A.clone(brainSel, nm() || (src ? src.name + ' 2' : 'checkoAI 2')).then(function (b) {
-        selectBrain(b.id); aimaMsg = T('aima.cloned') + ' ' + b.name; again('ai:clone');
-      });
-    }));
-    act.appendChild(btn('', T('aima.rename'), 'ai:rename', function () {
-      if (!nm()) { aimaMsg = T('aima.needname'); again('ai:rename'); return; }
-      A.rename(brainSel, nm()).then(function () { aimaMsg = T('aima.renamed'); again('ai:rename'); });
     }));
     act.appendChild(btn('', T('aima.newbrain'), 'ai:new', function () {
       var b = A.create(nm() || 'checkoAI ' + (A.brains().length + 1));
       selectBrain(b.id); aimaMsg = T('aima.created') + ' ' + b.name; again('ai:new');
     }));
-    if (brainSel !== A.activeId() && A.brains().length > 1) {
-      act.appendChild(btn('danger', T('aima.delete'), 'ai:del', function () {
-        if (aimaConfirm !== 'del:' + brainSel) { aimaConfirm = 'del:' + brainSel; aimaMsg = T('aima.confirm.del'); again('ai:del'); return; }
-        aimaConfirm = '';
-        A.remove(brainSel);
-        aimaSel = A.activeId();
-        aimaMsg = T('aima.deleted');
-        again('ai:del');
-      }));
-    }
     list.appendChild(act);
+    var ac = aimaCard(T('aima.c.all') + ' (' + A.brains().length + ')');
+    A.brains().forEach(function (e) {
+      var id = e.id, isAct = id === A.activeId(), used = A.inUse(id);
+      var row = el('div', 'aima-brow' + (id === brainSel ? ' sel' : ''));
+      row.appendChild(el('div', 'aima-bname', (isAct ? '★ ' : '') + e.name));
+      row.appendChild(el('div', 'aima-bsub', e.size + '  ·  ' + (e.matches || 0) + ' ' + T('aima.tr.matches') + (used ? '  ·  ' + T('aima.inuse') : '')));
+      var bt = el('div', 'row aima-bbtns');
+      bt.appendChild(btn('', T('aima.sel'), 'ai:s:' + id, function () { selectBrain(id); again('ai:s:' + id); }));
+      if (!isAct) bt.appendChild(btn('primary', T('aima.use'), 'ai:u:' + id, function () {
+        A.use(id).then(function (b) { aimaMsg = T('aima.used') + ' ' + b.name; again('ai:u:' + id); }, function () { aimaMsg = T('aima.loadfail'); again('ai:u:' + id); });
+      }));
+      bt.appendChild(btn('', T('aima.clone'), 'ai:c:' + id, function () {
+        A.clone(id, nm() || e.name + ' 2').then(function (b) { selectBrain(b.id); aimaMsg = T('aima.cloned') + ' ' + b.name; again('ai:c:' + id); },
+          function () { aimaMsg = T('aima.loadfail'); again('ai:c:' + id); });
+      }));
+      bt.appendChild(btn('', T('aima.rename'), 'ai:r:' + id, function () {
+        if (!nm()) { aimaMsg = T('aima.needname'); again('ai:r:' + id); return; }
+        A.rename(id, nm()).then(function () { aimaMsg = T('aima.renamed'); again('ai:r:' + id); }, function () { aimaMsg = T('aima.loadfail'); again('ai:r:' + id); });
+      }));
+      if (!isAct && !used && A.brains().length > 1) {
+        bt.appendChild(btn('danger', T('aima.delete'), 'ai:d:' + id, function () {
+          if (aimaConfirm !== 'del:' + id) { aimaConfirm = 'del:' + id; aimaMsg = T('aima.confirm.del') + ' (' + e.name + ')'; again('ai:d:' + id); return; }
+          aimaConfirm = '';
+          if (A.remove(id)) { if (aimaSel === id) aimaSel = A.activeId(); aimaMsg = T('aima.deleted'); } else aimaMsg = T('aima.inuse');
+          again('ai:d:' + id);
+        }));
+      }
+      row.appendChild(bt);
+      ac.appendChild(row);
+    });
+    list.appendChild(ac);
   }
 
   function trName(id) {
