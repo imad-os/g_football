@@ -118,11 +118,13 @@
       return ok;
     };
     A.header = function (p, shot, type) {
-      add(shot ? 'header_at_goal' : (type === ACT.LONG ? 'header_long' : 'header_pass'), p.team);
+      var before = run.shot;
       run.headChain++;
       if (run.headChain === 3) { add('header_chains_3_or_more', p.team); note('header chain (3+ headers in a row)'); }
       var r = orig.header.apply(this, arguments);
-      if (shot && run.shot) run.shot.desc = 'header ' + run.shot.desc.split(' ')[1];
+      var atGoal = !!run.shot && run.shot !== before; // (from too far out it became a long header)
+      if (atGoal) run.shot.desc = 'header ' + run.shot.desc.split(' ')[1];
+      add(atGoal ? 'header_at_goal' : (shot || type === ACT.LONG ? 'header_long' : 'header_pass'), p.team);
       return r;
     };
     A.startTackle = function (p, c, human, slide) { add(slide ? 'slide_tackle_attempts' : 'tackle_attempts', p.team); return orig.startTackle.apply(this, arguments); };

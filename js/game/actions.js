@@ -31,6 +31,7 @@
 
   // Human reaction: the seconds a player needs between a ball being played and a controlled header / first touch
   var REACT_HEAD = 0.5;
+  var HEAD_SHOT_MAX = 22;   // metres from the goal a header at goal can come from
   var REACT_TOUCH = 0.38;
 
   function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
@@ -504,6 +505,12 @@
       var attack = NS.attack(p.team);
       var y0 = ball.pos.y;
       if (this.touch(p)) return;
+      // a header carries ~20 m: from further out a "header at goal" is a long headed ball forward
+      var gdx = attack * HALF_W - p.pos.x;
+      if (shot && Math.sqrt(gdx * gdx + p.pos.z * p.pos.z) > HEAD_SHOT_MAX) {
+        shot = false; type = ACT.LONG;
+        if (!(ax * ax + az * az > 0.01) || ax * attack < 0) { ax = attack; az = 0; }
+      }
       this.release(p, shot ? ACT.SHOOT : type);
       ball.headed = true;
       p.kickT = 0;
