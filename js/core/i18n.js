@@ -905,6 +905,10 @@
   Object.assign(D.fr, { 'opt.st.ultra': 'Ultra 200x130' });
   Object.assign(D.es, { 'opt.st.ultra': 'Ultra 200x130' });
 
+  Object.assign(D.en, { 'aima.k.agree': 'Same direction as Legend' });
+  Object.assign(D.fr, { 'aima.k.agree': 'Meme direction que Legend' });
+  Object.assign(D.es, { 'aima.k.agree': 'Misma direccion que Legend' });
+
   var lang = 'en';
 
   NS.I18n = {

@@ -120,6 +120,17 @@
     return dx * dx + dz * dz < 16;
   }
 
+  // A ball in the air on its way to this player: the pass is for him (or he contests it), or it comes towards him
+  // from up to 14 m. A pass / shot button pressed now waits for it at head height (a header), like in FIFA / PES.
+  function airComing(p) {
+    var ball = World.ball;
+    if (ball.owner || (ball.pos.y < 0.9 && ball.vel.y < 2)) return false;
+    if (airNear(p)) return true;
+    var dx = p.pos.x - ball.pos.x, dz = p.pos.z - ball.pos.z, d2 = dx * dx + dz * dz;
+    if (ball.receiver === p || ball.contester === p) return d2 < 40 * 40;
+    return d2 < 14 * 14 && dx * ball.vel.x + dz * ball.vel.z > 0;
+  }
+
   // The ball is at head height, in reach, and this player is the closest one to it.
   function inHeadZone(p) { return Actions.canHead(p); }
 
@@ -276,7 +287,7 @@
           slot.evMove = -1;
           // 1 = with the ball, 3 = a pass / shot button pressed while a ball in the air is right next to us (header
           // only), 2 = everything else without the ball
-          slot.evCtx = has ? 1 : (airNear(p) && B.resolve(1, held) >= 0 ? 3 : 2);
+          slot.evCtx = has ? 1 : (airComing(p) && B.resolve(1, held) >= 0 ? 3 : 2);
           slot.evPlayer = p;
           slot.evSettle = B.needsSettle(held) ? 0.06 : 0;
         }
@@ -305,11 +316,11 @@
           mv = B.resolve(1, slot.evMask);
           if (mv < 0) mv = I_LOW;
           slot.chargeMove = mv;
-          // the ball went away from him (or too long since the press): the press is over, nothing is kept
-          if (!airNear(p) || slot.evT > 0.6) { endEvent(slot); mv = -1; }
+          // the ball no longer comes to him in the air (or too long since the press): the header is off
+          if (!airComing(p) || slot.evT > 1.6) { endEvent(slot); mv = -1; }
           slot.chargeFrac = slot.evT > 0.06 ? Math.min(1, slot.evT / fullCharge()) : -1;
-          // A header happens only while the button is down and the ball is at head height next to him. Nothing is
-          // ever stored for later: released early, or the ball came to his feet = no action (press again to play).
+          // The press is kept (held or not) until the ball is at head height next to him: then he heads it. The ball
+          // came to his feet instead = no action (press again to play).
           if (mv < 0) {
             // ended above
           } else if (has || ball.owner) {
@@ -319,8 +330,6 @@
             endEvent(slot);
             p = slot.player;
             has = false;
-          } else if (ended) {
-            endEvent(slot);
           }
         } else if (has) {
           endEvent(slot);

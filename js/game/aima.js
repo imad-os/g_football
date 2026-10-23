@@ -46,6 +46,9 @@
   var HOLD_CONT = [0.3, 0.8, 1.5];    // press / team press, seconds
   var LR = [0.0003, 0.001, 0.003];
   var TEMP = [0.7, 1.0, 1.4];
+  // playing: his best choice, and now and then (this share of decisions) a choice drawn from his odds to try something
+  // new. Drawing every choice (10 a second) made him turn and pass at random: a 5% press chance = a pass every 2 s.
+  var EPS = [0.02, 0.06, 0.15];
   var CLAP_W = [0.6, 1.0, 1.6];
   var PUNISH = 3.0;         // a punishment: twice a clap's reward, negative
   var HELP = { AUTO: -1, H0: 0, H30: 0.3, H60: 0.6 };
@@ -213,6 +216,20 @@
       prob[i] = e; s += e;
     }
     for (i = 0; i < n; i++) prob[i] /= s;
+  }
+  // the best choice of prob[], or (with chance eps) one drawn from it
+  function pick(n, eps) {
+    if (eps >= 1 || Math.random() < eps) return sample(n);
+    var bi = 0;
+    for (var i = 1; i < n; i++) if (prob[i] > prob[bi]) bi = i;
+    return bi;
+  }
+  var PRESS = 0.3;   // a button is pressed when its odds are above this (drawn from his odds when he tries something new)
+  function pressPick(eps) {
+    if (Math.random() < eps * 0.3) return sample(NBT);
+    var bi = 1;
+    for (var i = 2; i < NBT; i++) if (prob[i] > prob[bi]) bi = i;
+    return prob[bi] > PRESS ? bi : 0;
   }
   function sample(n) {
     var r = Math.random(), i;
@@ -582,19 +599,21 @@
     features(p, xs, b);
     forward(b, xs);
     var temp = TEMP[b.cfg.explore] || 1;
+    var eps = EPS[b.cfg.explore] || EPS[1];
     softmax(O_ST, NST, null, temp);
-    var stk = sample(NST);
+    var stk = pick(NST, eps);
     softmax(O_SP, NSP, null, temp);
-    var spr = sample(NSP);
+    var spr = pick(NSP, eps);
     var btn = -1, pw = -1;
     var ctx = ctxOf(p);
     if (c.holdLeft <= 0) {
       setMask(ctx);
       softmax(O_BT, NBT, bmask, temp);
-      btn = sample(NBT);
+      // a button only when he is fairly sure of it (his best choice would nearly always be "nothing": buttons are rare)
+      btn = pressPick(eps);
       if (btn > 0) {
         softmax(O_PW, NPW, null, temp);
-        pw = sample(NPW);
+        pw = pick(NPW, eps);
         var mv = B.MOVES[btn - 1];
         var full = World.settings.gaugeTime > 0 ? World.settings.gaugeTime : 0.5;
         c.btnMask = mv.mask;
@@ -627,10 +646,17 @@
   function copyCpu(slot, p) {
     var b = slot.brain, c = slot.c;
     var a = NS.attack(p.team);
-    if (b.learns() && c.tBtn === 0) {
+    if (c.tBtn === 0) {
       features(p, xs, b);
       var sp = Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z);
-      remember(b, xs, sp < 1.5 ? 0 : stickClass(p.vel.x, p.vel.z, a), sp > 10.2 ? 1 : 0, 0, -1, ctxOf(p), 0.6);
+      var lab = sp < 1.5 ? 0 : stickClass(p.vel.x, p.vel.z, a);
+      // how well he copies Legend: would his own first choice of direction be the same? (a running average)
+      forward(b, xs);
+      var best = 0;
+      for (var k = 1; k < NST; k++) if (out[O_ST + k] > out[O_ST + best]) best = k;
+      b.st.agree = (b.st.agree || 0) * 0.998 + (best === lab ? 0.002 : 0);
+      b.st.agreeN = (b.st.agreeN || 0) + 1;
+      if (b.learns()) remember(b, xs, lab, sp > 10.2 ? 1 : 0, 0, -1, ctxOf(p), 0.6);
     }
     b.st.cpuSamples++;
     think(slot, p, 0, 0, 0);

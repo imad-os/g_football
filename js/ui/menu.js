@@ -1199,6 +1199,7 @@
     kv(g, T('aima.k.tackles'), String(s.tackles));
     kv(g, T('aima.k.wonlost'), s.won + ' / ' + s.lost);
     kv(g, T('aima.k.fouls'), String(s.fouls));
+    if (s.agreeN > 500) kv(g, T('aima.k.agree'), Math.round(s.agree / (1 - Math.pow(0.998, s.agreeN)) * 100) + '%');
     kv(g, T('aima.k.claps'), s.claps + (s.claps ? '  (' + T('aima.k.avg') + ' ' + pct(s.clapSum / s.claps) + ')' : ''));
     kv(g, T('aima.k.punish'), String(s.punish || 0));
     kv(g, T('aima.k.reward'), String(Math.round(s.reward * 10) / 10));
