@@ -1008,10 +1008,7 @@
     foot.appendChild(btn('', T('set.buttons'), 'mapbtn', function () { show('BUTTONS'); }));
     refs.debugBtn = btn('', T('dbg.open'), 'dbgbtn', function () { show('DEBUG'); });
     foot.appendChild(refs.debugBtn);
-    foot.appendChild(plusKey(btn('primary', T('set.done'), 'done', function () {
-      if (NS.Aima && NS.Aima.training()) return;
-      if (matchRunning()) show('PAUSE'); else show('MAIN');
-    })));
+    // (no "save and return" button: every setting is saved when it is changed; Back / B closes the page, see back())
     wrap.appendChild(foot);
   }
 
