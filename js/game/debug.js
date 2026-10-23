@@ -42,6 +42,12 @@
     run.anomCount[text.split(':')[0]] = (run.anomCount[text.split(':')[0]] || 0) + 1;
   }
   function sideName(t) { return run.cur.names[t]; }
+  // an average over samples (the team's shape): key -> [sum0, sum1, n0, n1]
+  function avg(key, team, v) {
+    var c = run.S[key];
+    if (!c) c = run.S[key] = [0, 0, 0, 0];
+    c[team] += v; c[team + 2]++;
+  }
   function goalX(team) { return NS.attack(team) * NS.PITCH_HALF_W; }
   function bucket(d) { return d <= 12 ? '0-12m' : (d <= 20 ? '12-20m' : (d <= 28 ? '20-28m' : '28m+')); }
 
@@ -58,6 +64,7 @@
       run.cur.goals.push(value.mins + "' " + sideName(team) + ' ' + (value.who || '?') + ' (' + how + ')');
       return;
     }
+    if (kind === 'moment_seconds') { add('moment_' + extra + '_seconds', team, value); return; }
     if (kind === 'cpu_decision') { add('cpu_decision_' + (DEC[value] || ('type' + value)), team); return; }
     if (kind === 'foul_committed') {
       add('fouls_committed', team);
@@ -197,6 +204,32 @@
       run.stillT += STEP;
       if (run.stillT > 8 && run.stillT - STEP <= 8) note('ball did not move 8s in open play: owner ' + (o ? o.name : 'none'));
     }
+    // the shape of both teams, twice a second in open play (with and without the ball)
+    if (live && (run.cur.steps % 30) === 0) shape(o);
+    // players over the lines in open play (the throw-in / corner taker may stand outside)
+    if (live) {
+      for (var q = 0; q < players.length; q++) {
+        var pq = players[q];
+        if (Math.abs(pq.pos.x) > NS.PITCH_HALF_W + 0.5 || Math.abs(pq.pos.z) > NS.PITCH_HALF_H + 0.5) add('time_outside_pitch_seconds', pq.team, STEP);
+      }
+    }
+    // the turnover moment: how many of the team that lost it were behind the ball (rest defence)
+    if (o && run.restOwner >= 0 && o.team !== run.restOwner) {
+      var lt = run.restOwner, la = NS.attack(lt), nb = 0;
+      for (var r = 0; r < players.length; r++) if (players[r].team === lt && players[r].role !== 'GK' && (players[r].pos.x - o.pos.x) * la < 0) nb++;
+      avg('rest_defence_behind_ball_at_loss', lt, nb);
+      run.lostAt[lt] = run.cur.steps;
+    }
+    if (o) {
+      // regained within 5 s
+      if (run.lostAt[o.team] >= 0) {
+        var back = (run.cur.steps - run.lostAt[o.team]) * STEP;
+        if (back <= 5) add('regains_within_5s', o.team);
+        avg('regain_time_seconds', o.team, Math.min(back, 30));
+        run.lostAt[o.team] = -1;
+      }
+      run.restOwner = o.team;
+    }
     // positions that make no sense
     if (isNaN(ball.pos.x) || isNaN(ball.pos.z)) { note('ball position NaN'); run.broken = true; }
     for (var i = 0; i < players.length; i++) {
@@ -208,6 +241,46 @@
       }
       var sp = p.vel.x * p.vel.x + p.vel.z * p.vel.z;
       if (sp > 0.25) add('metres_run', p.team, Math.sqrt(sp) * STEP);
+    }
+  }
+
+  var XS = [], ZS = [];
+  function sorted(arr, n) { var a = arr.slice(0, n); a.sort(function (u, v) { return u - v; }); return a; }
+  function shape(o) {
+    var players = World.players, ball = World.ball, W = NS.PITCH_HALF_H;
+    for (var t = 0; t < 2; t++) {
+      var tag = o ? (o.team === t ? '_with_ball' : '_without_ball') : '';
+      if (!tag) continue;
+      // (a possession of 3 s or more: the shape has had time to form)
+      var TT = NS.AI && NS.AI.teams ? NS.AI.teams[o.team] : null;
+      if (TT && TT.wonT !== undefined && TT.wonT > 3) tag += '_settled';
+      var n = 0, near = 0, a = NS.attack(t), i, p, lanes = 0, flat = 0, dx = [0, 0, 0], dn = [0, 0, 0];
+      for (i = 0; i < players.length; i++) {
+        p = players[i];
+        if (p.team !== t || p.role === 'GK') continue;
+        XS[n] = p.pos.x * a; ZS[n] = p.pos.z; n++;
+        var bx = p.pos.x - ball.pos.x, bz = p.pos.z - ball.pos.z;
+        if (bx * bx + bz * bz < 144) near++;
+        var ri = p.role === 'DEF' ? 0 : (p.role === 'MID' ? 1 : 2);
+        dx[ri] += p.pos.x * a; dn[ri]++;
+      }
+      if (n < 3) continue;
+      var xs = sorted(XS, n), zs = sorted(ZS, n), k = 0; // (every outfield player: the wingers make the width)
+      avg('team_width_m' + tag, t, zs[n - 1 - k] - zs[k]);
+      avg('team_length_m' + tag, t, xs[n - 1 - k] - xs[k]);
+      avg('players_within_12m_of_ball' + tag, t, near);
+      // 3+ team-mates on one row (same x within 2.5 m) or one column (same z within 2.5 m)
+      for (i = 0; i + 2 < n; i++) { if (xs[i + 2] - xs[i] < 2.5) flat++; if (zs[i + 2] - zs[i] < 2.5) flat++; }
+      avg('flat_lines_3_in_a_row_or_column' + tag, t, flat);
+      if (dn[0] && dn[1]) avg('gap_def_to_mid_line_m' + tag, t, dx[1] / dn[1] - dx[0] / dn[0]);
+      if (dn[1] && dn[2]) avg('gap_mid_to_fwd_line_m' + tag, t, dx[2] / dn[2] - dx[1] / dn[1]);
+      if (o.team === t && ball.pos.x * a > NS.PITCH_HALF_W / 3) {
+        // the five vertical lanes taken by players in the attacking half
+        var used = [0, 0, 0, 0, 0];
+        for (i = 0; i < n; i++) if (XS[i] > 0) used[Math.max(0, Math.min(4, Math.floor((ZS[i] + W) / (2 * W) * 5)))] = 1;
+        for (i = 0; i < 5; i++) lanes += used[i];
+        avg('lanes_used_of_5_in_final_third', t, lanes);
+      }
     }
   }
 
@@ -235,6 +308,7 @@
     };
     run.lastOwnerTeam = -1; run.ownerZone = 'middle_third'; run.flips = []; run.pass = null; run.shot = null; run.headChain = 0;
     run.holder = null; run.holdT = 0; run.stillT = 0; run.stillX = 0; run.stillZ = 0;
+    run.restOwner = -1; run.lostAt = [-1, -1];
   }
 
   function endMatch() {
@@ -284,6 +358,12 @@
     later(slice);
   }
 
+  // a level's name; checkoAI with its brain and its Legend help
+  function lvName(l) {
+    if (l !== 'AIMA' || !NS.Aima || !NS.Aima.brain()) return l;
+    var b = NS.Aima.brain();
+    return 'checkoAI "' + b.name + '" (' + b.cfg.size + ', Legend help ' + Math.round(b.help() * 100) + '%)';
+  }
   function pct(a, b) { return b > 0 ? (100 * a / b).toFixed(0) + '%' : '-'; }
   function pad(s, n) { s = String(s); while (s.length < n) s += ' '; return s; }
   function lpad(s, n) { s = String(s); while (s.length < n) s = ' ' + s; return s; }
@@ -302,7 +382,7 @@
     out.push('REAL SOCCER 6 DEBUG REPORT  v' + NS.VERSION + '  ' + new Date().toISOString().slice(0, 16).replace('T', ' '));
     out.push('matches ' + run.done + (run.done < cfg.matches ? ' (stopped, ' + cfg.matches + ' planned)' : '') + ' | ' + cfg.teamSize + ' a side | stadium ' + cfg.stadium +
       ' | ' + cfg.duration + ' min | teams ' + (cfg.teams === 'RANDOM' ? 'random' : run.firstNames.join(' v ')) +
-      ' | HOME CPU ' + cfg.levels[0] + ' v AWAY CPU ' + cfg.levels[1] +
+      ' | HOME CPU ' + lvName(cfg.levels[0]) + ' v AWAY CPU ' + lvName(cfg.levels[1]) +
       ' | tactics home ' + World.session.tactics[0].join('-') + ' away ' + World.session.tactics[1].join('-') + ' (0 def 1 bal 2 att: defence-midfield-attack)');
     out.push('results: home won ' + w0 + ', drawn ' + dr + ', away won ' + w1 + ' | goals home ' + g0 + ' away ' + g1 +
       ' | ' + ((g0 + g1) / n).toFixed(2) + ' goals per match');
@@ -334,6 +414,15 @@
     rate('shoulder challenges won', shw[0], sha[0], shw[1], sha[1]);
     out.push('');
     out.push('EVERY COUNTER, PER MATCH                    HOME      AWAY    (totals home / away)');
+    var sk = Object.keys(run.S).sort();
+    if (sk.length) {
+      out.push('TEAM SHAPE (averages)                      HOME      AWAY');
+      sk.forEach(function (k) {
+        var v = run.S[k];
+        out.push(pad(k, 44) + lpad(v[2] ? (v[0] / v[2]).toFixed(1) : '-', 8) + lpad(v[3] ? (v[1] / v[3]).toFixed(1) : '-', 10));
+      });
+      out.push('');
+    }
     run.order.slice().sort().forEach(function (k) {
       var v = C[k];
       var isSec = k.indexOf('seconds') >= 0 || k === 'metres_run';
@@ -382,7 +471,7 @@
       var s = World.session, st = World.settings;
       saved = { stadium: st.stadium, teamSize: st.teamSize, duration: st.durationMins, sideMode: s.sideMode,
         home: s.homeTeamId, away: s.awayTeamId, comp: s.compActive, exit: NS.Match.exitToMenu };
-      run = { cfg: cfg, C: {}, order: [], log: [], res: [], anomCount: {}, done: 0, cur: null, stop: false, broken: false,
+      run = { cfg: cfg, C: {}, S: {}, order: [], log: [], res: [], anomCount: {}, done: 0, cur: null, stop: false, broken: false,
         onProgress: onProgress, onDone: onDone,
         firstNames: [NS.Teams.byId(s.homeTeamId).code, NS.Teams.byId(s.awayTeamId).code] };
       st.stadium = cfg.stadium; st.teamSize = cfg.teamSize; st.durationMins = cfg.duration;

@@ -1,6 +1,6 @@
 # CPU AI tactics plan (all levels)
 
-Status: plan, nothing built yet. Tick the boxes as releases land. Code lives in `js/game/ai.js` (team brain, carrier,
+Status: built in **1.27.0** (all steps at once; the unticked boxes are what is left). Tick the boxes as releases land. Code lives in `js/game/ai.js` (team brain, carrier,
 off-ball, defence, keeper), shapes in `js/data/formations.js`, checks in `js/game/debug.js`.
 
 ## Why: what the code does today
@@ -54,30 +54,30 @@ Sources: [Coaches' Voice: high press](https://learning.coachesvoice.com/cv/in-fo
 New counters in the debug report, per team, split **with the ball / without the ball**, so every later step is judged
 by numbers, not by eye.
 
-- [ ] `time_outside_pitch` (seconds any player is more than 0.5 m over a line in open play) and who
-- [ ] team **width** and **length** (outfield players, 10th-90th percentile) with / without the ball
-- [ ] **players near the ball** (within 12 m, average) with / without the ball
-- [ ] **lanes occupied** (of 5) in the final third when attacking
-- [ ] **flat lines**: how often 3+ team-mates stand within 3 m of the same x (row) or z (column)
-- [ ] **rest defence**: players behind the ball when we lose it
-- [ ] **distance between lines** (DEF-MID, MID-FWD) without the ball
+- [x] `time_outside_pitch` (seconds any player is more than 0.5 m over a line in open play) and who
+- [x] team **width** and **length** (outfield players, 10th-90th percentile) with / without the ball
+- [x] **players near the ball** (within 12 m, average) with / without the ball
+- [x] **lanes occupied** (of 5) in the final third when attacking
+- [x] **flat lines**: how often 3+ team-mates stand within 3 m of the same x (row) or z (column)
+- [x] **rest defence**: players behind the ball when we lose it
+- [x] **distance between lines** (DEF-MID, MID-FWD) without the ball
 - [ ] **pass options**: team-mates with an open lane at the moment the carrier decides
-- [ ] **regain time**: seconds from losing the ball to winning it back; regains within 5 s
+- [x] **regain time**: seconds from losing the ball to winning it back; regains within 5 s
 - [ ] **PPDA** (opponent passes per defensive action: pressing intensity)
-- [ ] the report header names the brain and its Legend help (for checkoAI)
+- [x] the report header names the brain and its Legend help (for checkoAI)
 
 Targets used below come from these counters. Baseline: run 10 Legend v Legend and 10 Normal v Normal before step 1.
 
 ## Step 1 — never leave the pitch  · release 1.27.0
 
-- [ ] one helper `keepIn(x, z, margin)` used by **every** `moveToward` target (presser, cover, marker, chaser,
+- [x] one helper `keepIn(x, z, margin)` used by **every** `moveToward` target (presser, cover, marker, chaser,
       receiver, runs, keeper), margin about 1 m
-- [ ] the carrier looks ahead (position in 0.4 s from his velocity), not only at his position, before the line; turns
+- [x] the carrier looks ahead (position in 0.4 s from his velocity), not only at his position, before the line; turns
       along the line instead of into it; near a corner flag he cuts back inside
-- [ ] the chaser does not chase a ball that will be out before he gets there (lets it go for the throw / goal kick)
-- [ ] a marker whose man stands off the pitch waits on the line
-- [ ] allowed exceptions only: throw-in taker, corner taker, goal celebrations, walking off for a set piece
-- [ ] the hard limit in `match.js` (411-412) tightened to 1 m past the line for players in open play
+- [x] the chaser does not chase a ball that will be out before he gets there (lets it go for the throw / goal kick)
+- [x] a marker whose man stands off the pitch waits on the line
+- [x] allowed exceptions only: throw-in taker, corner taker, goal celebrations, walking off for a set piece
+- [x] the hard limit in `match.js` (411-412) tightened to 1 m past the line for players in open play
 - **Done when**: `time_outside_pitch` = 0 in 50 matches at every level, no "far outside the pitch" issue.
 
 ## Step 2 — the team knows the moment of the game  · release 1.28.0
@@ -96,8 +96,8 @@ does not flip the whole team back and forth):
 | `HIGH_PRESS` / `MID_BLOCK` / `LOW_BLOCK` | their ball, organised | see step 4 |
 | `LOOSE` | nobody has it | the one who gets there first goes, the rest keep the shape of the moment before |
 
-- [ ] moment machine + hysteresis in `teamUpdate`
-- [ ] debug counter: seconds per moment per team (so we can see a team never builds up, never counters, etc.)
+- [x] moment machine + hysteresis in `teamUpdate`
+- [x] debug counter: seconds per moment per team (so we can see a team never builds up, never counters, etc.)
 
 ## Step 3 — attacking shape: width, depth, lanes, staggering  · release 1.28.0
 
@@ -114,51 +114,51 @@ Each formation gets an **in-possession shape per moment** (a table in `formation
 The slot is a **target zone**, not a spot: each player then picks the best point inside it with a cheap score
 (computed every 0.3 s, no allocation):
 
-- [ ] **space**: who reaches that point first, him or an opponent (a mini pitch-control: arrival times already exist in
+- [x] **space**: who reaches that point first, him or an opponent (a mini pitch-control: arrival times already exist in
       `oppArrival`)
-- [ ] **pass lane open** from the carrier (existing `laneRisk`) and from the next likely carrier
-- [ ] **between the lines** bonus (behind their midfield line, in front of their defence line)
-- [ ] **lane discipline**: penalty for a 3rd player in a lane, for standing within 8 m of a team-mate
-- [ ] **staggering**: penalty for standing on the same row (x) or column (z) as 2 team-mates in the same unit
-- [ ] **width**: the two wide-lane holders stay within 3-5 m of the touchline in PROGRESS / FINAL (never over it, step 1)
-- [ ] **depth**: one player always on the last line (never offside), one dropping short when the carrier is pressed
-- [ ] **rest defence**: 3+2 (attacking plan: 2+2, defensive plan: 3+3) stay behind the ball in their spots, marking the
+- [x] **pass lane open** from the carrier (existing `laneRisk`) and from the next likely carrier
+- [x] **between the lines** bonus (behind their midfield line, in front of their defence line)
+- [x] **lane discipline**: penalty for a 3rd player in a lane, for standing within 8 m of a team-mate
+- [x] **staggering**: penalty for standing on the same row (x) or column (z) as 2 team-mates in the same unit
+- [x] **width**: the two wide-lane holders stay within 3-5 m of the touchline in PROGRESS / FINAL (never over it, step 1)
+- [x] **depth**: one player always on the last line (never offside), one dropping short when the carrier is pressed
+- [x] **rest defence**: 3+2 (attacking plan: 2+2, defensive plan: 3+3) stay behind the ball in their spots, marking the
       opponents left up front
-- [ ] **ball-side overload, far-side isolation**: near side gets 3-4 players for short combinations, the far winger stays
+- [x] **ball-side overload, far-side isolation**: near side gets 3-4 players for short combinations, the far winger stays
       wide for the switch
-- [ ] **support limit**: at most 3 team-mates within 12 m of the carrier (except in COUNTER_PRESS)
-- [ ] keep the existing runs (in behind, late into box, overlap) but start them from the new spots; add **underlap**
+- [x] **support limit**: at most 3 team-mates within 12 m of the carrier (except in COUNTER_PRESS)
+- [x] keep the existing runs (in behind, late into box, overlap) but start them from the new spots; add **underlap**
       (full-back runs inside the winger) and **third-man run** (A passes to B, C is already running for B's lay-off)
 - **Done when** (Legend, 11-a-side): width with the ball 45 m+ (of 68), length 35-45 m, lanes in final third 5/5 most of
   the time, flat lines rare, players near the ball with the ball 4 or fewer, rest defence 4+ when the ball is lost.
 
 ## Step 4 — defending shape: block, compactness, pressing  · release 1.29.0
 
-- [ ] **block height** chosen by plan (Tactics: defensive = low block, balanced = mid block, attacking = high press),
+- [x] **block height** chosen by plan (Tactics: defensive = low block, balanced = mid block, attacking = high press),
       by score and time (winning late = drop, losing late = press) and by where the ball is
-- [ ] **compact block**: lines 8-12 m apart, team length 30-35 m, width 35-40 m, the whole block slides to the ball side,
+- [x] **compact block**: lines 8-12 m apart, team length 30-35 m, width 35-40 m, the whole block slides to the ball side,
       far-side players tucked in to the half-space, central corridor closed first
-- [ ] **zonal with man-orientation near the ball**: each player owns a zone; he steps to the opponent who enters it and
+- [x] **zonal with man-orientation near the ball**: each player owns a zone; he steps to the opponent who enters it and
       passes him on to the next zone (no dragging across the pitch, which crowds one side today)
-- [ ] **cover shadow**: the presser runs at the carrier on a curve that blocks the pass to the nearest pivot/inside
+- [x] **cover shadow**: the presser runs at the carrier on a curve that blocks the pass to the nearest pivot/inside
       player, pushing play to the touchline
-- [ ] **pressing triggers** (Hard / Legend): back pass, loose touch, receiver back to goal, ball to the touchline,
+- [x] **pressing triggers** (Hard / Legend): back pass, loose touch, receiver back to goal, ball to the touchline,
       slow or bouncing pass, keeper with the ball: then 2-3 players jump together and the line steps up
-- [ ] **low block**: protect the box, at most one presser, players in front of their men in the box, block shots
-- [ ] **counter-press** (step 2 moment): 3 s with the 2-3 nearest, then fall back to the block
-- [ ] defensive line: one line, steps up on a back pass, drops when the carrier faces forward with no pressure
+- [x] **low block**: protect the box, at most one presser, players in front of their men in the box, block shots
+- [x] **counter-press** (step 2 moment): 3 s with the 2-3 nearest, then fall back to the block
+- [x] defensive line: one line, steps up on a back pass, drops when the carrier faces forward with no pressure
       (keeps today's offside logic)
 - **Done when**: length without the ball 35 m or less, lines 12 m or less apart, regains within 5 s up for Hard/Legend,
   PPDA lower for high press than for low block.
 
 ## Step 5 — transitions and the carrier  · release 1.30.0
 
-- [ ] **counter-attack**: on a regain with few opponents behind the ball, first pass forward or into a runner, 2-3
+- [x] **counter-attack**: on a regain with few opponents behind the ball, first pass forward or into a runner, 2-3
       players sprint, the rest follow; otherwise SECURE (a safe pass, then rebuild the shape)
-- [ ] carrier scoring rewards passes to players **between the lines / in the half-spaces / in space** (from step 3) and
+- [x] carrier scoring rewards passes to players **between the lines / in the half-spaces / in space** (from step 3) and
       punishes passes into crowded zones (the 19 intercepted passes per match seen on checkoAI and the CPU too)
-- [ ] **switch of play** when the ball side is overloaded and the far winger is free
-- [ ] **cut-back** from the by-line to the penalty spot area, instead of a cross into a crowd
+- [x] **switch of play** when the ball side is overloaded and the far winger is free
+- [x] **cut-back** from the by-line to the penalty spot area, instead of a cross into a crowd
 - [ ] **play out from the back** in BUILD against a high press only when the lanes are open, else a long ball to the
       far side / the forward
 - [ ] the keeper is an outlet in BUILD and joins the 3-2
@@ -177,7 +177,7 @@ What each level understands (speed / accuracy stay as now; this is about the bra
 | rest defence | 4 | 4 | 3+2 | 3+2 adapted to their forwards |
 | reaction (re-scoring spots) | 0.6 s | 0.4 s | 0.3 s | 0.25 s |
 
-- [ ] the Tactics screen (defence / midfield / attack: defensive, balanced, attacking) maps to: block height, line
+- [x] the Tactics screen (defence / midfield / attack: defensive, balanced, attacking) maps to: block height, line
       height, width, pressing intensity, number of runners, rest defence count. Show a one-line explanation per choice.
 
 ## Step 7 — checkoAI and recorded data
@@ -188,6 +188,26 @@ What each level understands (speed / accuracy stay as now; this is about the bra
       brain already learnt)
 - [ ] later: the brain's inputs could include its moment and its target zone (the "where should I be" the new AI
       computes), which would make off-ball learning much easier
+
+## Measured in 1.27.0 (debug matches, 3 min, 11-a-side, "settled" = a possession of 3 s or more)
+
+| | old Legend | new Legend | new Normal |
+|---|---|---|---|
+| width with the ball (all outfield) | 51 m | 56-57 m settled | 58 m settled |
+| width without the ball | 39 m | 39 m settled | 38-39 m settled |
+| length with the ball | 22 m | 31 m settled | 31 m settled |
+| length without the ball | 18 m | 18-19 m settled | 19-21 m settled |
+| players within 12 m of the ball, with it | 2.7 | 1.6-2.0 settled | 1.4-1.6 settled |
+| players behind the ball when it is lost | 9.1 | 7.5-7.9 | |
+| flat lines (3 on a row / column) with the ball | 2.8 | 1.6-2.0 settled | |
+| lanes used in the final third | 4.2 | 4.3-4.6 | |
+| time over a line in open play | up to 1 s per match | 0 | 0 |
+| long balls per match | 15 | 23-27 (of which ~10 switches) | 17-23 |
+
+Tactics check (Legend v Legend, home all defensive v away all attacking): home in a low block 100 % of its block time and
+8.9 behind the ball; away in a high press with 22 pressing triggers per match and a 26 m long block.
+7-a-side scores like before (old Legend v Legend 4.9 goals per match, new 5.2). Possessions in this game are short
+(the ball changes team about every 2 s), so the "settled" numbers show the shape best.
 
 ## Rules for every release
 

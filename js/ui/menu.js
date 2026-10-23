@@ -771,6 +771,8 @@
       tac.appendChild(bt);
     });
     top.appendChild(tac);
+    refs.tacHint = el('div', 'muted small tac-hint');
+    top.appendChild(refs.tacHint);
     wrap.appendChild(top);
 
     var mid = el('div', 'gp-mid');
@@ -931,11 +933,13 @@
     var fb = screens.GAMEPLAN.querySelectorAll('[data-form]');
     for (var i = 0; i < fb.length; i++) fb[i].classList.toggle('sel', fb[i].getAttribute('data-form') === formKey);
     refs.gpTitle.textContent = teamObj.name + ' (' + formKey + ')';
-    var trow = s.tactics[idx];
+    var trow = s.tactics[idx], hint = [];
     for (var tb = 0; tb < 3; tb++) {
       refs.tacBtns[tb].textContent = T('tac.b' + tb) + ': ' + T('tac.m' + trow[tb]);
       for (var mk = 0; mk < 3; mk++) refs.tacBtns[tb].classList.toggle('m' + mk, trow[tb] === mk);
+      hint.push(T('tac.h' + tb + trow[tb]));
     }
+    refs.tacHint.textContent = hint.join('  ·  ');
     clear(refs.gpStarters);
     clear(refs.gpSubs);
 

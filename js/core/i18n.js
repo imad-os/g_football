@@ -916,6 +916,16 @@
 
   // a training's time limit
   Object.assign(D.en, { 'dbg.hours': 'Stop after (hours)', 'aima.tr.nolimit': 'No limit' });
+  // what each tactics choice makes the CPU do (Game plan)
+  Object.assign(D.en, { 'tac.h00': 'Defence: low block, protects the box', 'tac.h01': 'Defence: mid block around halfway', 'tac.h02': 'Defence: high press in their half',
+    'tac.h10': 'Midfield: only the nearest presses', 'tac.h11': 'Midfield: presses on triggers, counter-presses a lost ball', 'tac.h12': 'Midfield: an extra presser',
+    'tac.h20': 'Attack: one more stays behind the ball, fewer runs', 'tac.h21': 'Attack: runs in behind and into the box', 'tac.h22': 'Attack: one more goes forward, more runs' });
+  Object.assign(D.fr, { 'tac.h00': 'Defense : bloc bas, protege la surface', 'tac.h01': 'Defense : bloc median vers le milieu', 'tac.h02': 'Defense : pressing haut chez eux',
+    'tac.h10': 'Milieu : seul le plus proche presse', 'tac.h11': 'Milieu : presse sur les declencheurs, contre-pressing', 'tac.h12': 'Milieu : un presseur de plus',
+    'tac.h20': 'Attaque : un de plus reste derriere, moins de courses', 'tac.h21': 'Attaque : appels dans le dos et dans la surface', 'tac.h22': 'Attaque : un de plus monte, plus de courses' });
+  Object.assign(D.es, { 'tac.h00': 'Defensa: bloque bajo, protege el area', 'tac.h01': 'Defensa: bloque medio hacia el centro', 'tac.h02': 'Defensa: presion alta en su campo',
+    'tac.h10': 'Medio: solo presiona el mas cercano', 'tac.h11': 'Medio: presiona en los momentos clave, contrapresion', 'tac.h12': 'Medio: un presionador mas',
+    'tac.h20': 'Ataque: uno mas se queda atras, menos desmarques', 'tac.h21': 'Ataque: desmarques a la espalda y al area', 'tac.h22': 'Ataque: uno mas sube, mas desmarques' });
   Object.assign(D.en, { 'aima.c.all': 'ALL BRAINS', 'aima.inuse': 'in use (training / learning)', 'aima.sel': 'Show' });
   Object.assign(D.en, { 'aima.d.cont': 'Going on', 'aima.d.before': 'already learnt', 'aima.d.newdec': 'new decisions to catch up', 'aima.d.chunks': 'chunks learnt',
     'aima.d.newchunks': 'new chunks', 'aima.d.never': 'nothing learnt from this set yet' });

@@ -110,7 +110,11 @@ counter per match for both teams (each kick type, every CPU decision, pass outco
 saves, headers, tackles, fouls and cards, restarts, off-the-ball runs, metres run, where each team loses the ball (own /
 middle / final third), completed passes going forward / square / backward...), the issues seen (ball stuck, a
 restart not taken, a player far off the pitch, header chains, ping-pong turnovers, code errors) and a log of every match
-with its goals and cards. The game reports its events through `NS.dbg` (js/game/debug.js), which is null otherwise.
+with its goals and cards. A **TEAM SHAPE** section gives averages twice a second, with and without the ball (and
+"settled": a possession of 3 s or more): team width and length, players within 12 m of the ball, flat lines, the gaps
+between the lines, lanes used in the final third, players behind the ball when it is lost, regain time; plus the seconds
+spent in each moment of the game, pressing triggers, time over a line, and the kind of every long ball (switch, over the
+top, cross, chip to a runner). A checkoAI side is named with its brain and its Legend help. The game reports its events through `NS.dbg` (js/game/debug.js), which is null otherwise.
 
 ## checkoAI (CPU level "checkoAI")
 
@@ -263,6 +267,18 @@ The game plan shows every player's overall rating and the six bars of the select
 
 * **Team plan every step**: attack / defend / loose-ball phase, who presses, who covers, man-marking of the most dangerous
   opponents, one back line, and the player who can **reach a loose ball first** (passes are read and intercepted).
+* **Moments of the game** (1.27.0, plan in docs/ai-tactics-plan.md): build-up, progression, final third, counter-attack
+  (just won it and their team is open), securing the ball, counter-pressing (just lost it), and a defensive **block**: high
+  press, mid block or low block, from the Tactics (defence row), the score and the time.
+* **In-possession shape**: players stay behind the ball (rest defence: 3+2 in 11-a-side, 2+1 in 7-a-side, more with a
+  defensive plan), the others spread over the five vertical lanes (wingers on the touchline lanes, half-spaces between the
+  opponents' lines, the centre forward on their last line), staggered, the ball side a little overloaded, the far winger
+  wide for the switch; each picks the free spot near his place. Overlaps, underlaps, third-man runs.
+* **Out of possession**: a compact block (lines a fixed gap apart, narrow, shifted to the ball side), man-marking only in
+  a player's own zone, pressing triggers (a pass back, the carrier facing his own goal, the ball near the touchline, the
+  keeper), a second man closing the shooter near the box, counter-pressing with 1-3 players for 2-3 s.
+* **Never off the pitch**: every CPU target is inside the lines, the carrier looks ahead and turns along a line, nobody
+  jogs on over the line after a ball going out.
 * **Ball carrier** scores every option: dribble in 5 directions, short pass / through ball / long ball to each team-mate, or
   a shot. It weighs lane interception risk, space around the receiver, progress, and shot quality (goal angle, distance,
   blockers, keeper), then plays the best one. Shots aim at the far post with a spread that grows with distance and pressure.
@@ -277,7 +293,9 @@ The game plan shows every player's overall rating and the six bars of the select
 * **Game state**: a team losing late pushes its line higher and takes more risks; a team leading late keeps the ball.
   Coin toss for the kickoff, teams swap kickoff at half time.
 * **Difficulty** changes speed (86% on EASY to 112% on LEGEND), reaction time, decision noise, pass / shot accuracy, tackling,
-  marking tightness, a second presser and the keeper. CPU vs CPU: EASY loses every match to NORMAL, HARD and LEGEND win
+  marking tightness, a second presser and the keeper, and how much of the tactics a level understands (EASY: the shape
+  and the lines only; NORMAL: + transitions, a compact mid block, cut-backs; HARD / LEGEND: + the block from the plan,
+  pressing triggers, switches of play, underlaps and third-man runs, up to 3 counter-pressers). CPU vs CPU: EASY loses every match to NORMAL, HARD and LEGEND win
   nearly all of them.
 
 Measured with a headless simulator (NORMAL vs NORMAL, 3-minute matches, v1.5): pass completion about 90 to 95%, about 9 shots

@@ -1119,7 +1119,13 @@
         // ball out: it runs on and the players jog on; a foul / offside: everybody stops for the whistle
         var outK = m.setPiece >= 3 && m.setPiece <= 5;
         var damp = outK ? 0.97 : 0.9;
-        for (i = 0; i < n; i++) { p = players[i]; p.vel.x *= damp; p.vel.z *= damp; p.pos.x += p.vel.x * dt; p.pos.z += p.vel.z * dt; animate(p, dt); }
+        for (i = 0; i < n; i++) {
+          p = players[i]; p.vel.x *= damp; p.vel.z *= damp;
+          // (they stop at the lines: nobody jogs on off the pitch after the ball)
+          p.pos.x = clamp(p.pos.x + p.vel.x * dt, -HALF_W - 0.3, HALF_W + 0.3);
+          p.pos.z = clamp(p.pos.z + p.vel.z * dt, -HALF_H - 0.3, HALF_H + 0.3);
+          animate(p, dt);
+        }
         if (outK) rollOut(dt);
         refStep(dt);
         if (m.setPieceTimer <= 0) startSetPiece();
@@ -1222,9 +1228,9 @@
       }
 
       // ----- everyone else, then movement -----
-      AI.teamUpdate(dt);
       var profs0 = profFor(0);
       var profs1 = profFor(1);
+      AI.teamUpdate(dt, [profs0, profs1]);
       for (i = 0; i < n; i++) {
         p = players[i];
         var prof = p.team === 0 ? profs0 : profs1;
@@ -1248,8 +1254,10 @@
         }
         var nx = p.pos.x + p.vel.x * dt * pace;
         var nz = p.pos.z + p.vel.z * dt * pace;
-        p.pos.x = clamp(nx, -HALF_W - 1.5, HALF_W + 1.5);
-        p.pos.z = clamp(nz, -HALF_H - 1.5, HALF_H + 1.5);
+        // (a CPU player stays inside the lines; a human may run a step over them)
+        var over = p.isCtl ? 1.5 : 0.3;
+        p.pos.x = clamp(nx, -HALF_W - over, HALF_W + over);
+        p.pos.z = clamp(nz, -HALF_H - over, HALF_H + over);
         // a goal kick: the opponents stay out of the box until it is taken
         if (m.restart === 5 && p.team !== m.setTeam) {
           var ownX = -NS.attack(m.setTeam) * HALF_W;
