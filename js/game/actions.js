@@ -238,15 +238,18 @@
           tz = mate.pos.z + mate.vel.z * 0.4;
         } else {
           // into the space ahead of the receiver: along the aim, pulled towards the goal he attacks
+          // The hold sets how far ahead: a tap = his position, a full bar = the far space, always more towards the goal
+          var pw = this.passPower; // -1: the CPU (a fixed lead)
           var al2 = Math.sqrt(ax * ax + az * az);
-          var lx = (al2 > 0.1 ? ax / al2 : Math.sin(p.facing)) * 0.6 + attack * 0.4;
-          var lz = (al2 > 0.1 ? az / al2 : Math.cos(p.facing)) * 0.6;
+          var aimW = pw >= 0 ? 0.6 - 0.45 * pw : 0.6, goalW = pw >= 0 ? 0.4 + 0.6 * pw : 0.4;
+          var lx = (al2 > 0.1 ? ax / al2 : Math.sin(p.facing)) * aimW + attack * goalW;
+          var lz = (al2 > 0.1 ? az / al2 : Math.cos(p.facing)) * aimW;
           var ll = Math.sqrt(lx * lx + lz * lz) || 1;
-          // (deep: he runs onto it at full pace; a long through ball lands further still)
-          var lead = this.lob ? 14 : 11;
-          tx = mate.pos.x + mate.vel.x * 0.7 + lx / ll * lead;
-          tz = mate.pos.z + mate.vel.z * 0.7 + lz / ll * lead;
-          if (this.lob) {
+          var lead = pw >= 0 ? (this.lob ? 3 + 21 * pw : 17 * pw) : (this.lob ? 14 : 11);
+          var runLead = pw >= 0 ? 0.25 + 0.45 * pw : 0.7;
+          tx = mate.pos.x + mate.vel.x * runLead + lx / ll * lead;
+          tz = mate.pos.z + mate.vel.z * runLead + lz / ll * lead;
+          if (this.lob && (pw < 0 || pw >= 0.35)) {
             // over the defenders: it comes down beyond the deepest outfield opponent near the line of the ball
             var ldx2 = tx - p.pos.x, ldz2 = tz - p.pos.z, ldl = Math.sqrt(ldx2 * ldx2 + ldz2 * ldz2) || 1;
             var deep = tx * attack;

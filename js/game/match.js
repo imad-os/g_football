@@ -925,7 +925,7 @@
             carry: 0.95, dribbling: false, dBall: 0, rank: 0, gkHold: 0, isCtl: false,
             tackleSlide: false, returnTo: null, returnT: 0, returnExp: 0,
             // animation timers
-            kickT: 0, kickHard: false, lungeT: 0, slideT: 0, fallT: 0, diveT: 0, diveRoll: 0, headT: 0, catchT: 0,
+            kickT: 0, kickHard: false, lungeT: 0, slideT: 0, fallT: 0, diveT: 0, diveRoll: 0, headT: 0, catchT: 0, ftT: 0,
             gkHands: false, diveCd: 0, diveHigh: false, mood: 0, celX: 0, celZ: 0, slid: false,
             fouls: 0, card: 0, // yellow cards, and the card shown: 2 yellow, 3 red (sent off)
             throwIn: false, throwT: 0, shoulderT: 0, shoulderDir: 1, shCd: 0, offside: false,
@@ -944,7 +944,7 @@
       NS.Scene.add(rm.root);
       ref = {
         mesh: rm, pos: rm.root.position, vel: new THREE.Vector3(), facing: 0, index: 0, animPhase: 0, mood: 0, stun: 0,
-        kickT: 0, kickHard: false, lungeT: 0, slideT: 0, fallT: 0, diveT: 0, diveRoll: 0, diveHigh: false, headT: 0, catchT: 0,
+        kickT: 0, kickHard: false, lungeT: 0, slideT: 0, fallT: 0, diveT: 0, diveRoll: 0, diveHigh: false, headT: 0, catchT: 0, ftT: 0,
         gkHands: false, throwIn: false, throwT: 0, shoulderT: 0, shoulderDir: 1
       };
     },
@@ -1324,6 +1324,7 @@
         for (i = 0; i < n; i++) {
           p = players[i];
           if (p.stun > 0 || p.tackleT > 0) continue;
+          if (p.ftT > 0) continue; // a first-time pass / shot is queued: he plays it without taking the ball (controls.js)
           if (p === ball.kicker && ball.kickerT > 0) continue;
           var ddx = ball.pos.x - p.pos.x;
           var ddz = ball.pos.z - p.pos.z;
