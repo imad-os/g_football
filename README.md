@@ -144,6 +144,17 @@ the top-right corner shows what it is thinking.
   (hours)"), with its own progress bar,
   Stop, summary and full stats. Start as many as you like: the running ones take turns, one match each, and count only
   their own matches. Every brain is saved after each of its matches (a stopped session keeps what it played).
+- **Recorded data** (Settings > checkoAI > Training, its own card; the training sessions above work as before): **Record
+  Legend v Legend** plays Legend against Legend at full speed (players, stadium, minutes, matches and "stop after" from the
+  options above; the record matches take turns with the training matches) and keeps every outfield player's decisions in a
+  **named data set**: his 96 inputs, what Legend did (stick, sprint, button, power) and how the next 10 seconds went for
+  his team (goals). All of Legend's passes / shots / tackles are kept (with his decisions in the 0.25 s before a kick), one
+  in three of his other decisions without the ball. 8 bits a number, chunks of 5,000 decisions (~700 KB), about 13,000
+  decisions per 11-a-side match. **Learn from data**: the brain picked at the top learns from a set without playing (1-20
+  passes over it, ~6,000 steps a second on a PC): the presses drawn 8% of the time, the decisions he already gets right
+  (over 90% sure of Legend's stick and button) skipped, the value head learns the 10-second outcome. A twentieth of the set is
+  never learnt from: the score (direction, same button at Legend's presses, his odds of it, presses where Legend pressed
+  nothing) before and after. A set recorded with other inputs cannot be used (record again). Delete removes it from the cloud.
 - **Work** (Stats > Work): each brain counts the arithmetic operations it does (playing and learning), per second of
   play: the same number on any device (how heavy the brain is; the share of CPU then depends on the device). Also the
   expected work of its current settings (learning on / off), one decision, one learning step, the total, its memory.
@@ -153,7 +164,8 @@ the top-right corner shows what it is thinking.
   the code). The token is kept in the profile's My PC save, so his TV and other devices are signed in too.
 - **Everyone else**: signs in anonymously and plays a fresh copy of the active brain (read only).
 - **Store**: its own Firebase project (`js/data/aima-cloud.js`, public web config; the app config `aimaFirebase`
-  overrides it), through the REST APIs: `aima/index` (the list and the active brain) and `aima/b_<id>` per brain.
+  overrides it), through the REST APIs: `aima/index` (the list and the active brain) and `aima/b_<id>` per brain;
+  recorded data in its own collection: `aimaData/index` (the named sets) and `aimaData/c_<set>_<n>` (its chunks).
 - Testing in a plain browser (not My PC): `?aimatrainer=1` shows the trainer's screens (it cannot write the cloud).
 
 Firebase setup: Authentication > Sign-in method: enable **Google** and **Anonymous**; Authentication > Settings >
@@ -167,6 +179,10 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.token.email == 'YOUR_GMAIL@gmail.com'
                    && request.auth.token.email_verified == true;
+    }
+    match /aimaData/{doc} {
+      allow read, write: if request.auth != null && request.auth.token.email == 'YOUR_GMAIL@gmail.com'
+                         && request.auth.token.email_verified == true;
     }
   }
 }

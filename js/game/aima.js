@@ -14,7 +14,8 @@
  *    so they are kept in a memory of their own (with the decisions just before them, when the button would go down)
  *    and drawn more often than they happen
  *  - from rewards (actor-critic, n-step returns): goals, shots, passes, ball won / lost, fouls, and the trainer's claps
- * Store: the owner's Firebase project (REST): "aima/index" (the list, the active brain) and "aima/b_<id>" per brain.
+ * Store: the owner's Firebase project (REST): "aima/index" (the list, the active brain) and "aima/b_<id>" per brain;
+ * recorded Legend play (named data sets to learn from without playing): "aimaData/index" and "aimaData/c_<set>_<n>".
  * The trainer signs in with Google once (the token is kept in his My PC save); everyone else anonymously, read only.
  * No allocation in the play loop: every buffer is made when a brain is built. */
 (function (NS) {
@@ -519,6 +520,7 @@
   function copyMove(slot, p, mi, pw, w) {
     var b = slot.brain, c = slot.c;
     if (mi < 0) return;
+    if (slot.rec) { recMove(slot, p, mi, pw); return; } // (a recording: kept in the data set, nobody learns now)
     var a = NS.attack(p.team);
     var ctx = B.MOVES[mi].ctx;
     features(p, xs, b);
@@ -771,7 +773,7 @@
   var tackleT = [0, 0];
 
   // a player's controller this match (a checkoAI team's outfield player, or a Legend player watched in a training)
-  function slotOf(p) { var v = p.aiv; return v && v.gen === matchGen && v.brain ? v : null; }
+  function slotOf(p) { var v = p.aiv; return v && v.gen === matchGen && (v.brain || v.rec) ? v : null; }
   function aiOf(p) { var s = slotOf(p); return !!s && !s.watch && !s.c.cpu; }
   function brainOfTeam(t) { var s = World.aiSlots[t]; return s && s.active ? s.brain : null; }
 
@@ -1346,13 +1348,16 @@
 
   // the next match: the next running session in turn
   function pump() {
-    if (training || !NS.Debug || NS.Debug.running()) return;
+    if (training || recording || !NS.Debug || NS.Debug.running()) return;
+    // (a recording of Legend v Legend takes every other turn when one is running)
+    recTurn = !recTurn;
+    if (recTurn && pumpRec()) return;
     var n = sessions.length, S = null;
     for (var i = 0; i < n; i++) {
       var c = sessions[(rr + i) % n];
       if (c.state === 'running') { S = c; rr = (rr + i + 1) % n; break; }
     }
-    if (!S) return;
+    if (!S) { if (!recTurn) pumpRec(); return; }
     training = S;
     S.curDone = false;
     S.mins = 0;
@@ -1465,6 +1470,364 @@
     }
     L.push('', T('aima.tr.log'));
     for (var m = 0; m < S.log.length; m++) L.push(S.log[m]);
+    return L.join('\n');
+  }
+
+  /* ------------------------------------------------------------------ recorded data: Legend v Legend, kept, learnt from */
+
+  // A data set (a name of its own): Legend's play recorded at full speed, Legend v Legend, every outfield player of both
+  // teams at 10 decisions a second, each decision as a brain sees it (its F inputs) with what Legend did (stick, sprint,
+  // button, power, ball at his feet) and how the next 10 seconds went for his team (goals for / against). Legend's
+  // passes / shots / tackles are all kept (and his decisions in the PRE_PRESS seconds before a kick become that press);
+  // of his other decisions without the ball one in KEEP_MOVE. Kept in the cloud apart from the brains, collection
+  // "aimaData": "index" (the sets) and "c_<set>_<n>" (chunks of up to CHUNK decisions, 8 bits a number).
+  // Learning from a set ("Learn from data") needs no match: many passes over it, the presses drawn PRESS_SHARE of the
+  // time, the decisions he already gets right (sure of Legend's stick and button) skipped; a twentieth of the set is
+  // never learnt from and gives the score.
+  var DQ = 40;              // an input x DQ -> int8 (-3.2 .. 3.2)
+  var DA = 6;               // labels: stick, sprint, button (0 none), power (-1 none), ctx, the next 10 s x 100
+  var CHUNK = 5000;         // decisions per cloud document (~700 KB)
+  var KEEP_MOVE = 3;
+  var RET_T = 10;
+  var SURE = 0.9;           // skipped when his odds of Legend's stick and button are both above this
+  var dataIndex = { sets: [] }, dataState = 'off';   // the list of sets ('off' | 'loading' | 'ok' | 'error ...')
+  var dsets = {};           // set id -> [chunk: { x: Int8Array, a: Int8Array, n }] (in memory, from the recording or the cloud)
+  var jobs = [], jobSeq = 0, recTurn = false;
+  var recording = null;     // the record job whose match is being played
+  var rb = null;            // this match's recording: { x, a, t (time), tm (team), n, cap, goals: [[t, team]] }
+  var recT = 0;
+
+  function dataUrl(id) {
+    return 'https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(cloud.projectId) +
+      '/databases/(default)/documents/aimaData/' + id + '?key=' + encodeURIComponent(cloud.apiKey);
+  }
+  function dataGet(id) {
+    if (!cloud) return Promise.reject(new Error('no cloud'));
+    return token().then(function (t) { return fetch(dataUrl(id), { headers: { Authorization: 'Bearer ' + t } }); }).then(function (r) {
+      if (r.status === 404) return null;
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function (d) { return d && d.fields && d.fields.data ? JSON.parse(d.fields.data.stringValue) : null; });
+  }
+  // writes run one after another (chunks, then the index): a promise of the answer
+  var dataQ = Promise.resolve();
+  function dataPut(id, obj) {
+    var body = JSON.stringify({ fields: { data: { stringValue: JSON.stringify(obj) }, updated: { integerValue: String(Date.now()) } } });
+    var p = dataQ.then(function () {
+      if (!canWrite()) throw new Error('not signed in');
+      return token().then(function (t) {
+        return fetch(dataUrl(id), { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t }, body: body });
+      }).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status + (r.status === 403 ? ' (Firestore rules: aimaData)' : '')); });
+    });
+    dataQ = p.catch(function () {});
+    return p;
+  }
+  function dataDel(id) {
+    dataQ = dataQ.then(function () {
+      if (!canWrite()) return null;
+      return token().then(function (t) { return fetch(dataUrl(id), { method: 'DELETE', headers: { Authorization: 'Bearer ' + t } }); });
+    }).catch(function () {});
+  }
+  function findSet(id) { for (var i = 0; i < dataIndex.sets.length; i++) if (dataIndex.sets[i].id === id) return dataIndex.sets[i]; return null; }
+  function saveDataIndex() { return dataPut('index', { v: 1, sets: dataIndex.sets, updated: Date.now() }); }
+  function loadDataIndex() {
+    cloud = cloud || cloudCfg();
+    if (!cloud) { dataState = 'off'; return Promise.resolve(); }
+    dataState = 'loading';
+    return dataGet('index').then(function (ix) {
+      // (sets recorded here and not saved yet stay in the list)
+      var local = dataIndex.sets.filter(function (s) { return s.local; });
+      dataIndex.sets = (ix && ix.sets ? ix.sets : []).concat(local.filter(function (s) { return !(ix && ix.sets || []).some(function (c) { return c.id === s.id; }); }));
+      dataState = 'ok';
+      jobNotify(null);
+    }, function (e) { dataState = 'error ' + (e && e.message ? e.message : 'network'); jobNotify(null); });
+  }
+
+  // ---- recording (one match of a record job)
+  function rbGrow(need) {
+    if (rb.n + need <= rb.cap) return;
+    var cap = Math.max(rb.cap * 2, rb.n + need);
+    var x = new Int8Array(cap * F); x.set(rb.x); rb.x = x;
+    var a = new Int8Array(cap * DA); a.set(rb.a); rb.a = a;
+    var t = new Float32Array(cap); t.set(rb.t); rb.t = t;
+    var tm = new Int8Array(cap); tm.set(rb.tm); rb.tm = tm;
+    rb.cap = cap;
+  }
+  function recAdd(x, stk, spr, btn, pw, ctx, team) {
+    rbGrow(1);
+    var i = rb.n++, o = i * F;
+    for (var j = 0; j < F; j++) { var q = Math.round(x[j] * DQ); rb.x[o + j] = q > 127 ? 127 : (q < -127 ? -127 : q); }
+    o = i * DA;
+    rb.a[o] = stk; rb.a[o + 1] = spr; rb.a[o + 2] = btn; rb.a[o + 3] = pw; rb.a[o + 4] = ctx; rb.a[o + 5] = 0;
+    rb.t[i] = recT; rb.tm[i] = team;
+    return i;
+  }
+  var ML = [0, 0];   // a Legend player's stick class and sprint, from how he runs
+  function moveLabel(p) {
+    var sp = Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z);
+    ML[0] = sp < 1.5 ? 0 : stickClass(p.vel.x, p.vel.z, NS.attack(p.team));
+    ML[1] = sp > 10.2 ? 1 : 0;
+  }
+  // a decision of a Legend player (every 0.1 s, as copyCpu)
+  function recTick(v, p) {
+    var c = v.c;
+    if (c.tBtn) { c.tBtn = 0; return; } // (this tick's move was recorded as it happened)
+    var ctx = ctxOf(p);
+    if (ctx !== 1 && (++c.recK % KEEP_MOVE) !== 0) return;
+    features(p, xs, null);
+    moveLabel(p);
+    c.lm[c.lmi] = recAdd(xs, ML[0], ML[1], 0, -1, ctx, p.team);
+    c.lmt[c.lmi] = c.clock;
+    c.lmi = (c.lmi + 1) % c.lm.length;
+  }
+  // a pass / shot / tackle / press of a Legend player, as it happens (from the hooks, through copyMove)
+  function recMove(v, p, mi, pw) {
+    var c = v.c, ctx = B.MOVES[mi].ctx;
+    features(p, xs, null);
+    moveLabel(p);
+    recAdd(xs, ML[0], ML[1], mi + 1, pw, ctx, p.team);
+    if (ctx !== 1) return;
+    for (var k = 0; k < c.lm.length; k++) {
+      var at = c.lm[k];
+      if (at < 0 || c.clock - c.lmt[k] > PRE_PRESS || rb.a[at * DA + 4] !== 1) continue;
+      rb.a[at * DA + 2] = mi + 1; rb.a[at * DA + 3] = pw; // (his decision just before: when the button would go down)
+      c.lm[k] = -1;
+    }
+  }
+  function recTeam(t, dt) {
+    var players = World.players;
+    for (var i = 0; i < players.length; i++) {
+      var p = players[i];
+      if (p.team !== t || p.role === 'GK') continue;
+      var v = vslotOf(p, null);
+      if (!v.rec) { v.rec = true; v.watch = true; v.c.recK = Math.floor(Math.random() * KEEP_MOVE); }
+      v.c.cpu = true; v.c.clock = recT;
+      v.c.t -= dt;
+      if (v.c.t <= 0) { v.c.t += 0.1; if (v.c.t <= 0) v.c.t = 0.1; recTick(v, p); }
+    }
+  }
+  // the match is over: its outcome labels, its chunks into the set (memory, and the cloud when the trainer is signed in)
+  function recMatchEnd(R, finished) {
+    var r = rb;
+    rb = null;
+    if (!finished || !r || !r.n) return;
+    var i, k, g;
+    for (i = 0; i < r.n; i++) {
+      var s = 0;
+      for (k = 0; k < r.goals.length; k++) {
+        g = r.goals[k];
+        if (g[0] > r.t[i] && g[0] <= r.t[i] + RET_T) s += g[1] === r.tm[i] ? 1 : -1;
+      }
+      r.a[i * DA + 5] = Math.max(-1, Math.min(1, s)) * 100;
+    }
+    var meta = findSet(R.set);
+    var list = dsets[R.set] || (dsets[R.set] = []);
+    var presses = 0;
+    for (i = 0; i < r.n; i++) if (r.a[i * DA + 2] > 0) presses++;
+    for (var o = 0; o < r.n; o += CHUNK) {
+      var n = Math.min(CHUNK, r.n - o);
+      var ch = { x: r.x.slice(o * F, (o + n) * F), a: r.a.slice(o * DA, (o + n) * DA), n: n };
+      var idx = meta.chunks++;
+      list[idx] = ch;
+      R.pending++;
+      upChunk(R, meta, idx, ch);
+    }
+    meta.matches++; meta.samples += r.n; meta.presses += presses; meta.updated = Date.now();
+    R.samples += r.n; R.presses += presses;
+    if (canWrite()) saveDataIndex().catch(function () {});
+  }
+  function upChunk(R, meta, idx, ch) {
+    if (!canWrite()) { meta.local = true; R.pending--; R.upErr = NS.I18n.t('aima.d.local'); return; }
+    dataPut('c_' + meta.id + '_' + idx, { v: 1, set: meta.id, n: idx, count: ch.n, F: F, DA: DA, q: DQ, x: b64(new Uint8Array(ch.x.buffer)),
+      a: b64(new Uint8Array(ch.a.buffer)) }).then(function () { R.pending--; R.uploaded++; jobNotify(R); },
+      function (e) { R.pending--; meta.local = true; R.upErr = e && e.message ? e.message : 'network'; jobNotify(R); });
+  }
+
+  function pumpRec() {
+    var R = null;
+    for (var i = 0; i < jobs.length; i++) if (jobs[i].kind === 'rec' && jobs[i].state === 'running') { R = jobs[i]; break; }
+    if (!R) return false;
+    recording = R;
+    R.mins = 0;
+    var c = R.cfg;
+    NS.Debug.start({ matches: 1, levels: ['LEGEND', 'LEGEND'], teams: 'RANDOM', teamSize: c.teamSize, stadium: c.stadium, duration: c.duration },
+      function (done, total, mins) { R.mins = mins; jobNotify(R); },
+      function () {
+        recording = null;
+        if (R.curDone) R.done++;
+        R.curDone = false;
+        if (R.stopReq) R.state = 'stopped';
+        else if ((c.matches > 0 && R.done >= c.matches) || (c.hours > 0 && Date.now() - R.started >= c.hours * 3600000)) {
+          R.state = 'done';
+          if (NS.Audio.chime) NS.Audio.chime();
+        }
+        if (R.state !== 'running') R.ended = Date.now();
+        jobNotify(R);
+        NS.Debug.later(pump, 30);
+      });
+    return true;
+  }
+
+  // ---- learning from data
+  function loadSet(J, id) {
+    var meta = findSet(id), list = dsets[id] || (dsets[id] = []);
+    var i = 0;
+    function next() {
+      while (i < meta.chunks && list[i]) i++;
+      if (i >= meta.chunks || J.stopReq) return Promise.resolve();
+      var at = i++;
+      J.loadMsg = (at + 1) + ' / ' + meta.chunks;
+      jobNotify(J);
+      return dataGet('c_' + id + '_' + at).then(function (d) {
+        if (d && d.F === F) list[at] = { x: new Int8Array(unb64(d.x).buffer), a: new Int8Array(unb64(d.a).buffer), n: d.count };
+        else J.skipped = (J.skipped || 0) + 1; // missing, or recorded with other inputs
+        return next();
+      });
+    }
+    return next();
+  }
+  // one decision of the data: dequantized into rx, its labels into lab
+  var lab = new Int8Array(DA);
+  function sampleOf(ch, i) {
+    var o = i * F;
+    for (var j = 0; j < F; j++) rx[j] = ch.x[o + j] / DQ;
+    o = i * DA;
+    for (j = 0; j < DA; j++) lab[j] = ch.a[o + j];
+  }
+  // a learning step on rx / lab; false = skipped (he already does what Legend did, and is sure of it)
+  function dataStep(b) {
+    forward(b, rx);
+    var stk = lab[0], btn = lab[2], ctx = lab[4];
+    setMask(ctx);
+    var bOk = !bmask[btn];
+    if (!bOk) { softmax(O_BT, NBT, bmask, 1); bOk = prob[btn] > SURE; }
+    if (bOk && btn === 0) { softmax(O_ST, NST, null, 1); if (prob[stk] > SURE) return false; }
+    dout.fill(0);
+    headGrad(O_ST, NST, null, stk, 1, 0);
+    headGrad(O_SP, NSP, null, lab[1], 0.5, 0);
+    setMask(ctx);
+    if (bmask[btn]) headGrad(O_BT, NBT, bmask, btn, 1, 0);
+    if (btn && lab[3] >= 0) headGrad(O_PW, NPW, null, lab[3], 1, 0);
+    dout[O_V] = (out[O_V] - lab[5] / 100) * 0.25;
+    backward(b, rx);
+    b.st.im++;
+    b.st.opsL += b.stepOps;
+    return true;
+  }
+  // the score on the decisions never learnt from: his stick (as he plays it) = Legend's, the same button at Legend's
+  // presses (and his odds of it), and presses where Legend pressed nothing (ball at his feet)
+  function validate(J, b) {
+    var v = { n: 0, dir: 0, pn: 0, same: 0, odds: 0, cn: 0, extra: 0 };
+    var V = J.val, step = Math.max(1, Math.floor(V.length / 4000));
+    for (var k = 0; k < V.length; k += step) {
+      sampleOf(J.ch[V[k] >> 16], V[k] & 0xffff);
+      forward(b, rx);
+      softmax(O_ST, NST, null, 1);
+      var ex = 0, ez = 0;
+      for (var d = 1; d < NST; d++) { ex += prob[d] * DIRX[d]; ez += prob[d] * DIRZ[d]; }
+      var mine = ex * ex + ez * ez > STAND * STAND ? 1 + ((Math.round(Math.atan2(ez, ex) / (Math.PI / 4)) + 8) % 8) : 0;
+      v.n++; if (mine === lab[0]) v.dir++;
+      setMask(lab[4]);
+      softmax(O_BT, NBT, bmask, 1);
+      var bi = 1;
+      for (d = 2; d < NBT; d++) if (prob[d] > prob[bi]) bi = d;
+      var press = bmask[bi] && prob[bi] > PRESS ? bi : 0;
+      if (lab[2] > 0) { v.pn++; v.odds += prob[lab[2]]; if (press === lab[2]) v.same++; }
+      else if (lab[4] === 1) { v.cn++; if (press) v.extra++; }
+    }
+    J.score = v;
+    J.scores.push([J.steps, v.n ? v.dir / v.n : 0, v.pn ? v.same / v.pn : 0]);
+  }
+  function learnSlice(J) {
+    if (J.state !== 'running') return;
+    var b = J.b, t0 = performance.now(), PS = J.press.length, MS = J.move.length;
+    while (performance.now() - t0 < 25) {
+      for (var k = 0; k < 64; k++) {
+        var ref = PS && (!MS || Math.random() < PRESS_SHARE) ? J.press[Math.floor(Math.random() * PS)] : J.move[Math.floor(Math.random() * MS)];
+        sampleOf(J.ch[ref >> 16], ref & 0xffff);
+        if (dataStep(b)) J.learnt++;
+        J.steps++;
+      }
+      if (J.steps >= J.total) break;
+    }
+    if (J.steps - J.lastVal >= 50000 || J.steps >= J.total) { J.lastVal = J.steps; validate(J, b); }
+    if (performance.now() - J.lastSave > 120000) { J.lastSave = performance.now(); saveBrain(b); }
+    var timeUp = J.cfg.hours > 0 && Date.now() - J.started >= J.cfg.hours * 3600000;
+    if (J.stopReq || J.steps >= J.total || timeUp) {
+      if (b.gN) adamStep(b);
+      J.state = J.stopReq ? 'stopped' : 'done';
+      J.ended = Date.now();
+      var sc = J.score || {};
+      b.log('data', { set: J.setName, steps: J.steps, dir: sc.n ? Math.round(sc.dir * 100 / sc.n) : 0, same: sc.pn ? Math.round(sc.same * 100 / sc.pn) : 0 });
+      saveBrain(b);
+      if (J.state === 'done' && NS.Audio.chime) NS.Audio.chime();
+      jobNotify(J);
+      return;
+    }
+    jobNotify(J);
+    NS.Debug.later(function () { learnSlice(J); }, 0);
+  }
+  function startLearn(J) {
+    var ids = J.cfg.sets, i;
+    var p = Promise.resolve();
+    ids.forEach(function (id) { p = p.then(function () { return loadSet(J, id); }); });
+    return Promise.all([getBrain(J.cfg.brain), p]).then(function (r) {
+      var b = J.b = r[0];
+      b.frozen = false;
+      if (!b.learns()) throw new Error(NS.I18n.t('aima.d.nolearn'));
+      // every decision of the sets: (chunk << 16) | index; one in 20 for the score only
+      J.ch = []; J.press = []; J.move = []; J.val = [];
+      var g = 0;
+      ids.forEach(function (id) {
+        var list = dsets[id] || [];
+        for (var c = 0; c < list.length; c++) {
+          if (!list[c]) continue;
+          var ci = J.ch.length, ch = list[c];
+          J.ch.push(ch);
+          for (i = 0; i < ch.n; i++, g++) {
+            var ref = (ci << 16) | i;
+            if (g % 20 === 0) J.val.push(ref);
+            else if (ch.a[i * DA + 2] > 0) J.press.push(ref);
+            else J.move.push(ref);
+          }
+        }
+      });
+      if (!J.move.length && !J.press.length) throw new Error(NS.I18n.t('aima.d.empty'));
+      J.total = J.cfg.passes * (J.move.length + J.press.length);
+      J.state = 'running';
+      J.loadMsg = '';
+      validate(J, b);
+      J.score0 = J.score;
+      jobNotify(J);
+      learnSlice(J);
+    }).catch(function (e) { J.state = 'error'; J.error = e && e.message ? e.message : String(e); jobNotify(J); });
+  }
+
+  function jobNotify(J) { if (Aima.onData) Aima.onData(J); }
+  function pctOf(a, n) { return n ? Math.round(a * 100 / n) + '%' : '-'; }
+  function jobText(J) {
+    var T = NS.I18n.t, L = [], s;
+    if (J.kind === 'rec') {
+      L.push(T('aima.d.rec') + ' "' + J.setName + '"  (' + J.done + ' / ' + (J.cfg.matches || '∞') + ' ' + T('aima.tr.matches') + ', ' +
+        J.cfg.teamSize + ' ' + T('aima.tr.aside') + ', ' + J.cfg.stadium + ', ' + J.cfg.duration + ' min)  ' + T('aima.ss.' + J.state));
+      L.push(T('aima.d.samples') + ': ' + J.samples + '   ' + T('aima.d.presses') + ': ' + J.presses + '   ' + T('aima.d.saved') + ': ' + J.uploaded +
+        (J.pending ? '  (' + J.pending + ' ' + T('aima.d.sending') + ')' : ''));
+    } else {
+      L.push(T('aima.d.learn') + ': ' + (J.b ? J.b.name : '?') + '  <-  "' + J.setName + '"  (' + J.cfg.passes + ' ' + T('aima.d.passes') + ')  ' + T('aima.ss.' + J.state));
+      if (J.loadMsg) L.push(T('aima.d.loading') + ' ' + J.loadMsg);
+      if (J.total) L.push(T('aima.d.steps') + ': ' + J.steps + ' / ' + J.total + '   ' + T('aima.d.learnt') + ' ' + pctOf(J.learnt, J.steps) +
+        '   (' + T('aima.d.sets') + ': ' + J.move.length + ' + ' + J.press.length + ' ' + T('aima.d.presses') + ', ' + J.val.length + ' ' + T('aima.d.check') + ')');
+      s = J.score;
+      if (s) {
+        var s0 = J.score0 || s;
+        L.push(T('aima.d.score') + ': ' + T('aima.k.agree') + ' ' + pctOf(s0.dir, s0.n) + ' -> ' + pctOf(s.dir, s.n) + '   ' +
+          T('aima.k.presssame') + ' ' + pctOf(s0.same, s0.pn) + ' -> ' + pctOf(s.same, s.pn) + '   ' + T('aima.k.pressodds') + ' ' + pctOf(s.odds, s.pn) +
+          '   ' + T('aima.d.extra') + ' ' + pctOf(s.extra, s.cn));
+      }
+      if (J.skipped) L.push(T('aima.d.skipped') + ': ' + J.skipped);
+    }
+    if (J.upErr) L.push(T('aima.d.cloud') + ': ' + J.upErr);
+    if (J.error) L.push(J.error);
     return L.join('\n');
   }
 
@@ -1584,6 +1947,7 @@
         for (var rid in S.runs) S.runs[rid].snap = JSON.parse(JSON.stringify(S.runs[rid].b.st));
       }
       matchGen++; vlist.length = 0; teamClock[0] = teamClock[1] = 0;
+      if (recording) { recT = 0; rb = { x: new Int8Array(20000 * F), a: new Int8Array(20000 * DA), t: new Float32Array(20000), tm: new Int8Array(20000), n: 0, cap: 20000, goals: [] }; }
       poss[0] = poss[1] = 0; shotsT[0] = shotsT[1] = 0;
       lastOwner = null; lastOwnerAi = false; lastScore[0] = lastScore[1] = 0; matchOn = false;
       matchReward[0] = matchReward[1] = 0;
@@ -1594,6 +1958,7 @@
     // full time (finished) or abandoned: results, the last rewards, history, save
     matchEnd: function (finished) {
       var m = World.match, done = {};
+      if (recording) { if (finished) recording.curDone = true; recMatchEnd(recording, finished); }
       for (var k0 = 0; k0 < vlist.length; k0++) if (!vlist[k0].watch) flush(vlist[k0]);
       for (var t = 0; t < 2; t++) {
         var s = World.aiSlots[t];
@@ -1631,6 +1996,13 @@
 
     poll: function (dt) {
       pastStep(dt);
+      if (recording && rb) {
+        // a recording: the clock, possession (an input) and the goals (for the 10-second outcome)
+        recT += dt;
+        var ro = World.ball.owner;
+        if (ro) poss[ro.team] += dt;
+        for (var rt = 0; rt < 2; rt++) if (World.match.score[rt] !== lastScore[rt]) { if (World.match.score[rt] > lastScore[rt]) rb.goals.push([recT, rt]); lastScore[rt] = World.match.score[rt]; }
+      }
       if (!anyAi()) return;
       matchOn = true;
       for (var t = 0; t < 2; t++) {
@@ -1674,6 +2046,8 @@
           v.c.t -= dt;
           if (v.c.t <= 0) { v.c.t += TICKS[b.cfg.tick] || TICKS[1]; if (v.c.t <= 0) v.c.t = 0.1; copyCpu(v, p); }
         }
+      } else if (recording && rb) {
+        recTeam(t, dt);
       }
     },
 
@@ -1761,6 +2135,70 @@
       sessions = sessions.filter(function (S) { return S.id !== id || S.state === 'running' || S.state === 'loading'; });
     },
     stopTraining: function () { for (var i = 0; i < sessions.length; i++) Aima.stopSession(sessions[i].id); },
+
+    // ---- recorded data (Legend v Legend) and learning from it. A job: { id, kind: 'rec' | 'learn', cfg, state, ... }
+    dataSets: function () { return dataIndex.sets; },
+    dataState: function () { return dataState; },
+    loadDataIndex: loadDataIndex,
+    dataJobs: function () { return jobs; },
+    recording: function () { return recording; },
+    // cfg: { set: id ('' = a new set named cfg.name), name, matches, teamSize, stadium, duration, hours }
+    startRecord: function (cfg) {
+      if (!trainer || !NS.Debug) return null;
+      if (World.match.running && !training && !recording && !(NS.Debug && NS.Debug.running())) return null;
+      var meta = cfg.set ? findSet(cfg.set) : null;
+      if (!meta) {
+        meta = { id: newId(), name: (cfg.name || 'Legend').slice(0, 24), created: Date.now(), updated: Date.now(), F: F, matches: 0, samples: 0,
+          presses: 0, chunks: 0, teamSize: cfg.teamSize, stadium: cfg.stadium, duration: cfg.duration, ver: NS.VERSION || '' };
+        dataIndex.sets.push(meta);
+      }
+      if (meta.F !== F) return null; // recorded with other inputs: a new set is needed
+      var J = { id: ++jobSeq, kind: 'rec', cfg: cfg, set: meta.id, setName: meta.name, state: 'running', done: 0, mins: 0, started: Date.now(),
+        samples: 0, presses: 0, uploaded: 0, pending: 0, upErr: '', stopReq: false };
+      jobs.push(J);
+      jobNotify(J);
+      pump();
+      return J;
+    },
+    // cfg: { brain: id, sets: [id], passes, hours }
+    startLearn: function (cfg) {
+      if (!trainer || !cfg.sets.length) return null;
+      var meta = findSet(cfg.sets[0]);
+      if (!meta || meta.F !== F) return null;
+      var J = { id: ++jobSeq, kind: 'learn', cfg: cfg, setName: meta.name, state: 'loading', started: Date.now(), steps: 0, learnt: 0, total: 0,
+        lastVal: 0, lastSave: performance.now(), scores: [], stopReq: false, move: [], press: [], val: [] };
+      jobs.push(J);
+      jobNotify(J);
+      startLearn(J);
+      return J;
+    },
+    stopJob: function (id) {
+      for (var i = 0; i < jobs.length; i++) {
+        var J = jobs[i];
+        if (J.id !== id || (J.state !== 'running' && J.state !== 'loading')) continue;
+        J.stopReq = true;
+        if (J.kind === 'rec') {
+          if (recording === J) NS.Debug.stop();
+          else { J.state = 'stopped'; J.ended = Date.now(); jobNotify(J); }
+        } else if (J.state === 'loading') { J.state = 'stopped'; jobNotify(J); }
+      }
+    },
+    removeJob: function (id) { jobs = jobs.filter(function (J) { return J.id !== id || J.state === 'running' || J.state === 'loading'; }); },
+    // deletes a data set (its chunks and its line in the index); not while a job uses it
+    deleteSet: function (id) {
+      for (var i = 0; i < jobs.length; i++) {
+        var J = jobs[i];
+        if ((J.state === 'running' || J.state === 'loading') && (J.set === id || (J.cfg.sets && J.cfg.sets.indexOf(id) >= 0))) return false;
+      }
+      var meta = findSet(id);
+      if (!meta) return false;
+      for (var k = 0; k < meta.chunks; k++) dataDel('c_' + id + '_' + k);
+      dataIndex.sets = dataIndex.sets.filter(function (s) { return s.id !== id; });
+      delete dsets[id];
+      if (canWrite()) saveDataIndex().catch(function () {});
+      return true;
+    },
+    jobText: jobText,
     sessionText: function (S, full) { return S.b ? (full ? trainFull(S) : trainSummary(S)) : (S.error || ''); },
 
     // style read from what he chooses himself

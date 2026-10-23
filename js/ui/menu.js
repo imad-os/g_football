@@ -1181,6 +1181,7 @@
       case 'reset': return T('aima.h.reset');
       case 'inputs': return T('aima.h.inputs') + ' ' + d.from + ' -> ' + d.to;
       case 'match': return T('aima.h.match') + ' ' + d.s + ' (' + T(d.vs === 'human' ? 'aima.h.vshuman' : 'aima.h.vscpu') + ')';
+      case 'data': return T('aima.h.data') + ' "' + d.set + '": ' + d.steps + ' ' + T('aima.d.steps').toLowerCase() + ', ' + d.dir + '% / ' + d.same + '%';
       case 'train': return T('aima.h.train') + ' v ' + d.opp + ': ' + d.n + (d.of && d.n < d.of ? '/' + d.of : '') + ' ' + T('aima.tr.matches') + ', ' + d.w + '-' + d.d + '-' + d.l +
         ' (' + d.gf + '-' + d.ga + ')';
       default: return h.k;
@@ -1441,16 +1442,16 @@
     if (S.error) txt += '  \u00b7  ' + S.error;
     return txt;
   }
+  // a new state redraws the Training tab: keep where the list was scrolled to
+  function redrawTrain() {
+    var sc = refs.setList, y0 = sc.scrollTop, y1 = sc.parentNode ? sc.parentNode.scrollTop : 0;
+    again('tr:start');
+    sc.scrollTop = y0;
+    if (sc.parentNode) sc.parentNode.scrollTop = y1;
+  }
   function onTrain(S) {
     if (current !== 'SETTINGS' || settingsGroup !== 'aima' || aimaSub !== 'train') return;
-    if (sesState[S.id] !== S.state || !sesRefs[S.id]) {
-      // a new state redraws the tab: keep where the list was scrolled to
-      var sc = refs.setList, y0 = sc.scrollTop, y1 = sc.parentNode ? sc.parentNode.scrollTop : 0;
-      again('tr:start');
-      sc.scrollTop = y0;
-      if (sc.parentNode) sc.parentNode.scrollTop = y1;
-      return;
-    }
+    if (sesState[S.id] !== S.state || !sesRefs[S.id]) { redrawTrain(); return; }
     var r = sesRefs[S.id], f = sesProgress(S);
     r.fill.style.width = Math.round(f * 1000) / 10 + '%';
     r.pct.textContent = Math.round(f * 100) + '%';
@@ -1492,6 +1493,7 @@
     form.appendChild(row);
     form.appendChild(el('div', 'set-hint', trMsg || T('aima.ss.hint')));
     list.appendChild(form);
+    list.appendChild(dataCard(me));
 
     // ---- the sessions, newest first: each with its own progress bar
     sesRefs = {};
@@ -1540,6 +1542,92 @@
       }
       list.appendChild(c);
     });
+  }
+
+  // ---- recorded data (Legend v Legend, named sets in the cloud) and learning from it: a card of its own on the Training tab
+  var DT_PASSES = [1, 2, 5, 10, 20];
+  var dtSel = { set: '', passes: 1 };
+  var dtMsg = '', dtAsked = false;
+  var jobRefs = {}, jobState = {};
+  function onData(J) {
+    if (current !== 'SETTINGS' || settingsGroup !== 'aima' || aimaSub !== 'train') return;
+    if (!J || jobState[J.id] !== J.state || !jobRefs[J.id]) { redrawTrain(); return; }
+    jobRefs[J.id].textContent = NS.Aima.jobText(J);
+  }
+  function dataCard(me) {
+    var A = NS.Aima;
+    A.onData = onData;
+    if (!dtAsked && A.hasCloud()) { dtAsked = true; A.loadDataIndex(); }
+    var c = aimaCard(T('aima.d.title'));
+    var sets = A.dataSets(), cur = null;
+    sets.forEach(function (x) { if (x.id === dtSel.set) cur = x; });
+    if (!cur) dtSel.set = '';
+    var g = el('div', 'aima-grid');
+    if (!sets.length) kv(g, '-', T('aima.d.none'));
+    sets.forEach(function (x) {
+      kv(g, x.name + (x.local ? ' *' : ''), x.matches + ' ' + T('aima.tr.matches') + ' \u00b7 ' + x.samples + ' ' + T('aima.d.samples') + ' \u00b7 ' +
+        x.presses + ' ' + T('aima.d.presses') + ' \u00b7 ' + x.teamSize + ' ' + T('aima.tr.aside') + ' \u00b7 ' + when(x.updated) +
+        (x.F !== A.F ? ' \u00b7 ' + T('aima.d.oldF') : ''));
+    });
+    c.appendChild(g);
+    c.appendChild(el('div', 'set-hint', T('aima.k.cloud') + ': ' + A.dataState()));
+    var opts = el('div', 'dbg-opts');
+    opts.appendChild(btn('opt dbg-opt', T('aima.d.set') + ': ' + (cur ? cur.name : T('aima.d.new')), 'dt:set', function () {
+      var ids = [''].concat(A.dataSets().map(function (x) { return x.id; }));
+      dtSel.set = ids[(ids.indexOf(dtSel.set) + 1) % ids.length];
+      dtMsg = ''; aimaConfirm = '';
+      again('dt:set');
+    }));
+    opts.appendChild(btn('opt dbg-opt', T('aima.d.passes') + ': ' + DT_PASSES[dtSel.passes], 'dt:passes', function () {
+      dtSel.passes = (dtSel.passes + 1) % DT_PASSES.length;
+      again('dt:passes');
+    }));
+    c.appendChild(opts);
+    var row = el('div', 'row aima-actions');
+    var name = document.createElement('input');
+    name.className = 'aima-code';
+    name.placeholder = T('aima.d.name');
+    name.maxLength = 24;
+    if (!cur) row.appendChild(name);
+    row.appendChild(btn('primary', T('aima.d.record'), 'dt:rec', function () {
+      if (!cur && !name.value.trim()) { dtMsg = T('aima.d.needname'); again('dt:rec'); return; }
+      var J = A.startRecord({ set: dtSel.set, name: name.value.trim(), matches: TR_OPTS[0][1][trSel.matches], teamSize: TR_OPTS[1][1][trSel.size],
+        stadium: TR_OPTS[2][1][trSel.stadium], duration: TR_OPTS[3][1][trSel.length], hours: TR_OPTS[4][1][trSel.hours] });
+      if (J) { dtSel.set = J.set; dtMsg = ''; } else dtMsg = T('aima.d.cant');
+      again('dt:rec');
+    }));
+    row.appendChild(btn('', T('aima.d.learnbtn'), 'dt:learn', function () {
+      if (!me || !cur) { dtMsg = T('aima.d.pickset'); again('dt:learn'); return; }
+      var J = A.startLearn({ brain: me.id, sets: [cur.id], passes: DT_PASSES[dtSel.passes], hours: TR_OPTS[4][1][trSel.hours] });
+      dtMsg = J ? '' : T('aima.d.cant');
+      again('dt:learn');
+    }));
+    if (cur) {
+      row.appendChild(btn('danger', T('aima.d.del'), 'dt:del', function () {
+        if (aimaConfirm !== 'dtdel:' + cur.id) { aimaConfirm = 'dtdel:' + cur.id; dtMsg = T('aima.d.confirmdel'); again('dt:del'); return; }
+        aimaConfirm = '';
+        dtMsg = A.deleteSet(cur.id) ? T('aima.d.deleted') : T('aima.d.inuse');
+        again('dt:del');
+      }));
+    }
+    c.appendChild(row);
+    c.appendChild(el('div', 'set-hint', dtMsg || T('aima.d.hint')));
+    // its jobs, newest first
+    jobRefs = {};
+    A.dataJobs().slice().reverse().forEach(function (J) {
+      jobState[J.id] = J.state;
+      var jc = el('div', 'panel-card aima-ses ' + J.state);
+      var info = el('div', 'set-hint aima-job', A.jobText(J));
+      jc.appendChild(info);
+      jobRefs[J.id] = info;
+      var acts = el('div', 'row aima-actions');
+      var live = J.state === 'running' || J.state === 'loading';
+      if (live) acts.appendChild(btn('danger', T('dbg.stop'), 'dt:stop:' + J.id, function () { A.stopJob(J.id); again('dt:stop:' + J.id); }));
+      else acts.appendChild(btn('', T('aima.ss.remove'), 'dt:rm:' + J.id, function () { A.removeJob(J.id); again('dt:rec'); }));
+      jc.appendChild(acts);
+      c.appendChild(jc);
+    });
+    return c;
   }
 
   function renderAima() {

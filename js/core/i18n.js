@@ -919,6 +919,44 @@
   Object.assign(D.fr, { 'dbg.hours': 'Arret apres (heures)', 'aima.tr.nolimit': 'Sans limite' });
   Object.assign(D.es, { 'dbg.hours': 'Parar tras (horas)', 'aima.tr.nolimit': 'Sin limite' });
 
+  // checkoAI: recorded data (Legend v Legend) and learning from it
+  Object.assign(D.en, { 'aima.d.title': 'Recorded data (Legend v Legend)', 'aima.d.none': 'no data set yet', 'aima.d.samples': 'decisions',
+    'aima.d.presses': 'passes / shots / tackles', 'aima.d.set': 'Data set', 'aima.d.new': 'new', 'aima.d.passes': 'Passes over the data',
+    'aima.d.name': 'name of the new data set', 'aima.d.record': 'Record Legend v Legend', 'aima.d.learnbtn': 'Learn from data',
+    'aima.d.needname': 'Give the new data set a name.', 'aima.d.pickset': 'Pick a data set first.', 'aima.d.cant': 'Cannot start now (a match is on, or the set has other inputs).',
+    'aima.d.hint': 'Record: Legend plays both teams with the options above (players, stadium, minutes, matches, stop after); every player\'s decisions go into the data set, in the cloud. Learn from data: the brain picked at the top learns from the set without playing (the training matches keep working as before).',
+    'aima.d.del': 'Delete data set', 'aima.d.confirmdel': 'Press again to delete this data set (in the cloud too).', 'aima.d.deleted': 'Data set deleted.',
+    'aima.d.inuse': 'A job is using this data set.', 'aima.d.rec': 'Recording', 'aima.d.learn': 'Learning from data', 'aima.d.saved': 'chunks saved',
+    'aima.d.sending': 'sending', 'aima.d.loading': 'Loading from the cloud', 'aima.d.steps': 'Steps', 'aima.d.learnt': 'learnt (not skipped)',
+    'aima.d.sets': 'data', 'aima.d.check': 'kept to check', 'aima.d.score': 'Score on unseen data', 'aima.d.extra': 'presses where Legend pressed nothing',
+    'aima.d.skipped': 'chunks skipped (other inputs or missing)', 'aima.d.cloud': 'Cloud', 'aima.d.local': 'not saved to the cloud (not signed in): only in this session',
+    'aima.d.nolearn': 'learning is off for this brain (Settings)', 'aima.d.empty': 'the data set is empty', 'aima.d.oldF': 'other inputs: record again',
+    'aima.h.data': 'learnt from data' });
+  Object.assign(D.fr, { 'aima.d.title': 'Donnees enregistrees (Legend v Legend)', 'aima.d.none': 'aucun jeu de donnees', 'aima.d.samples': 'decisions',
+    'aima.d.presses': 'passes / tirs / tacles', 'aima.d.set': 'Jeu de donnees', 'aima.d.new': 'nouveau', 'aima.d.passes': 'Passages sur les donnees',
+    'aima.d.name': 'nom du nouveau jeu', 'aima.d.record': 'Enregistrer Legend v Legend', 'aima.d.learnbtn': 'Apprendre des donnees',
+    'aima.d.needname': 'Donnez un nom au nouveau jeu.', 'aima.d.pickset': 'Choisissez d\'abord un jeu de donnees.', 'aima.d.cant': 'Impossible maintenant (un match est en cours, ou autres entrees).',
+    'aima.d.hint': 'Enregistrer : Legend joue les deux equipes avec les options ci-dessus ; les decisions de chaque joueur vont dans le jeu de donnees, dans le cloud. Apprendre des donnees : le cerveau choisi en haut apprend sans jouer.',
+    'aima.d.del': 'Supprimer le jeu', 'aima.d.confirmdel': 'Appuyez encore pour supprimer ce jeu (cloud aussi).', 'aima.d.deleted': 'Jeu supprime.',
+    'aima.d.inuse': 'Une tache utilise ce jeu.', 'aima.d.rec': 'Enregistrement', 'aima.d.learn': 'Apprentissage', 'aima.d.saved': 'morceaux enregistres',
+    'aima.d.sending': 'en envoi', 'aima.d.loading': 'Chargement du cloud', 'aima.d.steps': 'Pas', 'aima.d.learnt': 'appris (non sautes)',
+    'aima.d.sets': 'donnees', 'aima.d.check': 'gardees pour verifier', 'aima.d.score': 'Score sur donnees inconnues', 'aima.d.extra': 'appuis la ou Legend n\'appuie pas',
+    'aima.d.skipped': 'morceaux sautes', 'aima.d.cloud': 'Cloud', 'aima.d.local': 'non enregistre dans le cloud (non connecte)',
+    'aima.d.nolearn': 'apprentissage desactive pour ce cerveau', 'aima.d.empty': 'jeu de donnees vide', 'aima.d.oldF': 'autres entrees : reenregistrer',
+    'aima.h.data': 'appris des donnees' });
+  Object.assign(D.es, { 'aima.d.title': 'Datos grabados (Legend v Legend)', 'aima.d.none': 'aun no hay datos', 'aima.d.samples': 'decisiones',
+    'aima.d.presses': 'pases / tiros / entradas', 'aima.d.set': 'Conjunto de datos', 'aima.d.new': 'nuevo', 'aima.d.passes': 'Pasadas por los datos',
+    'aima.d.name': 'nombre del nuevo conjunto', 'aima.d.record': 'Grabar Legend v Legend', 'aima.d.learnbtn': 'Aprender de los datos',
+    'aima.d.needname': 'Ponle nombre al nuevo conjunto.', 'aima.d.pickset': 'Elige primero un conjunto.', 'aima.d.cant': 'No se puede ahora (hay un partido, u otras entradas).',
+    'aima.d.hint': 'Grabar: Legend juega con los dos equipos con las opciones de arriba; las decisiones de cada jugador van al conjunto, en la nube. Aprender de los datos: el cerebro elegido arriba aprende sin jugar.',
+    'aima.d.del': 'Borrar conjunto', 'aima.d.confirmdel': 'Pulsa otra vez para borrarlo (tambien en la nube).', 'aima.d.deleted': 'Conjunto borrado.',
+    'aima.d.inuse': 'Una tarea usa este conjunto.', 'aima.d.rec': 'Grabando', 'aima.d.learn': 'Aprendiendo de datos', 'aima.d.saved': 'trozos guardados',
+    'aima.d.sending': 'enviando', 'aima.d.loading': 'Cargando de la nube', 'aima.d.steps': 'Pasos', 'aima.d.learnt': 'aprendidos (no saltados)',
+    'aima.d.sets': 'datos', 'aima.d.check': 'para comprobar', 'aima.d.score': 'Puntuacion con datos no vistos', 'aima.d.extra': 'pulsaciones donde Legend no pulso',
+    'aima.d.skipped': 'trozos saltados', 'aima.d.cloud': 'Nube', 'aima.d.local': 'no guardado en la nube (sin sesion)',
+    'aima.d.nolearn': 'el aprendizaje esta desactivado para este cerebro', 'aima.d.empty': 'el conjunto esta vacio', 'aima.d.oldF': 'otras entradas: grabar de nuevo',
+    'aima.h.data': 'aprendio de datos' });
+
   var lang = 'en';
 
   NS.I18n = {

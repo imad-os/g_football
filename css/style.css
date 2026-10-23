@@ -514,3 +514,6 @@ h1, h2, p { margin: 0; }
 .side-zone .slot { width: 100%; }
 #clap-fx.bad svg { fill: #f87171; stroke: #7f1d1d; }
 #clap-fx.bad b { color: #fecaca; }
+
+/* checkoAI recorded data: a job's lines */
+.aima-job { white-space: pre-wrap; font-family: ui-monospace, Consolas, monospace; font-size: 0.8rem; }
