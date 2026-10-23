@@ -155,6 +155,8 @@ the top-right corner shows what it is thinking.
   (over 90% sure of Legend's stick and button) skipped, the value head learns the 10-second outcome. A twentieth of the set is
   never learnt from: the score (direction, same button at Legend's presses, his odds of it, presses where Legend pressed
   nothing) before and after. A set recorded with other inputs cannot be used (record again). Delete removes it from the cloud.
+  A chunk the cloud refuses (rules not applied yet, network) is tried again 3 times (8 s, 20 s, 45 s); one given up stays in
+  memory and the card shows **Resend unsaved chunks** (works while the app stays open; a restart loses what was not sent).
 - **Work** (Stats > Work): each brain counts the arithmetic operations it does (playing and learning), per second of
   play: the same number on any device (how heavy the brain is; the share of CPU then depends on the device). Also the
   expected work of its current settings (learning on / off), one decision, one learning step, the total, its memory.

@@ -1602,6 +1602,12 @@
       dtMsg = J ? '' : T('aima.d.cant');
       again('dt:learn');
     }));
+    if (cur && A.dataMissing(cur.id)) {
+      row.appendChild(btn('opt sel', T('aima.d.resend') + ' (' + A.dataMissing(cur.id) + ')', 'dt:resend', function () {
+        dtMsg = A.resendSet(cur.id) ? T('aima.d.resending') : T('aima.d.signfirst');
+        again('dt:resend');
+      }));
+    }
     if (cur) {
       row.appendChild(btn('danger', T('aima.d.del'), 'dt:del', function () {
         if (aimaConfirm !== 'dtdel:' + cur.id) { aimaConfirm = 'dtdel:' + cur.id; dtMsg = T('aima.d.confirmdel'); again('dt:del'); return; }

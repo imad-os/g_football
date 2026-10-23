@@ -1529,7 +1529,10 @@
     }).catch(function () {});
   }
   function findSet(id) { for (var i = 0; i < dataIndex.sets.length; i++) if (dataIndex.sets[i].id === id) return dataIndex.sets[i]; return null; }
-  function saveDataIndex() { return dataPut('index', { v: 1, sets: dataIndex.sets, updated: Date.now() }); }
+  function saveDataIndex() {
+    var sets = dataIndex.sets.map(function (x) { var c = {}; for (var k in x) if (k !== 'local') c[k] = x[k]; return c; }); // ("local" is only this session's note)
+    return dataPut('index', { v: 1, sets: sets, updated: Date.now() });
+  }
   function loadDataIndex() {
     cloud = cloud || cloudCfg();
     if (!cloud) { dataState = 'off'; return Promise.resolve(); }
@@ -1630,17 +1633,47 @@
       var idx = meta.chunks++;
       list[idx] = ch;
       R.pending++;
-      upChunk(R, meta, idx, ch);
+      upChunk(R, meta, idx, ch, 0);
     }
     meta.matches++; meta.samples += r.n; meta.presses += presses; meta.updated = Date.now();
     R.samples += r.n; R.presses += presses;
     if (canWrite()) saveDataIndex().catch(function () {});
   }
-  function upChunk(R, meta, idx, ch) {
-    if (!canWrite()) { meta.local = true; R.pending--; R.upErr = NS.I18n.t('aima.d.local'); return; }
+  // a chunk to the cloud: tried again (the rules may take a minute to apply, the network may drop) before it is given up;
+  // a chunk given up stays in memory (dmiss) and "Resend" tries it again. R: the record job (or null when resending)
+  var dmiss = {}, upBusy = 0, UP_TRIES = [0, 8000, 20000, 45000];
+  function missOf(id) { return Object.keys(dmiss[id] || {}).length; }
+  function upChunk(R, meta, idx, ch, tryN) {
+    tryN = tryN || 0;
+    if (!tryN) upBusy++;
+    function fin(ok, err) {
+      if (ok) { if (dmiss[meta.id]) delete dmiss[meta.id][idx]; if (R) R.uploaded++; }
+      else if (tryN + 1 < UP_TRIES.length && canWrite()) {
+        if (R) R.upErr = err;
+        setTimeout(function () { upChunk(R, meta, idx, ch, tryN + 1); }, UP_TRIES[tryN + 1]);
+        jobNotify(R);
+        return;
+      } else { (dmiss[meta.id] || (dmiss[meta.id] = {}))[idx] = 1; if (R) R.upErr = err; }
+      if (R) R.pending--;
+      meta.local = missOf(meta.id) > 0;
+      if (--upBusy <= 0 && canWrite()) saveDataIndex().catch(function () {}); // (the index last: the sets as they are now)
+      jobNotify(R);
+    }
+    if (!canWrite()) { fin(false, NS.I18n.t('aima.d.local')); return; }
     dataPut('c_' + meta.id + '_' + idx, { v: 1, set: meta.id, n: idx, count: ch.n, F: F, DA: DA, q: DQ, x: b64(new Uint8Array(ch.x.buffer)),
-      a: b64(new Uint8Array(ch.a.buffer)) }).then(function () { R.pending--; R.uploaded++; jobNotify(R); },
-      function (e) { R.pending--; meta.local = true; R.upErr = e && e.message ? e.message : 'network'; jobNotify(R); });
+      a: b64(new Uint8Array(ch.a.buffer)) }).then(function () { fin(true); }, function (e) { fin(false, e && e.message ? e.message : 'network'); });
+  }
+  // the chunks of a set that are still only in memory: sent again (only while this session still holds them)
+  function resendSet(id) {
+    var meta = findSet(id), n = 0;
+    if (!meta || !dmiss[id] || !canWrite()) return 0;
+    Object.keys(dmiss[id]).forEach(function (k) {
+      var ch = dsets[id] && dsets[id][+k];
+      if (!ch) { delete dmiss[id][k]; return; }
+      n++;
+      upChunk(null, meta, +k, ch, 0);
+    });
+    return n;
   }
 
   function pumpRec() {
@@ -1811,7 +1844,7 @@
       L.push(T('aima.d.rec') + ' "' + J.setName + '"  (' + J.done + ' / ' + (J.cfg.matches || '∞') + ' ' + T('aima.tr.matches') + ', ' +
         J.cfg.teamSize + ' ' + T('aima.tr.aside') + ', ' + J.cfg.stadium + ', ' + J.cfg.duration + ' min)  ' + T('aima.ss.' + J.state));
       L.push(T('aima.d.samples') + ': ' + J.samples + '   ' + T('aima.d.presses') + ': ' + J.presses + '   ' + T('aima.d.saved') + ': ' + J.uploaded +
-        (J.pending ? '  (' + J.pending + ' ' + T('aima.d.sending') + ')' : ''));
+        (J.pending ? '  (' + J.pending + ' ' + T('aima.d.sending') + ')' : '') + (missOf(J.set) ? '   ' + T('aima.d.unsaved') + ': ' + missOf(J.set) : ''));
     } else {
       L.push(T('aima.d.learn') + ': ' + (J.b ? J.b.name : '?') + '  <-  "' + J.setName + '"  (' + J.cfg.passes + ' ' + T('aima.d.passes') + ')  ' + T('aima.ss.' + J.state));
       if (J.loadMsg) L.push(T('aima.d.loading') + ' ' + J.loadMsg);
@@ -2194,10 +2227,13 @@
       if (!meta) return false;
       for (var k = 0; k < meta.chunks; k++) dataDel('c_' + id + '_' + k);
       dataIndex.sets = dataIndex.sets.filter(function (s) { return s.id !== id; });
-      delete dsets[id];
+      delete dsets[id]; delete dmiss[id];
       if (canWrite()) saveDataIndex().catch(function () {});
       return true;
     },
+    // chunks of a set not in the cloud yet (this session still holds them), and sending them again
+    dataMissing: missOf,
+    resendSet: resendSet,
     jobText: jobText,
     sessionText: function (S, full) { return S.b ? (full ? trainFull(S) : trainSummary(S)) : (S.error || ''); },
 

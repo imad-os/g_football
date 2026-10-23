@@ -931,7 +931,7 @@
     'aima.d.sets': 'data', 'aima.d.check': 'kept to check', 'aima.d.score': 'Score on unseen data', 'aima.d.extra': 'presses where Legend pressed nothing',
     'aima.d.skipped': 'chunks skipped (other inputs or missing)', 'aima.d.cloud': 'Cloud', 'aima.d.local': 'not saved to the cloud (not signed in): only in this session',
     'aima.d.nolearn': 'learning is off for this brain (Settings)', 'aima.d.empty': 'the data set is empty', 'aima.d.oldF': 'other inputs: record again',
-    'aima.h.data': 'learnt from data' });
+    'aima.h.data': 'learnt from data', 'aima.d.unsaved': 'not in the cloud yet', 'aima.d.resend': 'Resend unsaved chunks', 'aima.d.resending': 'Sending again...', 'aima.d.signfirst': 'Nothing to send (sign in first, or the app was restarted: record again).' });
   Object.assign(D.fr, { 'aima.d.title': 'Donnees enregistrees (Legend v Legend)', 'aima.d.none': 'aucun jeu de donnees', 'aima.d.samples': 'decisions',
     'aima.d.presses': 'passes / tirs / tacles', 'aima.d.set': 'Jeu de donnees', 'aima.d.new': 'nouveau', 'aima.d.passes': 'Passages sur les donnees',
     'aima.d.name': 'nom du nouveau jeu', 'aima.d.record': 'Enregistrer Legend v Legend', 'aima.d.learnbtn': 'Apprendre des donnees',
@@ -943,7 +943,7 @@
     'aima.d.sets': 'donnees', 'aima.d.check': 'gardees pour verifier', 'aima.d.score': 'Score sur donnees inconnues', 'aima.d.extra': 'appuis la ou Legend n\'appuie pas',
     'aima.d.skipped': 'morceaux sautes', 'aima.d.cloud': 'Cloud', 'aima.d.local': 'non enregistre dans le cloud (non connecte)',
     'aima.d.nolearn': 'apprentissage desactive pour ce cerveau', 'aima.d.empty': 'jeu de donnees vide', 'aima.d.oldF': 'autres entrees : reenregistrer',
-    'aima.h.data': 'appris des donnees' });
+    'aima.h.data': 'appris des donnees', 'aima.d.unsaved': 'pas encore dans le cloud', 'aima.d.resend': 'Renvoyer les morceaux', 'aima.d.resending': 'Nouvel envoi...', 'aima.d.signfirst': 'Rien a envoyer (connectez-vous, ou relancez un enregistrement).' });
   Object.assign(D.es, { 'aima.d.title': 'Datos grabados (Legend v Legend)', 'aima.d.none': 'aun no hay datos', 'aima.d.samples': 'decisiones',
     'aima.d.presses': 'pases / tiros / entradas', 'aima.d.set': 'Conjunto de datos', 'aima.d.new': 'nuevo', 'aima.d.passes': 'Pasadas por los datos',
     'aima.d.name': 'nombre del nuevo conjunto', 'aima.d.record': 'Grabar Legend v Legend', 'aima.d.learnbtn': 'Aprender de los datos',
@@ -955,7 +955,7 @@
     'aima.d.sets': 'datos', 'aima.d.check': 'para comprobar', 'aima.d.score': 'Puntuacion con datos no vistos', 'aima.d.extra': 'pulsaciones donde Legend no pulso',
     'aima.d.skipped': 'trozos saltados', 'aima.d.cloud': 'Nube', 'aima.d.local': 'no guardado en la nube (sin sesion)',
     'aima.d.nolearn': 'el aprendizaje esta desactivado para este cerebro', 'aima.d.empty': 'el conjunto esta vacio', 'aima.d.oldF': 'otras entradas: grabar de nuevo',
-    'aima.h.data': 'aprendio de datos' });
+    'aima.h.data': 'aprendio de datos', 'aima.d.unsaved': 'aun no en la nube', 'aima.d.resend': 'Reenviar trozos', 'aima.d.resending': 'Enviando de nuevo...', 'aima.d.signfirst': 'Nada que enviar (inicia sesion, o graba de nuevo).' });
 
   var lang = 'en';
 
