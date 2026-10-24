@@ -450,6 +450,24 @@ that differ from both teams.
   The other team's restart: a checkoAI taker plays it with the CPU's set play (it used to wait up to 10 s for its
   network to press a button), and pressing your pass or shot button (A / B, or the keyboard's) has the CPU take it at
   once (also pressed during the walk-up: he plays it as soon as he reaches the ball).
+* **Passes (low, through, long, long through)**:
+  - **Who gets it**: the stick's direction first (a team-mate within ~35 degrees of it, else ~70, else wider; the angle
+    off it and how far off its line he stands decide most), then the power bar (how far: a tap the near man, a full bar
+    the far one on that line); a free lane, a tight marker or a run only tip a close call. The **keeper** takes a low
+    pass when the stick points at him (never a through ball or a long ball).
+  - **Through balls** go into the space ahead of the receiver's run: the stick's direction blended with his own lane
+    (a wide man: straight down the wing; a central one: towards goal), kept 3.5 m inside the touchlines and 4 m from the
+    goal line, at the lead the bar asks for or a little shorter / longer where he gets there before the defenders.
+  - **Pace**: ground passes are struck about twice as firmly (they arrive at ~25 instead of ~12; a ground pass now
+    carries ~32 m). The man it is played to can take it at once (no pickup delay for him: a firm short pass used to roll
+    past him), and only a pass well above a pass's pace makes his touch harder.
+  - **Like a shot**, a pass is struck less well with his body away from the target, a man on him or at a sprint (a little
+    less strongly than a shot), by a poorer technician (Dribble) and by a weaker team: it goes astray more and comes off
+    softer / shorter.
+* **Chip shots** are no longer certain: their line and length go astray (more from further out, for a poor finisher,
+  with an awkward body or a man on him, for a weaker team): a bit long is over the bar, a bit short drops to the keeper,
+  and a keeper under one saves more (55% of his usual odds, was 40%). Test from 18 m: on target 69% facing goal (was
+  84%), 28% side on.
 * **How a shot comes off** (driven and curled shots; Actions.shotForm): its pace and aim depend on
   - his **body to the goal**: facing it, full power and his best aim; side on, less of both; back to it, about 60% of
     the pace and wild (a great finisher copes better: Shoot 90 loses ~0.65 of what Shoot 60 loses);

@@ -856,7 +856,7 @@
       // short pass to feet
       if (md > 4 && md < 34) {
         var sx = mt.pos.x + mt.vel.x * 0.3, sz = mt.pos.z + mt.vel.z * 0.3;
-        var spd = clamp(md * NS.PHYS.ROLL_K + 12, 21, 40);
+        var spd = Actions.passSpeed(md);
         var risk = laneRisk(px, pz, sx, sz, p.team, spd, false);
         var rspace = clamp((oppDist(sx, sz, p.team) - 1.5) / 7, 0, 1);
         var gain = (sx - px) * a;
@@ -879,7 +879,7 @@
           if (Math.abs(lx) > HALF_W - 4) continue;
           var ldx = lx - px, ldz = lz - pz;
           var ld = Math.sqrt(ldx * ldx + ldz * ldz);
-          var tspd = clamp(ld * NS.PHYS.ROLL_K + 8, 18, 38);
+          var tspd = Actions.thruSpeed(ld);
           var trisk = laneRisk(px, pz, lx, lz, p.team, tspd, false);
           var mgx = lx - mt.pos.x, mgz = lz - mt.pos.z;
           var mgd = Math.sqrt(mgx * mgx + mgz * mgz) || 1;
@@ -902,7 +902,7 @@
         var rx2 = clamp(mt.pos.x + mt.vel.x * 0.9, -HALF_W + 4, HALF_W - 4);
         var rz2 = clamp(mt.pos.z + mt.vel.z * 0.9, -HALF_H + 3, HALF_H - 3);
         var rdist = Math.sqrt((rx2 - px) * (rx2 - px) + (rz2 - pz) * (rz2 - pz));
-        var gr = laneRisk(px, pz, rx2, rz2, p.team, clamp(rdist * NS.PHYS.ROLL_K + 8, 18, 38), false) * 0.7;
+        var gr = laneRisk(px, pz, rx2, rz2, p.team, Actions.thruSpeed(rdist), false) * 0.7;
         var lr = rdist > 16 ? laneRisk(px, pz, rx2, rz2, p.team, 25, true) : 1;
         var race2 = 1 / (1 + Math.exp(-(0.3 - oppArrival(rx2, rz2, p.team)) * 5));
         var rrisk = Math.max(Math.min(gr, lr), race2);
@@ -1333,7 +1333,7 @@
       var dx = m.pos.x - p.pos.x, dz = m.pos.z - p.pos.z;
       var d = Math.sqrt(dx * dx + dz * dz);
       var short = d < 32;
-      var risk = laneRisk(p.pos.x, p.pos.z, m.pos.x, m.pos.z, p.team, short ? clamp(d * NS.PHYS.ROLL_K + 12, 21, 40) : 25, !short);
+      var risk = laneRisk(p.pos.x, p.pos.z, m.pos.x, m.pos.z, p.team, short ? Actions.passSpeed(d) : 25, !short);
       var space = clamp((oppDist(m.pos.x, m.pos.z, p.team) - 2) / 8, 0, 1);
       var sc = (1 - risk) * (0.4 + space * 0.6 + (m.pos.x * a + HALF_W) / 200) - risk * 0.8 + (Math.random() - 0.5) * prof.noise;
       if (sc > best) { best = sc; bm = m; bx = m.pos.x; bz = m.pos.z; bt = short ? ACT.PASS : ACT.LONG; }

@@ -1622,7 +1622,7 @@
               if (ball.lastTouchTeam >= 0) range += clamp(0.07 * (teamQ[p.team] - teamQ[ball.lastTouchTeam]), -0.12, 0.12);
               // (a human keeper: even a shot at him is not always kept out, a good one in the corner usually goes in)
               var chance = speed < 12 ? 1 : clamp(keeper + 0.05 + place + range - Math.max(0, speed - 34) * 0.01, 0.12, 0.9);
-              if (ball.chip) chance *= 0.4;
+              if (ball.chip) chance *= 0.55;
               if (ball.pen) chance *= 0.55;
               if (Math.random() < chance) {
                 if (NS.Stats) NS.Stats.save(p.team);
@@ -1663,7 +1663,7 @@
               takerD = d2;
               taker = p;
             }
-          } else if (ball.pickupCooldown <= 0 && (ball.pos.y < (p === ball.receiver ? 2.3 : 1.9) ? d2 < takerD :
+          } else if ((ball.pickupCooldown <= 0 || p === ball.receiver) && (ball.pos.y < (p === ball.receiver ? 2.3 : 1.9) ? d2 < takerD :
               (ball.pos.y < 2.6 && d2 < Math.min(takerD, 0.6)))) {
             // at his feet, or a ball at chest height that hits his body (the player it was played to brings it down
             // off his chest: he set himself for it)
