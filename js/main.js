@@ -93,6 +93,7 @@
       NS.HUD.applySettings(s);
       NS.Scene.setBallSkin(s.ballSkin);
       NS.Match.restyle(); // player models / polygons (at once, also during a match)
+      NS.Commentary.setup(s); // on / off (off: dropped at once), voice, language, how talkative...
       // 7 or 11 a side: the squads are rebuilt for the next match (a running match keeps its own)
       if (!World.match.running && NS.TEAM_SIZE !== s.teamSize) NS.Match.syncRosters();
     },
@@ -140,6 +141,7 @@
         NS.Scene.init(document.getElementById('game-canvas'), NS.Quality.tier());
         sceneReady = true;
         NS.Scene.setBallSkin(settings.ballSkin);
+        NS.Commentary.setup(settings); // (only reads the settings: it loads nothing before a match)
         MyPC.progress(0.7);
 
         NS.UI.build();

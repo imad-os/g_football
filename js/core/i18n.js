@@ -1048,6 +1048,51 @@
   Object.assign(D.es, { 'aima.d.win': 'Trozos por ventana', 'aima.d.rounds': 'Rondas', 'aima.d.window': 'Ventana', 'aima.d.chunk': 'trozos',
     'aima.d.round': 'Ronda', 'aima.d.loaded': 'cargados', 'aima.d.waiting': 'esperando trozos...', 'aima.d.resumed': 'siguio desde el trozo',
     'aima.d.autosave': 'Guardado (cada minuto)', 'aima.d.loaderr': 'Error de carga' });
+  // the voice commentator (Settings > Commentator)
+  Object.assign(D.en, { 'set.g.comm': 'COMMENTATOR',
+    'set.comm': 'Commentator', 'set.comm.h': 'A voice comments the match (off: nothing is loaded)',
+    'set.commlang': 'Language', 'set.commlang.h': 'AUTO: the language of the game',
+    'set.commvoice': 'Voice', 'set.commvoice.h': 'English has a male and a female voice; the other languages have one',
+    'set.commvol': 'Volume', 'set.commvol.h': 'The commentator\'s level (the sound volume of My PC applies too)',
+    'set.commtalk': 'How talkative', 'set.commtalk.h': 'CALM: the big moments only. CHATTY: tackles, passes, attacks too',
+    'set.commsubs': 'Subtitles', 'set.commsubs.h': 'What the commentator says, at the bottom of the screen',
+    'set.commfb': 'Phrase not recorded yet', 'set.commfb.h': 'When a phrase has no voice in this language yet',
+    'set.commduck': 'Lower the crowd', 'set.commduck.h': 'The crowd steps back while the commentator speaks',
+    'opt.comm.male': 'MALE', 'opt.comm.female': 'FEMALE', 'opt.comm.calm': 'CALM', 'opt.comm.chatty': 'CHATTY',
+    'opt.comm.english': 'ENGLISH VOICE', 'opt.comm.text': 'SUBTITLE ONLY', 'opt.comm.silent': 'SKIP IT' });
+  Object.assign(D.fr, { 'set.g.comm': 'COMMENTATEUR',
+    'set.comm': 'Commentateur', 'set.comm.h': 'Une voix commente le match (desactive : rien n\'est charge)',
+    'set.commlang': 'Langue', 'set.commlang.h': 'AUTO : la langue du jeu',
+    'set.commvoice': 'Voix', 'set.commvoice.h': 'L\'anglais a une voix d\'homme et de femme ; les autres langues une seule',
+    'set.commvol': 'Volume', 'set.commvol.h': 'Le niveau du commentateur (le volume de My PC s\'applique aussi)',
+    'set.commtalk': 'Bavardage', 'set.commtalk.h': 'CALME : les grands moments seulement. BAVARD : tacles, passes, attaques aussi',
+    'set.commsubs': 'Sous-titres', 'set.commsubs.h': 'Ce que dit le commentateur, en bas de l\'ecran',
+    'set.commfb': 'Phrase pas encore enregistree', 'set.commfb.h': 'Quand une phrase n\'a pas encore de voix dans cette langue',
+    'set.commduck': 'Baisser la foule', 'set.commduck.h': 'La foule se fait plus discrete quand le commentateur parle',
+    'opt.comm.male': 'HOMME', 'opt.comm.female': 'FEMME', 'opt.comm.calm': 'CALME', 'opt.comm.chatty': 'BAVARD',
+    'opt.comm.english': 'VOIX ANGLAISE', 'opt.comm.text': 'SOUS-TITRE SEUL', 'opt.comm.silent': 'L\'IGNORER' });
+  Object.assign(D.es, { 'set.g.comm': 'COMENTARISTA',
+    'set.comm': 'Comentarista', 'set.comm.h': 'Una voz comenta el partido (apagado: no se carga nada)',
+    'set.commlang': 'Idioma', 'set.commlang.h': 'AUTO: el idioma del juego',
+    'set.commvoice': 'Voz', 'set.commvoice.h': 'El ingles tiene voz de hombre y de mujer; los demas idiomas una',
+    'set.commvol': 'Volumen', 'set.commvol.h': 'El nivel del comentarista (el volumen de My PC tambien se aplica)',
+    'set.commtalk': 'Cuanto habla', 'set.commtalk.h': 'TRANQUILO: solo los grandes momentos. HABLADOR: entradas, pases, ataques tambien',
+    'set.commsubs': 'Subtitulos', 'set.commsubs.h': 'Lo que dice el comentarista, abajo en la pantalla',
+    'set.commfb': 'Frase aun no grabada', 'set.commfb.h': 'Cuando una frase aun no tiene voz en este idioma',
+    'set.commduck': 'Bajar el publico', 'set.commduck.h': 'El publico baja mientras habla el comentarista',
+    'opt.comm.male': 'HOMBRE', 'opt.comm.female': 'MUJER', 'opt.comm.calm': 'TRANQUILO', 'opt.comm.chatty': 'HABLADOR',
+    'opt.comm.english': 'VOZ EN INGLES', 'opt.comm.text': 'SOLO SUBTITULO', 'opt.comm.silent': 'OMITIRLA' });
+  Object.assign(D.ar, { 'set.g.comm': 'المعلق',
+    'set.comm': 'المعلق', 'set.comm.h': 'صوت يعلق على المباراة (عند الإيقاف لا يُحمَّل شيء)',
+    'set.commlang': 'اللغة', 'set.commlang.h': 'تلقائي: لغة اللعبة',
+    'set.commvoice': 'الصوت', 'set.commvoice.h': 'للإنجليزية صوت رجل وصوت امرأة، ولباقي اللغات صوت واحد',
+    'set.commvol': 'مستوى الصوت', 'set.commvol.h': 'مستوى صوت المعلق (يُطبَّق أيضاً مستوى صوت My PC)',
+    'set.commtalk': 'كثرة الكلام', 'set.commtalk.h': 'هادئ: اللحظات الكبيرة فقط. ثرثار: التدخلات والتمريرات والهجمات أيضاً',
+    'set.commsubs': 'الترجمة النصية', 'set.commsubs.h': 'ما يقوله المعلق، أسفل الشاشة',
+    'set.commfb': 'عبارة غير مسجلة بعد', 'set.commfb.h': 'عندما لا يكون للعبارة صوت بهذه اللغة بعد',
+    'set.commduck': 'خفض صوت الجمهور', 'set.commduck.h': 'ينخفض صوت الجمهور أثناء كلام المعلق',
+    'opt.comm.male': 'رجل', 'opt.comm.female': 'امرأة', 'opt.comm.calm': 'هادئ', 'opt.comm.chatty': 'ثرثار',
+    'opt.comm.english': 'صوت إنجليزي', 'opt.comm.text': 'نص فقط', 'opt.comm.silent': 'تخطيها' });
 
   var lang = 'en';
 

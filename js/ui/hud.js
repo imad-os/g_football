@@ -53,7 +53,7 @@
       var ids = ['hud', 'hud-comp', 'hud-home-badge', 'hud-home-name', 'hud-score-home', 'hud-score-away', 'hud-away-name',
         'hud-away-badge', 'hud-clock', 'hud-telemetry', 'hud-fps', 'hud-quality', 'hud-radar-box', 'radar-canvas',
         'event-banner', 'event-title', 'event-sub', 'hud-hint', 'goal-fx', 'goal-word', 'goal-sub', 'hud-home-cards', 'hud-away-cards',
-        'aima-box', 'aima-name', 'aima-ico', 'aima-txt', 'aima-gauge', 'clap-fx', 'clap-pct'];
+        'aima-box', 'aima-name', 'aima-ico', 'aima-txt', 'aima-gauge', 'clap-fx', 'clap-pct', 'hud-sub'];
       var i;
       for (i = 0; i < ids.length; i++) el[ids[i]] = $(ids[i]);
       for (i = 1; i <= 2; i++) {
@@ -243,6 +243,13 @@
       hintTimer = seconds;
     },
     hideHint: function () { el['hud-hint'].classList.add('hidden'); hintTimer = 0; },
+    // the commentator's subtitle ('' hides it); its text only changes when a phrase starts or ends
+    subtitle: function (txt) {
+      var s = el['hud-sub'];
+      if (!s) return;
+      if (txt) s.textContent = txt;
+      s.classList.toggle('hidden', !txt);
+    },
     tick: function (dt) {
       if (goalTimer > 0) { goalTimer -= dt; if (goalTimer <= 0) el['goal-fx'].classList.add('hidden'); }
       if (hintTimer > 0) { hintTimer -= dt; if (hintTimer <= 0) el['hud-hint'].classList.add('hidden'); }

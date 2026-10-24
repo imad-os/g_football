@@ -24,6 +24,7 @@
   var scorer = null;
   var breakClock = 0;
   var dangerT = 0;
+  var commAttack = [false, false];  // (the commentator's ATTACK: each team's attack said once)
   var R = NS.BALL_R;
   var PI = Math.PI;
 
@@ -185,6 +186,9 @@
 
   function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
+  // the voice commentator (js/game/commentary.js): an event code of its library; nothing when it is off
+  function say(ev, team) { if (NS.Commentary) NS.Commentary.event(ev, team); }
+
   // Where a leg meets the ball's height (drop = hips - ball centre), across (x) and along his facing (z): legPX / legPZ.
   // A leg lifted over the ball (a stride, a kick) gives its foot instead, and legLow = false: the ball rolls under it.
   var legPX = 0, legPZ = 0, legLow = false;
@@ -238,7 +242,7 @@
     var tc = t / sp;
     var chance = clamp((sp - 5) / 12, 0.15, 1) * (1 - p.st.def / 99 * 0.45) * (tc < 0.2 ? 1 : 0.6) * (p.role === 'GK' ? 0.5 : 1);
     if (Math.random() >= chance) return false;
-    ball.thruT = clamp((t + 1.2) / sp, 0.2, 0.6);
+    ball.nutT = clamp((t + 1.2) / sp, 0.2, 0.6);
     return true;
   }
 
@@ -339,6 +343,11 @@
   function takeBall(p) {
     var ball = World.ball;
     if (Actions.touch(p)) return false; // he was offside when it was played
+    // a long ball / through ball that found its man (played from 28 m or more)
+    if (ball.receiver === p && ball.kicker && ball.kicker.team === p.team) {
+      var lx = p.pos.x - ball.fromX, lz = p.pos.z - ball.fromZ;
+      if (ball.thru || lx * lx + lz * lz > 784) say('LONGPASS', p.team);
+    }
     if (NS.Stats) NS.Stats.gain(p);
     ball.owner = p;
     ball.lastTouchTeam = p.team;
@@ -401,6 +410,7 @@
       scorer.celZ = (scorer.pos.z >= 0 ? 1 : -1) * (HALF_H - 2.5);
     }
     NS.Audio.goal();
+    say('GOAL', team);
     NS.HUD.setScore(m.score[0], m.score[1]);
     var who = k ? k.name : ball.lastToucher;
     var mins = Math.min(90, Math.floor(m.timeSeconds / 60) + 1);
@@ -434,6 +444,8 @@
     scorer = null;
     setMoods(3, m.score[0] > m.score[1] ? 0 : (m.score[1] > m.score[0] ? 1 : -1));
     NS.Audio.whistle(2);
+    say('FULLTIME', 0);
+    if (m.score[0] !== m.score[1]) say(m.score[0] > m.score[1] ? 'HOMEWIN' : 'AWAYWIN', m.score[0] > m.score[1] ? 0 : 1);
     NS.HUD.banner(NS.I18n.t('hud.fulltime'), m.score[0] + ' - ' + m.score[1], 0);
     if (NS.Aima) NS.Aima.matchEnd(true);
     if (World.slots[0].active) {
@@ -544,6 +556,7 @@
     var ownGoalX = -NS.attack(tackler.team) * HALF_W;
     var inBox = Math.abs(victim.pos.x - ownGoalX) < NS.BOX_D && Math.abs(victim.pos.z) < NS.BOX_HW;
     m.setPiece = inBox ? 2 : 1;
+    say(inBox ? 'PENALTY' : 'FOUL', victim.team);
     if (NS.dbg) NS.dbg(inBox ? 'penalty_won' : 'free_kick_won', victim.team);
     m.setTeam = victim.team;
     m.setX = clamp(victim.pos.x, -HALF_W + 2, HALF_W - 2);
@@ -691,6 +704,7 @@
       m.setPieceTimer = 0.8;
       if (NS.dbg) NS.dbg('corner_won', m.setTeam);
       if (NS.Stats) NS.Stats.corner(m.setTeam);
+      say('CORNER', m.setTeam);
       NS.Audio.whistle(0);
       NS.HUD.banner(NS.I18n.t('hud.corner'), '', 1.0);
     } else {
@@ -708,6 +722,7 @@
     stopPlay();
     if (NS.dbg) NS.dbg('offside_caught', q.team);
     if (NS.Stats) NS.Stats.offside(q.team);
+    say('OFFSIDE', q.team);
     World.ball.vel.set(0, 0, 0);
     m.setPiece = 6;
     m.setTeam = 1 - q.team;
@@ -1130,6 +1145,8 @@
       NS.HUD.show(true);
       NS.HUD.applySettings(World.settings);
       NS.Audio.crowd(true);
+      if (NS.Commentary) { NS.Commentary.matchStart(); say('INTRO', 0); }
+      commAttack[0] = commAttack[1] = false;
     },
 
     // Back to the main menu (abandon or after full time).
@@ -1142,6 +1159,7 @@
       m.celebrationTimer = 0;
       breakKind = 0;
       NS.Audio.crowd(false);
+      if (NS.Commentary) NS.Commentary.matchEnd();
       NS.HUD.show(false);
       NS.HUD.hideGoalFx();
       NS.Scene.setRing(0, false, 0, 0);
@@ -1177,6 +1195,7 @@
       var n = players.length;
       var i, j, p;
       if (!m.running) return;
+      if (NS.Commentary) NS.Commentary.tick(dt);
 
       if (m.celebrationTimer > 0) {
         m.celebrationTimer -= dt;
@@ -1270,6 +1289,7 @@
         setMoods(2, -1);
         NS.Audio.whistle(1);
         NS.HUD.banner(NS.I18n.t('hud.halftime'), m.score[0] + ' - ' + m.score[1], 0);
+        say('HALFTIME', 0);
         return;
       }
 
@@ -1386,13 +1406,13 @@
         var taker = null;
         var takerD = 1.35;
         var gkActed = false;
-        if (ball.thruT > 0) ball.thruT -= dt;
+        if (ball.nutT > 0) ball.nutT -= dt;
         for (i = 0; i < n; i++) {
           p = players[i];
           if (p.stun > 0 || p.tackleT > 0) continue;
           if (p.ftT > 0) continue; // a first-time pass / shot is queued: he plays it without taking the ball (controls.js)
           if (p === ball.kicker && ball.kickerT > 0) continue;
-          if (p === ball.thru && ball.thruT > 0) continue; // it went through his legs: it is behind him now
+          if (p === ball.nutThru && ball.nutT > 0) continue; // it went through his legs: it is behind him now
           var ddx = ball.pos.x - p.pos.x;
           var ddz = ball.pos.z - p.pos.z;
           var d2 = ddx * ddx + ddz * ddz;
@@ -1400,7 +1420,7 @@
           if (d2 < (p.role === 'GK' ? 3.8 : 1.35) && !(ball.nutP === p && ball.age >= ball.nutAge)) {
             ball.nutP = p; ball.nutAge = ball.age;
             if (throughLegs(p, ball)) {
-              ball.thru = p;
+              ball.nutThru = p;
               if (NS.dbg) NS.dbg(p.team === ball.lastTouchTeam ? 'dummy' : 'nutmeg', ball.lastTouchTeam);
               if (p.team !== ball.lastTouchTeam) { NS.Audio.ooh(); NS.HUD.hint(NS.I18n.t('hud.nutmeg'), 1.2); }
               continue;
@@ -1438,6 +1458,7 @@
               if (ball.pen) chance *= 0.55;
               if (Math.random() < chance) {
                 if (NS.Stats) NS.Stats.save(p.team);
+                if (speed >= 16) say('SAVE', p.team); // (a real shot, not a back pass)
                 if (speed < (p.diveT > 0 ? 30 : 25) - (ball.pos.y > 2.3 ? 4 : 0)) { // a diving keeper holds on to harder shots; high ones are tipped
                   if (NS.dbg) NS.dbg('gk_catch', p.team);
                   takeBall(p);
@@ -1555,6 +1576,14 @@
         var danger = clamp(1 - toGoal / 32, 0, 1) * clamp(1.25 - Math.abs(ball.pos.z) / HALF_H, 0.35, 1);
         if (ball.hard && !ball.owner) danger = 1;
         NS.Audio.tick(0.2, danger);
+        // the commentator: a team carrying the ball into the last 25 m (once per attack: again after it went back
+        // beyond 35 m or changed hands)
+        var ao = ball.owner;
+        for (var at = 0; at < 2; at++) {
+          var aGoal = ao && ao.team === at && !m.restart ? Math.abs(NS.attack(at) * HALF_W - ao.pos.x) : 99;
+          if (aGoal < 25 && !commAttack[at]) { commAttack[at] = true; say('ATTACK', at); }
+          else if (aGoal > 35) commAttack[at] = false;
+        }
       }
 
       for (i = 0; i < 2; i++) {

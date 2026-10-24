@@ -2,7 +2,7 @@
 (function (NS) {
   'use strict';
 
-  NS.VERSION = '1.32.1';
+  NS.VERSION = '1.33.0';
 
   // Pitch geometry (world units; x = length, z = width, y = up). The players and the goal are drawn ~1.5x real size,
   // so the markings around the goal are the real ones scaled to the goal (BOX_K), not to the pitch: the boxes look
@@ -79,11 +79,19 @@
     showRadar: true,
     showFPS: false,
     replayLen: 10,
-    goalReplay: true
+    goalReplay: true,
+    commentary: true,
+    commLang: 'AUTO',
+    commVoice: 'MALE',
+    commVolume: 0.85,
+    commTalk: 'NORMAL',
+    commSubs: true,
+    commFallback: 'EN',
+    commDuck: true
   };
 
   // Settings groups (the tabs of the Settings screen)
-  NS.SETTING_GROUPS = [['game', 'set.g.game'], ['video', 'set.g.video'], ['audio', 'set.g.audio'], ['aima', 'set.g.aima']];
+  NS.SETTING_GROUPS = [['game', 'set.g.game'], ['video', 'set.g.video'], ['audio', 'set.g.audio'], ['comm', 'set.g.comm'], ['aima', 'set.g.aima']];
 
   // Settings schema: drives the Settings screen, validation and the app_config merge.
   NS.SETTING_DEFS = [
@@ -131,6 +139,23 @@
     { key: 'replayLen', group: 'video', label: 'set.replay', hint: 'set.replay.h',
       options: [[10, 'opt.s10'], [15, 'opt.s15'], [20, 'opt.s20']] },
     { key: 'goalReplay', group: 'video', label: 'set.goalrep', hint: 'set.goalrep.h',
+      options: [[true, 'opt.on'], [false, 'opt.off']] },
+    // the voice commentator (js/game/commentary.js): off = nothing is loaded and it never runs
+    { key: 'commentary', group: 'comm', label: 'set.comm', hint: 'set.comm.h',
+      options: [[true, 'opt.on'], [false, 'opt.off']] },
+    { key: 'commLang', group: 'comm', label: 'set.commlang', hint: 'set.commlang.h',
+      options: [['AUTO', 'opt.auto'], ['EN', 'English'], ['FR', 'Français'], ['ES', 'Español'], ['AR', 'العربية']] },
+    { key: 'commVoice', group: 'comm', label: 'set.commvoice', hint: 'set.commvoice.h',
+      options: [['MALE', 'opt.comm.male'], ['FEMALE', 'opt.comm.female']] },
+    { key: 'commVolume', group: 'comm', label: 'set.commvol', hint: 'set.commvol.h',
+      options: [[0.6, 'opt.low'], [0.85, 'opt.med'], [1, 'opt.high']] },
+    { key: 'commTalk', group: 'comm', label: 'set.commtalk', hint: 'set.commtalk.h',
+      options: [['CALM', 'opt.comm.calm'], ['NORMAL', 'opt.normal'], ['CHATTY', 'opt.comm.chatty']] },
+    { key: 'commSubs', group: 'comm', label: 'set.commsubs', hint: 'set.commsubs.h',
+      options: [[true, 'opt.show'], [false, 'opt.hide']] },
+    { key: 'commFallback', group: 'comm', label: 'set.commfb', hint: 'set.commfb.h',
+      options: [['EN', 'opt.comm.english'], ['TEXT', 'opt.comm.text'], ['SILENT', 'opt.comm.silent']] },
+    { key: 'commDuck', group: 'comm', label: 'set.commduck', hint: 'set.commduck.h',
       options: [[true, 'opt.on'], [false, 'opt.off']] }
   ];
 

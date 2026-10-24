@@ -354,6 +354,22 @@ repeats the same loop. **Settings > Crowd chants** turns the songs off.
 
 **Ball**: Settings > Ball has 5 designs (CLASSIC, PRO, NIGHT, RETRO, GOLD).
 
+**Voice commentator** (Settings > Commentator; js/game/commentary.js): a recorded voice comments the match in English
+(male or female voice), French, Spanish or Arabic (AUTO = the game's language), with subtitles. The match sends it events
+(the codes of its library: INTRO, GOAL, PENALTY, FOUL, CORNER, OFFSIDE, SAVE, TACKLE, LONGPASS, COUNTER, ATTACK, HALFTIME,
+FULLTIME, HOMEWIN, AWAYWIN); it says one phrase at a time, picks by importance (a goal cuts a small comment short, a
+phrase that came too late is dropped), keeps cool-downs per event (no "what a tackle!" every few seconds), says minor
+events only sometimes (How talkative: CALM = the big moments only, NORMAL, CHATTY), pauses between phrases and never
+repeats the last phrase of an event. The crowd steps back while it speaks (Lower the crowd). Settings: on / off,
+language, voice, volume, how talkative, subtitles, what to do with a phrase not recorded in that language yet (English
+voice, subtitle only, or skip it), lower the crowd. **Off: nothing is loaded and nothing runs.** On: at the first match it
+reads `audio/commentary/library.json` (~30 KB), then fetches the MP3s of the chosen voice one at a time in the background,
+the big moments first (~3 MB for English, kept compressed); a phrase is decoded only when needed (8 kept), and the next
+goal / penalty / save phrase is decoded ahead so the big moments are never late. It speaks through the game's
+AudioContext (the My PC volume and pause apply) and stays silent in debug / training matches and in trainer.html.
+The audio comes from the assets repo `imad-os/f_assets`: `node tools/commentary-sync.mjs` copies the MP3s that exist and
+writes the library (run it again after new audio was generated there, then release a new version).
+
 **Player models** (Settings > Graphics): `ATHLETE` (default: a real footballer's build, legs about half the height, heights
 1.72-1.92 m with taller keepers, hair styles and boot colours that stay the same for a player every match; keepers wear long
 sleeves and gloves), `CLASSIC` (the original blocks) or `TOON` (big heads, short legs). **Polygons**: LOW / MEDIUM / HIGH /
@@ -410,7 +426,8 @@ js/main.js            My PC lifecycle (init / ready / start / pause / resume / d
 * Matches: controllers through `MyPC.gamepad` (buttons, sticks, pad list; never `navigator.getGamepads()` ourselves). Menus: `MyPC.init({ onInput })` actions (arrows + OK, cancel goes back). No `keydown` listeners.
 * The guide asks for play with the TV remote alone; this game is deliberately controller-only in matches (owner's choice), the menus still work with the remote.
 * Saves: `MyPC.save/load` (`stats`, `settings`, `bindings`). Score: `MyPC.submitScore` at full time of a match with a human player.
-* Owner config (`MyPC.app_config`, defaults in `mypc-app.json` `config`): `difficulty`, `durationMins`, `gameSpeed`, `switchMode`, `cameraMode`, `ballSkin`, `playerModel`, `playerDetail`, `crowdChants`, `gaugeTime`, `quality`, `soundEnabled`, `showRadar`, `showFPS`.
+* Owner config (`MyPC.app_config`, defaults in `mypc-app.json` `config`): `difficulty`, `durationMins`, `gameSpeed`, `switchMode`, `cameraMode`, `ballSkin`, `playerModel`, `playerDetail`, `commentary`, `commLang`, `commVoice`, `commVolume`, `commTalk`,
+`commSubs`, `commFallback`, `commDuck`, `crowdChants`, `gaugeTime`, `quality`, `soundEnabled`, `showRadar`, `showFPS`.
 * Touch: My PC's own virtual pad on phones and tablets (no `"touch"` entry in the manifest); phones can also be phone controllers.
 * Fixed 60 Hz step, no allocation in the update loop, DOM written only when a value changes, one `AudioContext` closed in `onDestroy`.
 

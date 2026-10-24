@@ -658,6 +658,7 @@
           chance = clamp(chance, 0.03, 0.92);
           if (Math.random() < chance) {
             if (NS.dbg) { NS.dbg(p.tackleSlide ? 'slide_won' : 'tackle_won', p.team); if (!onBall) NS.dbg('tackle_won_via_body', p.team); }
+            if (NS.Commentary) NS.Commentary.event('TACKLE', p.team);
             ball.receiver = null;
             ball.contester = null;
             ball.lastTouchTeam = p.team;

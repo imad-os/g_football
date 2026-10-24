@@ -333,6 +333,7 @@
         if (T.cntLevel) {
           if (owner.aiCd > 0.12) owner.aiCd = 0.12; // the first pass goes quickly
           if (NS.dbg) NS.dbg(T.cntLevel === 2 ? 'counter_attack_started_everyone' : 'counter_attack_started_quick_break', t);
+          if (NS.Commentary) NS.Commentary.event('COUNTER', t);
         }
       } else if (owner && owner.team !== t && T.has) {
         T.has = false; T.lostT = 0;

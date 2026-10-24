@@ -17,6 +17,7 @@
   var sfxVolume = 0.8;
 
   var master = null, sfxBus = null, crowdBus = null;
+  var duckG = null, voiceBus = null;  // the crowd's level under the commentator, the commentator's own channel
   var buf = {};                 // prebuilt effect buffers
   var noiseBuf = null;
   var murmurG = null, murmurF = null, roarG = null, roarF = null;
@@ -103,7 +104,11 @@
     sfxBus.connect(master);
     crowdBus = ctx.createGain();
     crowdBus.gain.value = 0;
-    crowdBus.connect(master);
+    duckG = ctx.createGain();
+    crowdBus.connect(duckG);
+    duckG.connect(master);
+    voiceBus = ctx.createGain();
+    voiceBus.connect(master);
 
     var Z = window.ZZFX;
     if (Z) {
@@ -298,6 +303,23 @@
         });
       } catch (e) {}
     },
+    // The commentator's channel (js/game/commentary.js): its own level, after the My PC volume (master). It plays even
+    // with the match sounds off (its own setting), never while the app is paused. null when there is no audio.
+    voice: function () {
+      if (suspended) return null;
+      if (!ctx) {
+        var AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        try { ctx = new AC(); build(); } catch (e) { ctx = null; return null; }
+      }
+      if (ctx.state === 'suspended') ctx.resume().catch(function () {});
+      return voiceBus ? { ctx: ctx, out: voiceBus } : null;
+    },
+    // the crowd steps back while the commentator speaks (level 1 = full, 0.5 = half)
+    duck: function (level) {
+      if (!ctx || !duckG) return;
+      duckG.gain.setTargetAtTime(level, ctx.currentTime, level < 1 ? 0.08 : 0.4);
+    },
     setVolume: function (v) {
       sfxVolume = v >= 0 && v <= 1 ? v : 0.8;
       if (master) master.gain.value = sfxVolume;
@@ -421,7 +443,7 @@
       suspended = true;
       if (ctx) { try { ctx.close(); } catch (e) {} }
       ctx = null;
-      master = sfxBus = crowdBus = null;
+      master = sfxBus = crowdBus = duckG = voiceBus = null;
       murmurG = murmurF = roarG = roarF = null;
       buf = {};
       crowdLive = false;
