@@ -446,6 +446,9 @@ that differ from both teams.
   throw to a man is a soft ball, so his first touch almost never fails (even running onto it, which your players do).
   Kept in a test: the CPU 97%, by hand 80-93% (was ~50%). **The clock stops** while a restart waits to be played
   (throw-in, corner, free kick, goal kick, penalty, kick-off), as it already did while the players got into place.
+  The other team's restart: a checkoAI taker plays it with the CPU's set play (it used to wait up to 10 s for its
+  network to press a button), and pressing your pass or shot button (A / B, or the keyboard's) has the CPU take it at
+  once (also pressed during the walk-up: he plays it as soon as he reaches the ball).
 * **Knees and elbows** (ATHLETE, TOON): thigh / shin and upper arm / forearm on their own pivots: a running leg folds
   as it swings through, the back-swing of a kick folds the knee, the slide folds the back leg, players kneel on their
   shins; the forearms come up with the pace; keepers crouch set for a shot (bent knees, arms out low, elbows bent),

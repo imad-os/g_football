@@ -974,7 +974,8 @@
       }
       c.mode = newMode;
     }
-    c.cpu = c.mode === 0 || (m.penalty && World.ball.owner === p);
+    // (a penalty, and a restart he takes (throw-in, corner, free kick, goal kick, kick-off): the CPU's set play, at once)
+    c.cpu = c.mode === 0 || (World.ball.owner === p && (m.penalty || (m.restart && p === m.setTaker)));
     c.t -= dt;
     if (c.t <= 0) {
       var TICK = TICKS[b.cfg.tick] || TICKS[1];

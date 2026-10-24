@@ -19,6 +19,7 @@
   var breakKind = 0;
   // ball out of play: the players walk to their places for the throw-in / corner / goal kick (no frozen screen)
   var walking = false, walkT = 0, walkBallY = 0;
+  var hurried = false; // a human pressed A / B: the other team's restart is played at once (hurryRestart)
   // the referee (not one of World.players: he never touches the ball)
   var ref = null;
   var scorer = null;
@@ -712,7 +713,7 @@
       p.mesh.root.rotation.y = p.facing;
       animate(p, dt);
     }
-    if (!(takerIn && (done || walkT > 1.2)) && walkT < 3.2) return;
+    if (!(takerIn && (done || walkT > 1.2 || hurried)) && walkT < 3.2) return;
     // everybody in place: the restart is on
     if (NS.dbg && walkT >= 3.2) NS.dbg('restart_walkup_timeout', World.match.setTeam);
     walking = false;
@@ -724,6 +725,21 @@
     }
     World.ball.pos.y = walkBallY;
     NS.Input.clearEdges();
+  }
+
+  // The other team's restart (throw-in, corner, free kick, goal kick, kick-off): a human pressing A or B (his pass or
+  // shot button) has the CPU taker play it now instead of looking up first.
+  function hurryRestart() {
+    var m = World.match, tk = m.setTaker;
+    if (!m.restart || !tk || World.ball.owner !== tk) return;
+    if (hurried) { if (!walking) tk.aiT = 99; return; } // (pressed during the walk-up: he plays it once he is there)
+    for (var i = 0; i < 2; i++) {
+      var slot = World.slots[i];
+      if (!slot.active || slot.team === tk.team) continue;
+      var map = NS.Devices.mapOf(i), B = NS.Bindings;
+      var mask = B.maskOf(B.index('lowpass'), map) | B.maskOf(B.index('shoot'), map) | (map === 0 ? 8 | 16 : 0); // (A, B)
+      if (NS.Input.pads[i].latch & mask) { hurried = true; if (!walking) tk.aiT = 99; return; }
+    }
   }
 
   // Play stops (foul, offside, ball out): nobody has the ball, no pass is on its way, the offside snapshot is gone.
@@ -1021,6 +1037,7 @@
       walking = true;
       walkT = 0;
     }
+    hurried = false;
     for (i = 0; i < players.length; i++) { players[i].mesh.root.rotation.y = players[i].facing; animate(players[i], 0); }
   }
 
@@ -1340,6 +1357,7 @@
         return;
       }
       if (walking) {
+        hurryRestart();
         walkStep(dt);
         refStep(dt);
         NS.Scene.followBall(dt, ball.pos.x, ball.pos.z, settings.cameraMode);
@@ -1352,6 +1370,7 @@
         if (ball.owner !== m.setTaker) {
           m.restart = 0;
           m.protectT = 0;
+          hurried = false;
         } else if (m.restartT > 10) {
           if (NS.dbg) NS.dbg('restart_auto_played_10s', m.setTaker.team, m.restart);
           Actions.kick(m.setTaker, m.restart === 5 ? ACT.LONG : ACT.PASS, 0.5, NS.attack(m.setTaker.team), 0, 1);
@@ -1414,6 +1433,7 @@
 
       // ----- humans (and AI.MA, who plays like one) -----
       syncAiSlots();
+      hurryRestart();
       if (NS.Aima) NS.Aima.poll(dt);
       // the ball changed hands: a human team takes control of its new carrier straight away
       if (ball.owner !== lastOwner) {
