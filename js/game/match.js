@@ -468,6 +468,7 @@
       scorer.celZ = (scorer.pos.z >= 0 ? 1 : -1) * (HALF_H - 2.5);
     }
     NS.Audio.goal();
+    NS.Scene.crowdCheer(4.2);
     say('GOAL', team);
     NS.HUD.setScore(m.score[0], m.score[1]);
     var who = k ? k.name : ball.lastToucher;

@@ -626,8 +626,71 @@
     for (var i = 0; i < mesh.mats.length; i++) mesh.mats[i].dispose();
   }
 
+  // The crowd: flat stands (js/render/scene.js) wearing one small tile of fans drawn here once, no 3D people. Two frames
+  // of the same fans (the same seeded draw): sitting, and on their feet with their arms up (a goal). 512 x 256, tiled
+  // along the stands; mipmapped, so the far rows cost nothing more.
+  var crowdTex = null;
+  var FAN_COLS = 16, FAN_ROWS = 6;
+  var FAN_SHIRTS = ['#dc2626', '#f8fafc', '#2563eb', '#16a34a', '#facc15', '#111827', '#ea580c', '#7c3aed', '#0ea5e9', '#b91c1c', '#e2e8f0', '#1e3a8a'];
+  var FAN_SKIN = ['#f1c7a3', '#d9a07a', '#b97850', '#8d5a3b', '#5e3b26'];
+  var FAN_HAIR = ['#111111', '#2b1b10', '#4a3020', '#8a6a3a', '#d6c08a', '#3a3a3a'];
+  function drawCrowd(cheer) {
+    var W = 512, H = 256, cw = W / FAN_COLS, rh = H / FAN_ROWS;
+    var canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    var ctx = canvas.getContext('2d');
+    var seed = 7;
+    function rnd() { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }
+    for (var r = 0; r < FAN_ROWS; r++) {
+      // the seat row (a step of the terrace): dark, its edge a little lighter
+      var y0 = r * rh;
+      ctx.fillStyle = r % 2 ? '#1b2333' : '#202a3d';
+      ctx.fillRect(0, y0, W, rh);
+      ctx.fillStyle = '#2c3850';
+      ctx.fillRect(0, y0 + rh - 4, W, 4);
+      for (var c = 0; c < FAN_COLS; c++) {
+        var empty = rnd() < 0.08;
+        var shirt = FAN_SHIRTS[Math.floor(rnd() * FAN_SHIRTS.length)];
+        var skin = FAN_SKIN[Math.floor(rnd() * FAN_SKIN.length)];
+        var hair = FAN_HAIR[Math.floor(rnd() * FAN_HAIR.length)];
+        var jx = (rnd() - 0.5) * 6, jy = (rnd() - 0.5) * 3, arms = rnd(), lift = rnd(); // (the same draws in both frames)
+        if (empty) continue;
+        var x = c * cw + cw / 2 + jx, base = y0 + rh - 4;
+        var up = cheer ? 6 + lift * 4 : 0;            // on his feet
+        var sh = base - 17 - up + jy;                  // shoulders
+        ctx.fillStyle = shirt;
+        ctx.beginPath();                               // body: a rounded shirt
+        ctx.moveTo(x - 9, base); ctx.lineTo(x - 9, sh + 4); ctx.quadraticCurveTo(x - 9, sh, x - 5, sh);
+        ctx.lineTo(x + 5, sh); ctx.quadraticCurveTo(x + 9, sh, x + 9, sh + 4); ctx.lineTo(x + 9, base); ctx.closePath();
+        ctx.fill();
+        if (cheer && arms < 0.75) {                    // arms up (one or both)
+          ctx.strokeStyle = shirt; ctx.lineWidth = 3.5; ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(x - 7, sh + 2); ctx.lineTo(x - 11, sh - 10);
+          if (arms < 0.5) { ctx.moveTo(x + 7, sh + 2); ctx.lineTo(x + 11, sh - 10); }
+          ctx.stroke();
+          ctx.fillStyle = skin;
+          ctx.beginPath(); ctx.arc(x - 11, sh - 11, 2, 0, 6.283); ctx.fill();
+          if (arms < 0.5) { ctx.beginPath(); ctx.arc(x + 11, sh - 11, 2, 0, 6.283); ctx.fill(); }
+        }
+        ctx.fillStyle = skin;                          // head
+        ctx.beginPath(); ctx.arc(x, sh - 5, 5, 0, 6.283); ctx.fill();
+        ctx.fillStyle = hair;                          // hair
+        ctx.beginPath(); ctx.arc(x, sh - 6.5, 5, Math.PI, 6.283); ctx.fill();
+      }
+    }
+    var tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+  }
+  function crowdTextures() {
+    if (!crowdTex) crowdTex = [drawCrowd(false), drawCrowd(true)];
+    return crowdTex;
+  }
+
   function disposeAll() {
     var k;
+    if (crowdTex) { crowdTex[0].dispose(); crowdTex[1].dispose(); crowdTex = null; }
     for (k in geo) geo[k].dispose();
     for (k in jerseyCache) jerseyCache[k].dispose();
     jerseyCache = {};
@@ -647,6 +710,7 @@
     hexToCss: hexToCss,
     initGeometries: initGeometries,
     pitchTexture: buildPitchTexture,
+    crowdTextures: crowdTextures,
     ballTexture: ballTexture,
     createPlayer: createPlayer,
     restylePlayer: restylePlayer,

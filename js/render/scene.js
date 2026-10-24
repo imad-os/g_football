@@ -74,21 +74,49 @@
     buildGoal(-NS.PITCH_HALF_W, stadium);
     buildGoal(NS.PITCH_HALF_W, stadium);
 
-    var COUNT = 140;
-    crowdMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.9, 1.2, 0.9), new THREE.MeshBasicMaterial({ color: 0xffffff }), COUNT);
-    var dummy = new THREE.Object3D();
-    var palette = [0xef4444, 0x38bdf8, 0xfacc15, 0xf8fafc, 0x22c55e];
-    var color = new THREE.Color();
-    for (var i = 0; i < COUNT; i++) {
-      var row = i % 5;
-      var col = Math.floor(i / 5);
-      dummy.position.set(-NS.PITCH_HALF_W + col * 3.4 * NS.PITCH_SCALE, 2.2 + row * 1.6, -NS.PITCH_HALF_H - M - 3.5 - row * 2.1);
-      dummy.updateMatrix();
-      crowdMesh.setMatrixAt(i, dummy.matrix);
-      color.setHex(palette[i % palette.length]);
-      crowdMesh.setColorAt(i, color);
-    }
+    crowdMesh = buildStands();
     stadium.add(crowdMesh);
+  }
+
+  // The crowd: flat terraces sloping up away from the pitch behind the far touchline and both goals (the TV camera sits
+  // on the near side), all in one mesh of 3 quads with one unlit material: the fans are a picture (js/render/assets.js),
+  // not 3D people. One draw call, 12 vertices, whatever the stadium.
+  var FAN_TILE = 16 * 0.62 * NS.M;  // world width of the crowd tile (16 fans) and its height along the slope (6 rows)
+  var ROW_TILE = 6 * 0.85 * NS.M;
+  function buildStands() {
+    var pos = [], uv = [], idx = [];
+    var HW = NS.PITCH_HALF_W + NS.Assets.PITCH_MARGIN, HH = NS.PITCH_HALF_H + NS.Assets.PITCH_MARGIN;
+    // a terrace: its front edge a -> b at height h0, going back along (nx, nz) by depth up to h1
+    function terrace(ax, az, bx, bz, nx, nz, depth, h0, h1) {
+      var n = pos.length / 3;
+      var len = Math.sqrt((bx - ax) * (bx - ax) + (bz - az) * (bz - az));
+      var u = Math.round(len / FAN_TILE), v = Math.round(Math.sqrt(depth * depth + (h1 - h0) * (h1 - h0)) / ROW_TILE);
+      pos.push(ax, h0, az, bx, h0, bz, bx + nx * depth, h1, bz + nz * depth, ax + nx * depth, h1, az + nz * depth);
+      uv.push(0, 0, u, 0, u, v, 0, v);
+      idx.push(n, n + 1, n + 2, n, n + 2, n + 3);
+    }
+    terrace(-HW - 8, -HH - 2, HW + 8, -HH - 2, 0, -1, 24, 1.2, 17); // behind the far touchline
+    terrace(-HW - 3, HH, -HW - 3, -HH - 2, -1, 0, 18, 1.2, 12);     // behind the left goal
+    terrace(HW + 3, -HH - 2, HW + 3, HH, 1, 0, 18, 1.2, 12);        // behind the right goal
+    var g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx);
+    var mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ map: NS.Assets.crowdTextures()[0], side: THREE.DoubleSide }));
+    mesh.matrixAutoUpdate = false; // (never moves)
+    return mesh;
+  }
+  // a goal: the fans jump up, arms in the air, for a few seconds (only the picture and its offset change)
+  var cheerT = 0;
+  function crowdStep(dt) {
+    if (!crowdMesh || !crowdMesh.visible) return;
+    var tx = NS.Assets.crowdTextures(), mat = crowdMesh.material;
+    if (cheerT > 0) {
+      cheerT -= dt;
+      if (mat.map !== tx[1]) mat.map = tx[1];
+      tx[1].offset.y = cheerT > 0 ? Math.abs(Math.sin(cheerT * 11)) * 0.03 : 0;
+    }
+    if (cheerT <= 0 && mat.map !== tx[0]) mat.map = tx[0];
   }
 
   NS.Scene = {
@@ -155,10 +183,7 @@
         pitchMesh.material.map = NS.Assets.pitchTexture(tier.pitchStripes);
         pitchMesh.material.needsUpdate = true;
       }
-      if (crowdMesh) {
-        crowdMesh.count = tier.crowdCount;
-        crowdMesh.visible = tier.crowdCount > 0;
-      }
+      if (crowdMesh) crowdMesh.visible = tier.crowdCount > 0; // (LOW: no crowd)
       dirLight.visible = tier.useLighting;
     },
     resize: function () {
@@ -239,8 +264,11 @@
     },
     // The ball hit the net of goal side (+1 / -1): it bulges and settles.
     netHit: function (side) { netT[side > 0 ? 1 : 0] = 1; },
+    // a goal: the crowd on its feet for t seconds
+    crowdCheer: function (t) { cheerT = t; },
     // Smooth follow camera; called once per simulation step (also settles the nets).
     followBall: function (dt, bx, bz, mode) {
+      crowdStep(dt);
       for (var n = 0; n < 2; n++) {
         if (netT[n] <= 0 || !nets[n]) continue;
         netT[n] -= dt * 1.6;
@@ -309,6 +337,7 @@
         if (o.material && o.material.dispose) o.material.dispose();
       });
       buildStadium(currentTier || { pitchStripes: true });
+      if (currentTier) crowdMesh.visible = currentTier.crowdCount > 0;
     },
     lit: function () { return currentTier ? currentTier.useLighting : true; },
     dispose: function () {

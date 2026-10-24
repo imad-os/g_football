@@ -444,6 +444,11 @@ that differ from both teams.
 * Players (js/render/assets.js + `animate` in js/game/match.js): legs and arms swing from hips and shoulders, body leans with speed;
   kick and shot (back-swing and strike, bigger for shots and long balls), standing tackle lunge, slide tackle on the grass,
   knocked off balance after losing the ball, keeper dives to the side of the shot and holds the ball in front.
+* Crowd (js/render/scene.js `buildStands`, js/render/assets.js `crowdTextures`): no 3D people. Three flat terraces slope
+  up behind the far touchline and both goals (the camera is on the near side): one mesh, 12 vertices, one unlit material,
+  one draw call on any stadium. The fans are a 512 x 256 picture of 16 x 6 fans drawn once at start (no download, no
+  outside asset), tiled over the terraces and mipmapped. A goal swaps it for the same fans on their feet with their arms
+  up and bounces it for 4 s (only the texture and its offset change). Off on the LOW quality tier.
 
 ## Layout
 
