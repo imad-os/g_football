@@ -322,8 +322,9 @@
       var sd = Math.sqrt(sdx * sdx + sdz * sdz);
       ball.shotD = sd; // the keeper sees a shot from range coming for longer
       // his Shoot rating: accuracy (a great finisher misses by much less) and pace
-      var err = (0.016 + sd * 0.0015) * (accuracy || 1) * (0.6 + g * 0.7) * (1.7 - p.st.sht / 99 * 1.1);
+      var err = (0.016 + sd * 0.0015) * (accuracy || 1) * (0.6 + g * 0.7) * (2.1 - p.st.sht / 99 * 1.65);
       if (p.bumpT > 0) err *= BUMP_ACC; // pressed shoulder to shoulder: off balance
+      if (NS.teamClass) err *= clamp(1 - 0.3 * NS.teamClass(p.team), 0.6, 1.5); // (a better team finishes better)
       var angle = Math.atan2(sdx, sdz) + gaussR() * err;
       var speed = this.shotSpeed(g) * (0.9 + p.st.sht / 99 * 0.14) * (p.bumpT > 0 ? BUMP_POW : 1);
       var ty = this.gaugeHeight(g);
@@ -364,6 +365,7 @@
       var angle, speed, vy, d;
       var bumped = p.bumpT > 0;
       if (bumped) accuracy = (accuracy || 1) * BUMP_ACC; // pressed shoulder to shoulder: off balance
+      if (p.st) accuracy = (accuracy || 1) * (1.45 - p.st.drb / 99 * 0.6); // his technique (Dribble): a cleaner pass
       var dx = tx - p.pos.x;
       var dz = tz - p.pos.z;
       d = Math.sqrt(dx * dx + dz * dz);
@@ -475,6 +477,7 @@
       var strength = (p.st.def * 0.6 + p.st.hdr * 0.4) / 99;
       // (a shoulder is mostly a nuisance, not a tackle: half the odds a tackle-like challenge would have)
       var chance = (skill || 0.3) * (0.55 + strength * 0.7) * (1.35 - c.st.drb / 99 * 0.7) * 0.5;
+      if (NS.classEdge) chance *= NS.classEdge(p.team, c.team); // (the better team wins more of them)
       if (front < -0.55) chance *= 0.3;       // from behind: his back shields the ball
       else if (front > 0.45) chance *= 0.8;  // in front: it is a tackle's job
       if (c.dribbling) chance *= 0.8;
@@ -672,6 +675,7 @@
           else chance *= 1.08;
           if (carrier.dribbling) chance *= 0.75;
           if (!onBall) chance *= 0.45; // into the man, not the ball
+          if (NS.classEdge) chance *= NS.classEdge(p.team, carrier.team); // (the better team wins more of them)
           chance = clamp(chance, 0.03, 0.92);
           if (Math.random() < chance) {
             if (NS.dbg) { NS.dbg(p.tackleSlide ? 'slide_won' : 'tackle_won', p.team); if (!onBall) NS.dbg('tackle_won_via_body', p.team); }
@@ -729,7 +733,8 @@
       var pace = Math.max(0, s - 10) / 25;
       var quick = react < REACT_TOUCH ? Math.min(1, (REACT_TOUCH - react) / (REACT_TOUCH - 0.15)) : 0;
       var skill = (p.role === 'GK' ? p.st.drb * 0.5 + 30 : p.st.drb) / 99;
-      var fail = (pace * 0.35 + quick * 0.5) * (1.35 - skill * 0.7);
+      var fail = (pace * 0.35 + quick * 0.5) * (1.6 - skill * 1.0);
+      if (NS.teamClass) fail *= clamp(1 - 0.25 * NS.teamClass(p.team), 0.6, 1.4); // (a better team's touch is surer)
       // a throw-in to him: thrown softly at his body (he meets it on the thigh or chest even when running to it)
       if (ball.thrown && ball.receiver === p) return Math.random() >= clamp(fail * 0.2, 0, 0.1);
       if (ball.receiver === p) fail *= 0.45;

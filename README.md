@@ -450,6 +450,13 @@ that differ from both teams.
   The other team's restart: a checkoAI taker plays it with the CPU's set play (it used to wait up to 10 s for its
   network to press a button), and pressing your pass or shot button (A / B, or the keyboard's) has the CPU take it at
   once (also pressed during the walk-up: he plays it as soon as he reaches the ball).
+* **Ratings decide matches**: each team's **class** is the average overall of its players on the pitch (75 = 0, every
+  10 points = 1; Real Madrid +0.8, Raja -0.4). On top of the level (Easy..Legend) it sharpens the better side and blunts
+  the weaker one: its decisions (less noise, quicker), its passing and shooting accuracy, its tackles and shoulder duels,
+  its first touch, its keeper's saves. The players' own ratings count more too: Speed (pace 0.80..1.17), Shoot (finishing),
+  Dribble (now also clean passing and a surer first touch), a keeper's rating in his saves. Tests (CPU v CPU, Normal,
+  5-minute matches): Real Madrid v Raja 4.95-1.05 on average, all 16 won (6-0, 7-0, 5-0...; it was 3.5-1.35, 13 won),
+  Betis v Real Madrid 2.0-3.5, two teams of the same class even.
 * **Goalkeepers**: with the ball far up the pitch the keeper stands off his line (about 4 m out with it at halfway,
   up to 11 m with it at the other end) and drops back as it comes, so he can sweep up a long ball over his defenders
   (he comes for a ball dropping anywhere in his box that he reaches first). **Rush**: a man through on goal with

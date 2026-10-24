@@ -309,11 +309,11 @@
   function layoutOf(teamIdx) { return NS.FORMATIONS[World.session.formations[teamIdx]]; }
 
   // A player's ratings and what they do in play (computed when the teams are built or the squad changes).
-  //   mSpd  pace factor from Speed (~0.84 .. 1.10)        drain  how fast he tires, from Stamina
+  //   mSpd  pace factor from Speed (~0.80 .. 1.17)        drain  how fast he tires, from Stamina
   function rate(p, teamObj) {
     var st = NS.Players.statsFor(teamObj, p.name);
     p.st = st;
-    p.mSpd = 0.84 + st.spd / 99 * 0.26;
+    p.mSpd = clamp(1.03 + (st.spd - 72) * 0.0055, 0.8, 1.17);
     p.drain = 1.5 - st.sta / 99;
   }
 
@@ -347,8 +347,45 @@
     }
   }
 
+  /* A team's class: the average overall of its players on the pitch, 75 = 0, +-10 = +-1 (Real Madrid ~+0.8, Raja ~-0.4).
+   * It sharpens or blunts the whole team's play on top of the level (Easy..Legend): its CPU decides better (less noise,
+   * quicker), passes and shoots straighter, tackles harder, its keeper saves more. A human team's team-mates and keeper
+   * play with it too (the human's own touches use his players' own ratings, js/game/actions.js). */
+  var teamQ = [0, 0], qBase = [null, null], qProf = [null, null];
+  var CLASS_K = 4; // how much the class counts (the gap between two teams decides more as it grows)
+  function rateTeams() {
+    for (var t = 0; t < 2; t++) {
+      var sum = 0, n = 0;
+      for (var i = 0; i < World.players.length; i++) {
+        var p = World.players[i];
+        if (p.team === t && p.st) { sum += p.st.ovr; n++; }
+      }
+      teamQ[t] = n ? clamp((sum / n - 75) / 10, -1.6, 1.6) : 0;
+    }
+    qBase[0] = qBase[1] = null;
+  }
+  // a duel between a man of team a and one of team b (tackle, shoulder): his odds x this (the better side wins more)
+  NS.classEdge = function (a, b) { return clamp(1 + 0.3 * (teamQ[a] - teamQ[b]), 0.55, 1.6); };
+  NS.teamClass = function (t) { return teamQ[t]; };
+  function withClass(b, q) {
+    var c = {}, k;
+    for (k in b) c[k] = b[k];
+    q *= CLASS_K;
+    c.speedMul = b.speedMul * (1 + 0.025 * q);
+    c.noise = Math.max(0.01, b.noise * (1 - 0.28 * q));
+    c.acc = Math.max(0.4, b.acc * (1 - 0.2 * q));
+    c.react = Math.max(0.08, b.react * (1 - 0.18 * q));
+    c.tackle = clamp(b.tackle * (1 + 0.14 * q), 0.15, 0.85);
+    c.gkSave = clamp(b.gkSave + 0.035 * q, 0.5, 0.92);
+    c.gkReact = Math.max(0.12, b.gkReact * (1 - 0.08 * q));
+    c.tight = b.tight * (1 + 0.06 * q);
+    c.shootBias = b.shootBias + 0.01 * q;
+    return c;
+  }
   function profFor(team) {
-    return humanTeam(team) ? AI.profiles.NORMAL : AI.profile(levelOf(team));
+    var b = humanTeam(team) ? AI.profiles.NORMAL : AI.profile(levelOf(team));
+    if (qBase[team] !== b) { qBase[team] = b; qProf[team] = withClass(b, teamQ[team]); }
+    return qProf[team];
   }
 
   function configureSlots() {
@@ -434,7 +471,7 @@
   }
 
   function gkSkill(team) {
-    return humanTeam(team) ? 0.7 : AI.profile(levelOf(team)).gkSave;
+    return profFor(team).gkSave; // (a human team's keeper: Normal's, with the team's class)
   }
 
   // Moods for the breaks: 1 celebrate, 2 dejected walk, 3 on the knees, 4 the scorer's run, 5 walk off.
@@ -1156,6 +1193,7 @@
         p.homeX = slot.x * dir * SX();
         p.homeZ = slot.z * dir * SZ();
       }
+      rateTeams();
     },
 
     resetKickoff: function () {
@@ -1576,10 +1614,12 @@
               // (a dive covers part of the distance); pace above 30 makes every save harder
               var reach = Math.sqrt(d2) - (p.diveT > 0 ? 1.0 : 0);
               var place = reach <= 0.65 ? 0.14 : -(reach - 0.65) * 0.34;
-              var keeper = gkSkill(p.team) * 0.5 + (0.4 + p.st.def / 99 * 0.5) * 0.5;
+              var keeper = gkSkill(p.team) * 0.5 + (0.25 + p.st.def / 99 * 0.75) * 0.5; // (the level / class, his rating)
               // from range he has time to see it and get across: the further out it was struck, the likelier the save
               // (never quite certain: even a great keeper lets one in now and then)
               var range = clamp(((ball.shotD || 0) - 13) * 0.02, 0, 0.25);
+              // the class gap: a top side's keeper against a weak side's shot (and the other way round)
+              if (ball.lastTouchTeam >= 0) range += clamp(0.07 * (teamQ[p.team] - teamQ[ball.lastTouchTeam]), -0.12, 0.12);
               // (a human keeper: even a shot at him is not always kept out, a good one in the corner usually goes in)
               var chance = speed < 12 ? 1 : clamp(keeper + 0.05 + place + range - Math.max(0, speed - 34) * 0.01, 0.12, 0.9);
               if (ball.chip) chance *= 0.4;
