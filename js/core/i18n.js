@@ -1104,6 +1104,16 @@
   Object.assign(D.ar, { 'opt.st.compact': 'صغير 65x45 م (7 ضد 7)', 'opt.st.small': 'متوسط 75x49 م', 'opt.st.standard': 'قياسي 85x55 م',
     'opt.st.grand': 'كبير 105x68 م (حقيقي)', 'opt.st.ultra': 'ضخم 110x72 م' });
 
+  // checkoAI: how many players a brain plays in a real-time match
+  Object.assign(D.en, { 'aima.o.ctl': 'RT match control', 'aima.ctl.1p': '1 player', 'aima.ctl.11p': '11 players',
+    'aima.o.ctl.h': 'In a real match: only the selected player (the marker, switched like yours) or every outfield player. Trainings always play all of them' });
+  Object.assign(D.fr, { 'aima.o.ctl': 'Controle en match', 'aima.ctl.1p': '1 joueur', 'aima.ctl.11p': '11 joueurs',
+    'aima.o.ctl.h': 'En vrai match : seulement le joueur selectionne (le marqueur, change comme le votre) ou tous les joueurs de champ. Les entrainements les jouent tous' });
+  Object.assign(D.es, { 'aima.o.ctl': 'Control en partido', 'aima.ctl.1p': '1 jugador', 'aima.ctl.11p': '11 jugadores',
+    'aima.o.ctl.h': 'En un partido real: solo el jugador seleccionado (el marcador, cambia como el tuyo) o todos los de campo. Los entrenamientos juegan con todos' });
+  Object.assign(D.ar, { 'aima.o.ctl': 'التحكم في المباراة', 'aima.ctl.1p': 'لاعب واحد', 'aima.ctl.11p': '11 لاعبا',
+    'aima.o.ctl.h': 'في المباراة الحقيقية: اللاعب المحدد فقط (العلامة، يتغير مثل لاعبك) أو كل لاعبي الميدان. التدريبات تلعب بالجميع' });
+
   // CPU v CPU: each side's level; checkoAI: what he is learning in this match (the pause menu)
   Object.assign(D.en, { 'cvc.title': 'CPU v CPU: each side\'s level', 'step.aimalearn': 'checkoAI LEARNING',
     'pause.aima': 'checkoAI', 'pause.aima.d': 'What he is learning in this match',

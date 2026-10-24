@@ -57,6 +57,9 @@ Nintendo by position). There are no tap / hold gestures: **holding a button neve
 | Knock-on (push the ball ahead and run onto it) | tap sprint again and again while dribbling: every second tap (he chases it by himself) |
 | Game menu | Start (+ on a phone controller) |
 
+On the Settings page a controller's **L / R** go to the tab before / after (Gameplay, Graphics, Audio, Commentator,
+checkoAI, round).
+
 **Settings > Button mapping**: pick a move and press the button (or two together) on any controller; the map is saved per My PC
 profile and used by all controllers. Maps saved by older versions keep their gamepad buttons.
 
@@ -137,6 +140,10 @@ A learning team named after the owner's white rooster (js/game/aima.js). On a CP
 plays every outfield player, each through his own virtual controller with the same stick, sprint, buttons and hold times
 as a human (the violet arrow shows the player with the ball, or nearest to it); the keeper is the game's. A small box in
 the top-right corner shows what it is thinking (a clap / punishment shows there for 1.5-2.5 s, then his thoughts again).
+**RT match control** (a brain setting, default 1 player): in a real-time match the brain plays only the team's selected
+player (the violet marker, switched like a human's cursor; a pass moves it to the receiver) and Legend the other ten, so
+everything he sees is real football, every reward is his own and every clap reaches the right move; "11 players" plays
+every outfield player as before. Trainings and recordings always use all of them.
 **Pause > checkoAI** shows what he is learning in the match in progress: how many decisions were his own (and Legend's
 help), lessons from rewards and from copying Legend, his passes / shots / balls won and lost, where the match's rewards
 came from (bars: green = do more of it, red = less) and the latest rewards with their minute.

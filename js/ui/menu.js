@@ -2371,6 +2371,18 @@
     },
     // a controller's stick / D-pad went left or right (js/core/gamepad.js): the sides screen moves its icon
     padSide: sideMove,
+    // a controller's L / R (d -1 / +1): the Settings page goes to the tab before / after (round). false = not on Settings
+    tabStep: function (d) {
+      if (!open || current !== 'SETTINGS') return false;
+      var tabs = [].filter.call(refs.setTabs.querySelectorAll('[data-group]'), function (b) { return b.offsetParent !== null; });
+      if (!tabs.length) return true;
+      var at = 0;
+      for (var i = 0; i < tabs.length; i++) if (tabs[i].getAttribute('data-group') === settingsGroup) at = i;
+      var to = tabs[(at + d + tabs.length) % tabs.length];
+      setFocus(to); // (the highlight moves off the tab before)
+      to.click();
+      return true;
+    },
     openPause: function () {
       World.match.paused = true;
       NS.Audio.whistle(0);

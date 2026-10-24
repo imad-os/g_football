@@ -69,7 +69,7 @@
     DEFENDER: [1, 0.6, 1, 0.8, 2.2, 1.5, 0.6]
   };
   var CFG_DEF = { learn: true, mine: true, lr: 1, explore: 1, clap: 1, help: 'AUTO', style: 'BALANCED', size: 'MEDIUM',
-    tick: 1, look: 1, mem: 1, mineW: 1, past: 1 };
+    tick: 1, look: 1, mem: 1, mineW: 1, past: 1, ctl: '1P' };
 
   function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
@@ -935,6 +935,7 @@
   // ---- one controller per outfield player of a checkoAI team (and per Legend player watched in a training), made
   // when the match starts (matchGen tells this match's from an older one)
   var vlist = [], matchGen = 0, teamClock = [0, 0];
+  var oneP = [null, null];   // "1 player" control: the player the brain plays now, per team
   function vslotOf(p, b) {
     var v = p.aiv;
     if (!v || v.gen !== matchGen) {
@@ -2036,6 +2037,7 @@
       ['mineW', 'aima.o.mineW', [[0, 'opt.low'], [1, 'opt.normal'], [2, 'opt.high']]],
       ['mem', 'aima.o.mem', [[0, '20 000 (~10 MB)'], [1, '50 000 (~24 MB)'], [2, '100 000 (~47 MB)']]], // MEMS: copied moves kept in RAM
       ['past', 'aima.o.past', [[1, 'opt.on'], [0, 'opt.off']]],
+      ['ctl', 'aima.o.ctl', [['1P', 'aima.ctl.1p'], ['11P', 'aima.ctl.11p']]],
       ['size', 'aima.o.size', [['TINY', 'aima.sz.TINY'], ['MEDIUM', 'aima.sz.MEDIUM'], ['LARGE', 'aima.sz.LARGE'], ['HUGE', 'aima.sz.HUGE']]]
     ],
     TR_OPTS: [
@@ -2178,7 +2180,7 @@
         if (S.ob && S.ob !== S.b) S.runs[S.ob.id].opps['checkoAI ' + S.b.name] = 1;
         for (var rid in S.runs) S.runs[rid].snap = JSON.parse(JSON.stringify(S.runs[rid].b.st));
       }
-      matchGen++; vlist.length = 0; teamClock[0] = teamClock[1] = 0;
+      matchGen++; vlist.length = 0; teamClock[0] = teamClock[1] = 0; oneP[0] = oneP[1] = null;
       if (recording) { recT = 0; rb = { x: new Int8Array(20000 * F), a: new Int8Array(20000 * DA), t: new Float32Array(20000), tm: new Int8Array(20000), n: 0, cap: 20000, goals: [] }; }
       poss[0] = poss[1] = 0; shotsT[0] = shotsT[1] = 0;
       lastOwner = null; lastOwnerAi = false; lastScore[0] = lastScore[1] = 0; matchOn = false;
@@ -2265,15 +2267,27 @@
         }
         teamClock[t] += dt;
         b.st.playT += dt; b.st.opsT += dt;
+        // a real-time match on "1 player": the brain plays only the team's selected player (the marker, switched like a
+        // human's cursor), Legend the others; a training plays all of them (more to learn from)
+        var solo = b.cfg.ctl !== '11P' && !training, one = solo ? as.player : null;
+        if (one !== oneP[t]) {
+          var ov = oneP[t] && slotOf(oneP[t]);
+          if (ov && !ov.watch) { flush(ov); ov.c.holdLeft = 0; ov.pad.cur = 0; ov.pad.x = 0; ov.pad.y = 0; } // (his last decisions are learnt now)
+          oneP[t] = one;
+        }
         for (i = 0; i < players.length; i++) {
           p = players[i];
           if (p.team !== t || p.role === 'GK') continue;
+          if (solo && p !== one) continue;
           v = vslotOf(p, b);
           if (p.stun > 0 || p.tackleT > 0) { v.c.t -= dt; continue; }
           if (driveOne(v, p, b, help, dt)) {
             p.isCtl = true;
             NS.Controls.update(v, dt);
-            v.player = p; // (a pass / switch moves a human's cursor; each of these stays on his own player)
+            // (a pass / switch moves a human's cursor: on "1 player" the team's marker follows it; on "11 players" each of
+            // these stays on his own player)
+            if (solo && v.player && v.player !== p && v.player.team === t) as.player = v.player;
+            v.player = p;
             p.isCtl = true;
           }
         }

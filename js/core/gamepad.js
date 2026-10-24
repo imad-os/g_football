@@ -78,6 +78,9 @@
     var bit = i < BIT.length ? BIT[i] : 0;
     if (!bit) return; // Start / Select / Home: menus (My PC sends 'menu')
     if (NS.Mapper && NS.Mapper.active()) { NS.Mapper.button(bit, pressed); return; }
+    // the Settings page: L / R (the shoulder buttons) go to the tab before / after
+    // (a release always goes on: it only clears the button)
+    if (pressed && (i === 4 || i === 5) && NS.UI && NS.UI.isOpen() && NS.UI.tabStep && NS.UI.tabStep(i === 4 ? -1 : 1)) return;
     NS.Input.button(n, bit, pressed);
   }
 
