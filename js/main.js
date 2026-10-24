@@ -77,13 +77,16 @@
   }
 
   NS.App = {
-    // My PC's actions drive the menus only (remote, keyboard and controllers); matches are played with the controllers
-    // themselves (js/core/gamepad.js)
+    // My PC's actions drive the menus (remote, keyboard and controllers). In a match a controller plays through its own
+    // buttons (js/core/gamepad.js), a keyboard player through these actions (NS.Input.key); Start (any controller) or
+    // the keyboard's Esc opens the menu.
     input: function (action, pressed, repeat, dev) {
+      NS.Devices.seen(dev);
       if (NS.Replay.active()) { NS.Replay.action(action, pressed, repeat, dev); return; }
       if (NS.Replay.justEnded()) return; // (the rest of the press that closed the replay)
-      if (NS.UI.isOpen()) NS.UI.onInput(action, pressed, repeat, dev);
-      else if (action === 'menu' && pressed && !repeat) NS.Match.requestMenu();
+      if (NS.UI.isOpen()) { NS.UI.onInput(action, pressed, repeat, dev); return; }
+      if ((action === 'menu' || (action === 'cancel' && NS.Devices.isKeys(dev))) && pressed && !repeat) { NS.Match.requestMenu(); return; }
+      if (World.match.running && NS.Devices.isKeys(dev) && !repeat) NS.Input.key(dev, action, pressed);
     },
     applySettings: function () {
       var s = World.settings;

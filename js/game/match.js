@@ -351,6 +351,7 @@
   }
 
   function configureSlots() {
+    if (World.session.sideMode === 'CUSTOM') NS.Devices.fix(); // (each player's device is still there)
     var pd = NS.sidePads();
     var s0 = World.slots[0];
     var s1 = World.slots[1];
@@ -1424,10 +1425,12 @@
         var slot = World.slots[i];
         if (!slot.active || !slot.player) continue;
         slot.player.isCtl = true;
+        NS.Bindings.use(i); // (this player's own button map)
         Controls.update(slot, dt);
         if (slot.player) slot.player.isCtl = true;
         if (NS.Aima) NS.Aima.observe(slot, dt); // the trainer's play teaches AI.MA
       }
+      NS.Bindings.use(0); // (checkoAI plays with P1's map)
       // checkoAI: its network plays every outfield player of its team (each one with his own virtual controller)
       if (NS.Aima) { NS.Aima.driveTeam(0, dt); NS.Aima.driveTeam(1, dt); }
       for (i = 0; i < 2; i++) {

@@ -20,13 +20,23 @@ The **+** button (Start) presses the main button of each menu screen: next, kick
 
 ## Controls
 
-Matches are played with **game controllers and phone controllers only** (a phone in My PC's Buttons mode is a real gamepad).
-Player 1 is the first controller connected, player 2 the second. Movement: the left stick (analog, any direction) or the
-D-pad. The TV remote and the keyboard only drive the menus. On a phone or tablet My PC draws its own virtual pad (stick + A B, X Y can be added).
+Two players (P1, P2) play with **any device**: a game controller, a phone controller (a phone in My PC's Buttons mode is
+a real gamepad), the **keyboard / TV remote** (arrows, Enter / Space = A, Shift = X, Esc = menu) or a second keyboard
+player (W A S D, F, G: My PC's `keys2`, listed once it is used). The **sides screen** has one row per device: each device's
+stick, D-pad or arrows move its own icon left (home), right (away) or to the middle (not playing); the first two devices on
+a side are P1 and P2, so a controller can play home and the keyboard away, or both together on one side against the CPU.
+Movement: the left stick (analog, any direction), the D-pad or the arrows. Start on any controller (or Esc) opens the menu.
+On a phone or tablet My PC draws its own virtual pad (stick + A B, X Y can be added).
 
-Every move has **its own button** (or a two-button combination). **One map is shared by every controller and phone
-controller**, since they all use the same standard button positions (shown with your controller's own names: Xbox, PlayStation,
-Nintendo by position). There are no tap / hold gestures: **holding a button never changes the move**, only how it is played:
+With two players the **Teams** and **Game plan** screens have **two cursors** (P1 light blue, P2 light red), each player
+working on his own side at the same time (both on one side: P1 his, P2 the CPU team's); the shared buttons (Back, Next,
+Kick off) are for both, only P1's Back leaves a screen. Teams: each side picks its league or continent first, then a team
+(Back: the leagues again). Game plan: the two sides next to each other, each with its formation, tactics, starters and bench.
+
+Every move has **its own button** (or a two-button combination). **Each player has his own map** (Settings > Button
+mapping: P1 / P2), whatever controller he holds, using the standard button positions (shown with your controller's own
+names: Xbox, PlayStation, Nintendo by position); checkoAI plays with P1's. There are no tap / hold gestures: **holding a
+button never changes the move**, only how it is played:
 
 * the power bar fills in 0.5 s by default (**Settings > Gameplay > Power bar speed**: slow 1 s, normal 0.75 s, fast 0.5 s, very fast 0.35 s)
 * passes (low, through, long): the longer the hold, the firmer the pass (up to about 35% more pace; a long ball flies flatter)

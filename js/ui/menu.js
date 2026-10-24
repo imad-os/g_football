@@ -15,7 +15,6 @@
   var focused = null;
   var lastFocusKey = {};
   var helpReturn = 'MAIN';
-  var gpCanvas, gpCtx;
   var refs = {};
   var mapLast = -2; // move index (-1 = sprint) of the focused row on the mapping screen
 
@@ -41,9 +40,12 @@
     b.type = 'button';
     if (key) b.setAttribute('data-k', key);
     b.addEventListener('click', onClick);
-    b.addEventListener('mouseenter', function () { setFocus(b, true); });
+    // the mouse takes P1's cursor only when it really moves (not a list redrawn or scrolled under a pointer at rest)
+    b.addEventListener('mouseenter', function () { if (performance.now() - mouseAt < 150) setFocus(b, true); });
     return b;
   }
+  var mouseAt = 0;
+  document.addEventListener('mousemove', function () { mouseAt = performance.now(); }, true);
 
   function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
 
@@ -85,7 +87,7 @@
   function focusByKey(key) {
     var list = visibleFocusables();
     for (var i = 0; i < list.length; i++) {
-      if (list[i].getAttribute('data-k') === key) { setFocus(list[i]); return true; }
+      if (list[i].getAttribute('data-k') === key && mayFocus(0, list[i])) { setFocus(list[i]); return true; }
     }
     return false;
   }
@@ -94,18 +96,77 @@
     var key = lastFocusKey[current];
     if (key && focusByKey(key)) return;
     var list = visibleFocusables();
-    var pick = null;
+    var pick = null, first = null;
     for (var i = 0; i < list.length; i++) {
+      if (!mayFocus(0, list[i])) continue; // (P2's panel is his)
+      if (!first) first = list[i];
       if (list[i].hasAttribute('data-default')) { pick = list[i]; break; }
     }
-    setFocus(pick || list[0] || null);
+    setFocus(pick || first || null);
   }
 
-  // dir: 0 left, 1 right, 2 up, 3 down
-  function move(dir) {
-    var list = visibleFocusables();
+  /* Two cursors: on the Teams and Game plan screens, when two people play, each has his own cursor (P1 light blue, P2
+   * light red, as their arrows in a match) and works on his own side's panel at the same time as the other; the shared
+   * buttons (Back, Next, Kick off) are for both. With one player his cursor goes everywhere. */
+  var DUAL = { TEAMS: 1, GAMEPLAN: 1 };
+  var focus2 = null;
+  var actor = 0;               // the cursor that pressed the button being handled (0 = P1 / the mouse)
+  function twoPlayers() {
+    var p = NS.sidePads();
+    return !!(DUAL[current] && p[0] >= 0 && p[1] >= 0 && NS.Devices.of(0) && NS.Devices.of(1));
+  }
+  // the cursor a device moves (P2's own device: the second one; every other device: the first)
+  function cursorOf(dev) { return twoPlayers() && NS.Devices.player(dev || 'keys') === 1 ? 1 : 0; }
+  // the panel (0 home, 1 away) cursor c looks after: its player's side; both on one side: P1 that one, P2 the other
+  function panelOf(c) { var p = NS.sidePads(); return c === 1 && p[0] === p[1] ? 1 - p[1] : p[c]; }
+  function mayFocus(c, node) {
+    if (!twoPlayers()) return true;
+    var pn = node.closest ? node.closest('[data-panel]') : null;
+    return !pn || +pn.getAttribute('data-panel') === panelOf(c);
+  }
+  function getF(c) { return c === 1 ? focus2 : focused; }
+  function setF(c, node) { if (c === 1) setFocus2(node); else setFocus(node); }
+  function setFocus2(node) {
+    if (focus2 && focus2 !== node) focus2.classList.remove('focus2');
+    focus2 = node;
+    if (!node) return;
+    node.classList.add('focus2');
+    if (node.scrollIntoView) node.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+  // cursor c onto the button with this key, else onto its panel's selected / first button
+  function focusC(c, key) {
+    var list = visibleFocusables(), i, first = null, sel = null;
+    for (i = 0; i < list.length; i++) {
+      if (!mayFocus(c, list[i])) continue;
+      if (key && list[i].getAttribute('data-k') === key) { setF(c, list[i]); return; }
+      var pn = list[i].closest('[data-panel]');
+      if (pn && +pn.getAttribute('data-panel') === panelOf(c)) {
+        if (!first) first = list[i];
+        if (!sel && list[i].classList.contains('sel')) sel = list[i];
+      }
+    }
+    if (c === 1) setFocus2(sel || first);
+    else if (twoPlayers() && (sel || first)) setFocus(sel || first);
+    else focusDefault();
+  }
+  // after a screen was drawn again: both cursors back on the buttons they were on (by key)
+  function keyOf(node) { return node ? node.getAttribute('data-k') : ''; }
+  function refocus(k0, k1) {
+    if (focused) focused.classList.remove('focus');
+    focused = null;
+    focusC(0, k0);
+    if (twoPlayers()) { if (focus2) focus2.classList.remove('focus2'); focus2 = null; focusC(1, k1); }
+    else setFocus2(null);
+  }
+
+  // dir: 0 left, 1 right, 2 up, 3 down; c: the cursor (1 = P2's on the two-cursor screens)
+  function move(dir, cur) {
+    cur = cur || 0;
+    var all = visibleFocusables(), list = [];
+    for (var a = 0; a < all.length; a++) if (mayFocus(cur, all[a])) list.push(all[a]);
     if (!list.length) return;
-    if (!focused || list.indexOf(focused) < 0) { focusDefault(); return; }
+    var focused = getF(cur); // (this cursor)
+    if (!focused || list.indexOf(focused) < 0) { focusC(cur, ''); return; }
     var r = focused.getBoundingClientRect();
     if (dir === 2 || dir === 3) {
       // the focused button was scrolled out of view: go on from the edge of the view
@@ -151,7 +212,7 @@
     if (bestOverlap) best = bestOverlap;
     // up / down: a list longer than the screen is read by scrolling first (text between the buttons has no button to land on)
     if ((dir === 2 || dir === 3) && scrollStep(focused, dir === 3 ? 1 : -1, best)) return;
-    if (best) setFocus(best);
+    if (best) setF(cur, best);
   }
 
   // the nearest ancestor that scrolls vertically
@@ -195,7 +256,12 @@
     if (key === 'COMPPICK') renderCompPick();
     if (key === 'COMPHUB') { abandonArmed = false; renderCompHub(); }
     if (key === 'SIDES') updateSideSlots();
-    if (key === 'TEAMS') renderTeams();
+    if (key === 'TEAMS') {
+      // both sides start on their leagues, each cursor on its side's league
+      teamView[0] = teamView[1] = 'cats';
+      lastFocusKey.TEAMS = 'c0:' + World.session.activeCategory;
+      renderTeams();
+    }
     if (key === 'GAMEPLAN') renderGamePlan();
     if (key === 'SETTINGS') renderSettings();
     if (key === 'HELP') renderHelp();
@@ -206,8 +272,12 @@
     if (key === 'RESULT') renderResult();
     NS.UI.refreshStats();
     NS.Input.clearEdges();
+    if (matchRunning()) NS.Input.releaseAll(); // (keys held when the menu opened)
+    if (focused) focused.classList.remove('focus');
     focused = null;
-    focusDefault();
+    setFocus2(null);
+    root.classList.toggle('two-cur', twoPlayers()); // (P1's cursor blue, P2's red)
+    if (twoPlayers()) { focusC(0, ''); focusC(1, ''); } else focusDefault();
     NS.App.syncMenuItems();
   }
 
@@ -218,6 +288,7 @@
     NS.Input.clearEdges();
     NS.Input.block(350);
     focused = null;
+    setFocus2(null);
   }
 
   function refreshNav() {
@@ -437,7 +508,7 @@
       if (st && st.done) { pick.comp = st.compType; show('COMPPICK'); return; }
       if (!NS.Comp.prepareMatch()) return;
       World.session.editingSquadIdx = 0;
-      World.session.selectedStarterIdx = null;
+      World.session.selStarter = [null, null];
       show('GAMEPLAN');
     }));
     refs.chPlay.setAttribute('data-default', '1');
@@ -566,9 +637,10 @@
 
   /* ------------------------------ SIDES ------------------------------ */
 
-  // Like FIFA / PES: each controller's icon starts where it was last time; push the stick (or the D-pad) left for the
-  // home team, right for the away team, to the middle for none. A team with nobody on it is played by the CPU (or
-  // checkoAI on that level), so P1 can play either team, P1 + P2 together, against each other, or nobody (watch).
+  // Like FIFA / PES: one row per device (the keyboard / remote, each controller, a second keyboard player once used),
+  // its icon where it was last time; that device's stick, D-pad or arrows push it left for the home team, right for the
+  // away team, to the middle for none. The first two devices on a side are P1 and P2 (both may be on one side, together
+  // against the CPU). A team with nobody on it is played by the CPU (or checkoAI on that level).
   var slotEls = {};
 
   function buildSides() {
@@ -578,25 +650,25 @@
     head.appendChild(el('p', 'muted', T('sides.how')));
     wrap.appendChild(head);
 
-    var row = el('div', 'sides-row sides-pick');
-    var home = el('div', 'panel-card home');
-    home.appendChild(el('div', 'tag red', T('sides.home')));
-    home.appendChild(el('div', 'big', T('sides.team1')));
-    slotEls.z0 = el('div', 'side-zone');
-    home.appendChild(slotEls.z0);
-    var mid = el('div', 'panel-card side-mid');
-    mid.appendChild(el('div', 'tag amber', T('sides.ctrl')));
-    slotEls.zm = el('div', 'side-zone');
-    mid.appendChild(slotEls.zm);
-    var away = el('div', 'panel-card away');
-    away.appendChild(el('div', 'tag blue', T('sides.away')));
-    away.appendChild(el('div', 'big', T('sides.team2')));
-    slotEls.z1 = el('div', 'side-zone');
-    away.appendChild(slotEls.z1);
-    row.appendChild(home);
-    row.appendChild(mid);
-    row.appendChild(away);
-    wrap.appendChild(row);
+    var grid = el('div', 'panel-card sides-grid');
+    var hr = el('div', 'side-row side-head');
+    var h0 = el('div', 'side-cell home');
+    h0.appendChild(el('div', 'tag red', T('sides.home')));
+    slotEls.cpu0 = el('div', 'slot cpu', T('slot.cpu'));
+    h0.appendChild(slotEls.cpu0);
+    var hm = el('div', 'side-cell mid');
+    hm.appendChild(el('div', 'tag amber', T('sides.ctrl')));
+    var h1 = el('div', 'side-cell away');
+    h1.appendChild(el('div', 'tag blue', T('sides.away')));
+    slotEls.cpu1 = el('div', 'slot cpu', T('slot.cpu'));
+    h1.appendChild(slotEls.cpu1);
+    hr.appendChild(h0); hr.appendChild(hm); hr.appendChild(h1);
+    grid.appendChild(hr);
+    slotEls.rows = el('div', 'side-rows');
+    grid.appendChild(slotEls.rows);
+    wrap.appendChild(grid);
+    refs.sideMsg = el('div', 'muted small side-msg');
+    wrap.appendChild(refs.sideMsg);
     refs.cvc = el('div', 'panel-card cvc hidden');
     wrap.appendChild(refs.cvc);
 
@@ -611,25 +683,39 @@
     wrap.appendChild(foot);
   }
 
-  // how many players can pick a side: one per controller (two at most), at least player 1 (remote, keyboard, touch)
-  function sidePlayers() { return NS.Gamepad && NS.Gamepad.count() >= 2 ? 2 : 1; }
+  // a device's name and picture: the keyboard (or the TV remote), the second keyboard player, a controller, a phone
+  function devName(dev) {
+    var D = NS.Devices, k = D.kind(dev);
+    if (k === 'keys') return ['\u2328', T('dev.keys')];
+    if (k === 'keys2') return ['\u2328', T('dev.keys2')];
+    var pads = NS.Gamepad.devs(), num = 0;
+    for (var i = 0; i < pads.length && pads[i] !== dev; i++) if (D.kind(pads[i]) === k) num++;
+    return [k === 'phone' ? '\uD83D\uDCF1' : '\uD83C\uDFAE', T(k === 'phone' ? 'dev.phone' : 'dev.pad') + ' ' + (num + 1)];
+  }
 
   function updateSideSlots() {
-    var s = World.session;
-    if (s.sideMode !== 'CUSTOM') { s.pads = NS.sidePads().slice(); s.sideMode = 'CUSTOM'; }
-    var n = sidePlayers();
-    if (n < 2) s.pads[1] = -1; // no second controller: nobody for player 2
-    var zones = { '0': slotEls.z0, '1': slotEls.z1, '-1': slotEls.zm };
-    clear(slotEls.z0); clear(slotEls.z1); clear(slotEls.zm);
-    for (var i = 0; i < n; i++) {
-      var ic = el('div', 'pad-ico p' + (i + 1));
-      ic.appendChild(el('b', null, 'P' + (i + 1)));
-      ic.appendChild(el('span', null, '\u25C0  \u25B6'));
-      zones[String(s.pads[i])].appendChild(ic);
+    var s = World.session, D = NS.Devices;
+    if (s.sideMode !== 'CUSTOM') {
+      s.padDev = [D.of(0), D.of(1)]; // (the side mode's default devices)
+      s.pads = NS.sidePads().slice();
+      s.sideMode = 'CUSTOM';
     }
-    for (var t = 0; t < 2; t++) {
-      if (s.pads[0] !== t && s.pads[1] !== t) zones[String(t)].appendChild(el('div', 'slot cpu', T('slot.cpu')));
-    }
+    D.fix();
+    clear(slotEls.rows);
+    D.list().forEach(function (dev) {
+      var n = D.player(dev), sd = n >= 0 ? s.pads[n] : -1;
+      var row = el('div', 'side-row');
+      var cells = [el('div', 'side-cell home'), el('div', 'side-cell mid'), el('div', 'side-cell away')];
+      var nm = devName(dev);
+      var ic = el('div', 'pad-ico ' + (n >= 0 ? 'p' + (n + 1) : 'idle'));
+      ic.appendChild(el('b', null, n >= 0 ? 'P' + (n + 1) : nm[0]));
+      ic.appendChild(el('span', 'dev-name', (n >= 0 ? nm[0] + ' ' : '') + nm[1]));
+      ic.appendChild(el('span', 'dev-arrows', '\u25C0  \u25B6'));
+      cells[sd === 0 ? 0 : (sd === 1 ? 2 : 1)].appendChild(ic);
+      cells.forEach(function (c) { row.appendChild(c); });
+      slotEls.rows.appendChild(row);
+    });
+    for (var t = 0; t < 2; t++) slotEls['cpu' + t].classList.toggle('hidden', s.pads[0] === t || s.pads[1] === t);
     renderCvc();
   }
 
@@ -681,57 +767,63 @@
     });
   }
 
-  // player n pushed his stick / D-pad left (-1) or right (+1) on this screen
-  function sideMove(n, d) {
-    if (!open || current !== 'SIDES' || n >= sidePlayers()) return;
+  // a device's stick / D-pad / arrows pushed left (-1) or right (+1) on this screen: its icon moves one column. A device
+  // that leaves the middle becomes the first free player (two at most); back in the middle it plays no more.
+  function sideMove(dev, d) {
+    if (!open || current !== 'SIDES') return;
     var s = World.session;
     if (s.sideMode !== 'CUSTOM') updateSideSlots();
-    var pos = s.pads[n] === 0 ? -1 : (s.pads[n] === 1 ? 1 : 0);
+    var n = NS.Devices.player(dev);
+    var pos = n < 0 ? 0 : (s.pads[n] === 0 ? -1 : (s.pads[n] === 1 ? 1 : 0));
     pos = Math.max(-1, Math.min(1, pos + d));
-    s.pads[n] = pos < 0 ? 0 : (pos > 0 ? 1 : -1);
+    var side = pos < 0 ? 0 : (pos > 0 ? 1 : -1);
+    refs.sideMsg.textContent = '';
+    if (n < 0) {
+      if (side < 0) return;
+      n = !s.padDev[0] ? 0 : (!s.padDev[1] ? 1 : -1);
+      if (n < 0) { refs.sideMsg.textContent = T('sides.full'); return; } // (two players already)
+      s.padDev[n] = dev;
+    }
+    s.pads[n] = side;
+    if (side < 0) s.padDev[n] = null;
     updateSideSlots();
   }
 
   /* ------------------------------ TEAMS ------------------------------ */
 
+  // Each side: first its league / continent (a list), then that one's teams (Back: the leagues again). Two players pick
+  // at the same time, each on his own side with his own cursor.
+  var teamView = ['cats', 'cats'];
+  var TP = [{}, {}];             // each side's panel: { sw, title, stars, crumb, list, owner }
+
   function buildTeams() {
     var wrap = screens.TEAMS;
     var cols = el('div', 'two-cols');
-    var hc = el('div', 'panel-card home');
-    var hh = el('div', 'col-head');
-    refs.homeSwatch = el('span', 'swatch');
-    refs.homeTitle = el('div', 'col-title');
-    hh.appendChild(refs.homeSwatch);
-    var hbox = el('div');
-    hbox.appendChild(el('div', 'tag red', T('teams.home')));
-    hbox.appendChild(refs.homeTitle);
-    hh.appendChild(hbox);
-    refs.homeStars = el('span', 'stars');
-    hh.appendChild(refs.homeStars);
-    hc.appendChild(hh);
-    refs.homeTabs = el('div', 'tabs');
-    hc.appendChild(refs.homeTabs);
-    refs.homeList = el('div', 'team-list');
-    hc.appendChild(refs.homeList);
-
-    var ac = el('div', 'panel-card away');
-    var ah = el('div', 'col-head');
-    refs.awaySwatch = el('span', 'swatch');
-    refs.awayTitle = el('div', 'col-title');
-    ah.appendChild(refs.awaySwatch);
-    var abox = el('div');
-    abox.appendChild(el('div', 'tag blue', T('teams.away')));
-    abox.appendChild(refs.awayTitle);
-    ah.appendChild(abox);
-    refs.awayStars = el('span', 'stars');
-    ah.appendChild(refs.awayStars);
-    ac.appendChild(ah);
-    refs.awayTabs = el('div', 'tabs');
-    ac.appendChild(refs.awayTabs);
-    refs.awayList = el('div', 'team-list');
-    ac.appendChild(refs.awayList);
-    cols.appendChild(hc);
-    cols.appendChild(ac);
+    [0, 1].forEach(function (t) {
+      var P = TP[t];
+      var card = el('div', 'panel-card ' + (t ? 'away' : 'home'));
+      card.setAttribute('data-panel', String(t));
+      var hh = el('div', 'col-head');
+      P.sw = el('span', 'swatch');
+      P.title = el('div', 'col-title');
+      hh.appendChild(P.sw);
+      var box = el('div');
+      var tags = el('div', 'row');
+      tags.appendChild(el('div', 'tag ' + (t ? 'blue' : 'red'), T(t ? 'teams.away' : 'teams.home')));
+      P.owner = el('span', 'owner-chip');
+      tags.appendChild(P.owner);
+      box.appendChild(tags);
+      box.appendChild(P.title);
+      hh.appendChild(box);
+      P.stars = el('span', 'stars');
+      hh.appendChild(P.stars);
+      card.appendChild(hh);
+      P.crumb = el('div', 'team-crumb muted small');
+      card.appendChild(P.crumb);
+      P.list = el('div', 'team-list');
+      card.appendChild(P.list);
+      cols.appendChild(card);
+    });
     wrap.appendChild(cols);
 
     var foot = el('div', 'foot');
@@ -739,10 +831,17 @@
     foot.appendChild(plusKey(btn('primary', T('nav.next_plan'), 'next', function () {
       NS.Match.syncRosters();
       World.session.editingSquadIdx = 0;
-      World.session.selectedStarterIdx = null;
+      World.session.selStarter = [null, null];
       show('GAMEPLAN');
     })));
     wrap.appendChild(foot);
+  }
+
+  // a screen drawn again after cursor `actor` pressed key k: that cursor stays there, the other one where it was
+  function redrawKeys(k) {
+    var k0 = keyOf(focused), k1 = keyOf(focus2);
+    if (actor === 1) k1 = k; else k0 = k;
+    return [k0, k1];
   }
 
   function teamButton(t, isHome) {
@@ -751,7 +850,7 @@
     var b = btn('team' + (sel ? ' sel ' + (isHome ? 'home' : 'away') : ''), '', (isHome ? 'h:' : 'a:') + t.id, function () {
       if (isHome) s.homeTeamId = t.id; else s.awayTeamId = t.id;
       NS.Match.syncRosters();
-      renderTeams((isHome ? 'h:' : 'a:') + t.id);
+      renderTeams(redrawKeys((isHome ? 'h:' : 'a:') + t.id));
     });
     var sw = el('span', 'swatch');
     sw.style.background = 'linear-gradient(135deg,' + NS.Assets.hexToCss(t.c1) + ' 50%,' + NS.Assets.hexToCss(t.c2) + ' 50%)';
@@ -763,106 +862,146 @@
     return b;
   }
 
-  function renderTeams(keepKey) {
+  // keys: [P1's cursor, P2's] after the redraw (none: as they are)
+  function renderTeams(keys) {
     var s = World.session;
     var cats = NS.Teams.CATEGORIES;
-    // each side has its own league / group tabs (a Spanish club against a French one, a club against a nation...)
-    [[refs.homeTabs, 'activeCategory', 'ch:'], [refs.awayTabs, 'awayCategory', 'ca:']].forEach(function (side) {
-      clear(side[0]);
-      cats.forEach(function (cat) {
-        side[0].appendChild(btn('tab' + (s[side[1]] === cat.id ? ' sel' : ''), cat.label, side[2] + cat.id, function () {
-          s[side[1]] = cat.id;
-          renderTeams(side[2] + cat.id);
-        }));
-      });
+    keys = keys || [keyOf(focused), keyOf(focus2)];
+    var two = twoPlayers();
+    [0, 1].forEach(function (t) {
+      var P = TP[t], catKey = t ? 'awayCategory' : 'activeCategory';
+      var cat = null;
+      for (var i = 0; i < cats.length; i++) if (cats[i].id === s[catKey]) cat = cats[i];
+      clear(P.list);
+      if (teamView[t] === 'cats' || !cat) {
+        // its leagues / continents: the one its team is from marked
+        P.crumb.textContent = T('teams.pickcat');
+        cats.forEach(function (c) {
+          var b = btn('team cat' + (s[catKey] === c.id ? ' sel ' + (t ? 'away' : 'home') : ''), '', 'c' + t + ':' + c.id, function () {
+            s[catKey] = c.id;
+            teamView[t] = 'teams';
+            var cur = t ? s.awayTeamId : s.homeTeamId, list = NS.Teams.byCategory(c.id), k = list.length ? list[0].id : '';
+            for (var j = 0; j < list.length; j++) if (list[j].id === cur) k = cur;
+            renderTeams(redrawKeys((t ? 'a:' : 'h:') + k));
+          });
+          var box = el('div', 'team-box');
+          box.appendChild(el('div', 'team-name', c.label));
+          box.appendChild(el('div', 'team-sub', NS.Teams.byCategory(c.id).length + ' ' + T('teams.count')));
+          b.appendChild(box);
+          P.list.appendChild(b);
+        });
+      } else {
+        // its teams, and the way back to the leagues first
+        P.crumb.textContent = cat.label;
+        var bk = btn('team back', '', 'tb' + t, function () { teamView[t] = 'cats'; renderTeams(redrawKeys('c' + t + ':' + cat.id)); });
+        bk.appendChild(el('div', 'team-name', '◀  ' + T('teams.leagues')));
+        P.list.appendChild(bk);
+        NS.Teams.byCategory(cat.id).forEach(function (tm) { P.list.appendChild(teamButton(tm, t === 0)); });
+      }
+      var tm = NS.Teams.byId(t ? s.awayTeamId : s.homeTeamId);
+      P.title.textContent = tm.name + ' (' + tm.code + ')';
+      P.stars.textContent = new Array(tm.stars + 1).join('★');
+      P.sw.style.background = 'linear-gradient(135deg,' + NS.Assets.hexToCss(tm.c1) + ' 50%,' + NS.Assets.hexToCss(tm.c2) + ' 50%)';
+      // who picks here: P1 / P2 (two players), else nobody's name
+      var own = two ? (panelOf(0) === t ? 0 : 1) : -1;
+      P.owner.textContent = own >= 0 ? 'P' + (own + 1) : '';
+      P.owner.className = 'owner-chip' + (own >= 0 ? ' p' + (own + 1) : ' hidden');
     });
-    clear(refs.homeList);
-    clear(refs.awayList);
-    NS.Teams.byCategory(s.activeCategory).forEach(function (t) { refs.homeList.appendChild(teamButton(t, true)); });
-    NS.Teams.byCategory(s.awayCategory).forEach(function (t) { refs.awayList.appendChild(teamButton(t, false)); });
-    var hT = NS.Teams.byId(s.homeTeamId);
-    var aT = NS.Teams.byId(s.awayTeamId);
-    refs.homeTitle.textContent = hT.name + ' (' + hT.code + ')';
-    refs.awayTitle.textContent = aT.name + ' (' + aT.code + ')';
-    refs.homeStars.textContent = new Array(hT.stars + 1).join('★');
-    refs.awayStars.textContent = new Array(aT.stars + 1).join('★');
-    refs.homeSwatch.style.background = 'linear-gradient(135deg,' + NS.Assets.hexToCss(hT.c1) + ' 50%,' + NS.Assets.hexToCss(hT.c2) + ' 50%)';
-    refs.awaySwatch.style.background = 'linear-gradient(135deg,' + NS.Assets.hexToCss(aT.c1) + ' 50%,' + NS.Assets.hexToCss(aT.c2) + ' 50%)';
-    if (keepKey) { focused = null; if (!focusByKey(keepKey)) focusDefault(); }
+    refocus(keys[0], keys[1]);
+  }
+
+  // Back on a two-cursor screen: the panel cursor c is in steps back first (its team list -> its leagues; the game plan:
+  // a starter picked for a swap is let go). True = done there.
+  function panelBack(c) {
+    var f = getF(c), pn = f && f.closest ? f.closest('[data-panel]') : null;
+    var t = pn ? +pn.getAttribute('data-panel') : (twoPlayers() ? panelOf(c) : -1);
+    if (t < 0) return false;
+    var s = World.session;
+    actor = c;
+    try {
+      if (current === 'TEAMS' && teamView[t] === 'teams') {
+        teamView[t] = 'cats';
+        renderTeams(redrawKeys('c' + t + ':' + (t ? s.awayCategory : s.activeCategory)));
+        return true;
+      }
+      if (current === 'GAMEPLAN' && s.selStarter[t] !== null) {
+        var k = 's' + t + ':' + s.selStarter[t];
+        s.selStarter[t] = null;
+        renderGamePlan(redrawKeys(k));
+        return true;
+      }
+    } finally { actor = 0; }
+    return c === 1; // (P2's Back never leaves the screen)
   }
 
   /* ------------------------------ GAME PLAN ------------------------------ */
 
+  // Split in two: each side's panel (formation, tactics, starters and bench) next to the other's, so two players set
+  // their teams up at the same time, each with his own cursor (one player: his cursor goes to both).
+  var GP = [{}, {}];             // each side's panel: { title, owner, forms, tac[], hint, starters, subs, stats }
+
   function buildGamePlan() {
     var wrap = screens.GAMEPLAN;
-    var top = el('div', 'gp-bar');
-    var tabs = el('div', 'row');
-    tabs.appendChild(el('span', 'muted', T('gp.editing')));
-    refs.gpHome = btn('', T('gp.home'), 'gp:h', function () { World.session.editingSquadIdx = 0; World.session.selectedStarterIdx = null; renderGamePlan('gp:h'); });
-    refs.gpAway = btn('', T('gp.away'), 'gp:a', function () { World.session.editingSquadIdx = 1; World.session.selectedStarterIdx = null; renderGamePlan('gp:a'); });
-    tabs.appendChild(refs.gpHome);
-    tabs.appendChild(refs.gpAway);
-    top.appendChild(tabs);
-    var forms = el('div', 'row');
-    forms.appendChild(el('span', 'muted', T('gp.formation')));
-    NS.FORMATION_KEYS.forEach(function (f) {
-      var b = btn('form', f, 'f:' + f, function () {
-        World.session.formations[World.session.editingSquadIdx] = f;
-        if (matchRunning()) NS.Match.refreshFromSession();
-        else NS.Match.refitRoster(World.session.editingSquadIdx); // the right players for the new positions
-        renderGamePlan('f:' + f);
+    var cols = el('div', 'gp-split');
+    [0, 1].forEach(function (t) {
+      var P = GP[t];
+      var card = el('div', 'panel-card gp-panel ' + (t ? 'away' : 'home'));
+      card.setAttribute('data-panel', String(t));
+      var head = el('div', 'row gp-head');
+      P.title = el('div', 'tag ' + (t ? 'blue' : 'red'));
+      head.appendChild(P.title);
+      P.owner = el('span', 'owner-chip');
+      head.appendChild(P.owner);
+      card.appendChild(head);
+      // the formation
+      var forms = el('div', 'row gp-forms');
+      NS.FORMATION_KEYS.forEach(function (f) {
+        var b = btn('form', f, 'f' + t + ':' + f, function () {
+          World.session.formations[t] = f;
+          World.session.selStarter[t] = null;
+          if (matchRunning()) NS.Match.refreshFromSession();
+          else NS.Match.refitRoster(t); // the right players for the new positions
+          renderGamePlan(redrawKeys('f' + t + ':' + f));
+        });
+        b.setAttribute('data-form', f);
+        forms.appendChild(b);
       });
-      b.setAttribute('data-form', f);
-      forms.appendChild(b);
-    });
-    top.appendChild(forms);
-    // tactics: what each block (defence, midfield, attack) is told to do; confirm cycles defensive / balanced / attacking;
-    // the 4th: counter-attacks (rarely / when it is on / always)
-    var tac = el('div', 'row');
-    tac.appendChild(el('span', 'muted', T('tac.title')));
-    refs.tacBtns = [];
-    [0, 1, 2, 3].forEach(function (b) {
-      var bt = btn('tac', '', 'tac:' + b, function () {
-        var row = World.session.tactics[World.session.editingSquadIdx];
-        row[b] = ((row[b] === undefined ? 1 : row[b]) + 1) % 3;
-        renderGamePlan('tac:' + b);
+      card.appendChild(forms);
+      // tactics: what each block (defence, midfield, attack) is told to do; confirm cycles defensive / balanced /
+      // attacking; the 4th: counter-attacks (rarely / when it is on / always)
+      var tac = el('div', 'row gp-tac');
+      P.tac = [];
+      [0, 1, 2, 3].forEach(function (b) {
+        var bt = btn('tac', '', 'tac' + t + ':' + b, function () {
+          var row = World.session.tactics[t];
+          row[b] = ((row[b] === undefined ? 1 : row[b]) + 1) % 3;
+          renderGamePlan(redrawKeys('tac' + t + ':' + b));
+        });
+        P.tac.push(bt);
+        tac.appendChild(bt);
       });
-      refs.tacBtns.push(bt);
-      tac.appendChild(bt);
+      card.appendChild(tac);
+      P.hint = el('div', 'muted small tac-hint');
+      card.appendChild(P.hint);
+      // the players: a starter picked, then a bench player = they swap
+      var lists = el('div', 'gp-lists');
+      var c1 = el('div', 'list-col');
+      c1.appendChild(el('div', 'tag amber', T('gp.starters')));
+      P.starters = el('div', 'stack');
+      c1.appendChild(P.starters);
+      var c2 = el('div', 'list-col');
+      c2.appendChild(el('div', 'tag blue', T('gp.bench')));
+      P.subs = el('div', 'stack');
+      c2.appendChild(P.subs);
+      lists.appendChild(c1);
+      lists.appendChild(c2);
+      card.appendChild(lists);
+      P.stats = el('div', 'gp-statline muted small');
+      card.appendChild(P.stats);
+      cols.appendChild(card);
     });
-    top.appendChild(tac);
-    refs.tacHint = el('div', 'muted small tac-hint');
-    top.appendChild(refs.tacHint);
-    wrap.appendChild(top);
-
-    var mid = el('div', 'gp-mid');
-    var boardCard = el('div', 'panel-card boardcard');
-    refs.gpTitle = el('div', 'tag green');
-    boardCard.appendChild(refs.gpTitle);
-    gpCanvas = document.createElement('canvas');
-    gpCanvas.width = 280;
-    gpCanvas.height = 190;
-    gpCanvas.className = 'board-canvas';
-    gpCtx = gpCanvas.getContext('2d');
-    boardCard.appendChild(gpCanvas);
-    refs.gpStats = el('div', 'gp-stats');
-    boardCard.appendChild(refs.gpStats);
-    boardCard.appendChild(el('p', 'muted small', T('gp.hint')));
-    mid.appendChild(boardCard);
-
-    var lists = el('div', 'panel-card lists');
-    var c1 = el('div', 'list-col');
-    c1.appendChild(el('div', 'tag amber', T('gp.starters')));
-    refs.gpStarters = el('div', 'stack');
-    c1.appendChild(refs.gpStarters);
-    var c2 = el('div', 'list-col');
-    c2.appendChild(el('div', 'tag blue', T('gp.bench')));
-    refs.gpSubs = el('div', 'stack');
-    c2.appendChild(refs.gpSubs);
-    lists.appendChild(c1);
-    lists.appendChild(c2);
-    mid.appendChild(lists);
-    wrap.appendChild(mid);
+    wrap.appendChild(cols);
+    wrap.appendChild(el('p', 'muted small gp-hint', T('gp.hint')));
 
     var foot = el('div', 'foot');
     foot.appendChild(btn('', T('nav.back'), 'back', back));
@@ -877,166 +1016,78 @@
     wrap.appendChild(foot);
   }
 
-  function clamp01(v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
-
-  function drawBoard(layout, roster, teamObj) {
-    var w = gpCanvas.width;
-    var h = gpCanvas.height;
-    var s = World.session;
-    gpCtx.clearRect(0, 0, w, h);
-    gpCtx.strokeStyle = 'rgba(255,255,255,0.35)';
-    gpCtx.lineWidth = 1.5;
-    gpCtx.strokeRect(10, 10, w - 20, h - 20);
-    gpCtx.beginPath();
-    gpCtx.moveTo(w / 2, 10);
-    gpCtx.lineTo(w / 2, h - 10);
-    gpCtx.stroke();
-    gpCtx.beginPath();
-    gpCtx.arc(w / 2, h / 2, 22, 0, Math.PI * 2);
-    gpCtx.stroke();
-    for (var i = 0; i < layout.length; i++) {
-      var slot = layout[i];
-      // kick-off positions are all in our half: spread them over the whole board (keeper left, forwards right)
-      var px = clamp01((slot.x + 52.5) / 52.5) * (w - 36) + 18;
-      var pz = ((slot.z + 34) / 68) * (h - 36) + 18;
-      gpCtx.fillStyle = s.selectedStarterIdx === i ? '#f59e0b' : NS.Assets.hexToCss(teamObj.c1);
-      gpCtx.beginPath();
-      gpCtx.arc(px, pz, 8, 0, Math.PI * 2);
-      gpCtx.fill();
-      gpCtx.strokeStyle = '#ffffff';
-      gpCtx.stroke();
-      gpCtx.fillStyle = '#ffffff';
-      gpCtx.font = layout.length > 7 ? 'bold 9px sans-serif' : 'bold 11px sans-serif';
-      gpCtx.textAlign = 'center';
-      gpCtx.fillText((roster[i] || '').slice(0, 9), px, pz + (layout.length > 7 ? 17 : 20));
-    }
-  }
-
-  // the six ratings of one player on a hexagon, PES style: one corner per rating with its name and value
+  // the six ratings of a player in one line (the one picked for a swap, else the first)
   var STAT_KEYS = [['spd', 'st.spd'], ['drb', 'st.drb'], ['sht', 'st.sht'], ['sta', 'st.sta'], ['hdr', 'st.hdr'], ['def', 'st.def']];
-  var hexCanvas = null;
-  function showStats(teamObj, name) {
-    var box = refs.gpStats;
-    clear(box);
-    if (!name) return;
-    var st = NS.Players.statsFor(teamObj, name);
-    var head = el('div', 'gp-st-head');
-    head.appendChild(el('b', null, name));
-    head.appendChild(el('span', 'chip', st.pos + '  ' + st.ovr));
-    box.appendChild(head);
-    if (!hexCanvas) {
-      hexCanvas = document.createElement('canvas');
-      hexCanvas.width = 240;
-      hexCanvas.height = 196;
-      hexCanvas.className = 'hex-canvas';
-    }
-    box.appendChild(hexCanvas);
-    drawHex(hexCanvas, st, teamObj);
+  function statLine(teamObj, name) {
+    if (!name) return '';
+    var st = NS.Players.statsFor(teamObj, name), out = name + '  ' + st.pos + ' ' + st.ovr + '   ';
+    for (var i = 0; i < STAT_KEYS.length; i++) out += T(STAT_KEYS[i][1]).toUpperCase() + ' ' + st[STAT_KEYS[i][0]] + '  ';
+    return out;
   }
 
-  function drawHex(cv, st, teamObj) {
-    var g = cv.getContext('2d');
-    var w = cv.width, h = cv.height, cx = w / 2, cy = h / 2 + 2, R = 56;
-    var n = STAT_KEYS.length, i, k, a;
-    g.clearRect(0, 0, w, h);
-    function pt(idx, r) { a = -Math.PI / 2 + idx * Math.PI * 2 / n; return [cx + Math.cos(a) * r, cy + Math.sin(a) * r]; }
-    // the web: rings at 25 / 50 / 75 / 100, and the spokes
-    g.lineWidth = 1;
-    for (k = 1; k <= 4; k++) {
-      g.beginPath();
-      for (i = 0; i <= n; i++) { var q = pt(i % n, R * k / 4); if (i) g.lineTo(q[0], q[1]); else g.moveTo(q[0], q[1]); }
-      g.fillStyle = k % 2 ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.08)';
-      g.strokeStyle = 'rgba(255,255,255,' + (k === 4 ? 0.45 : 0.18) + ')';
-      if (k === 4) g.fill();
-      g.stroke();
-    }
-    for (i = 0; i < n; i++) { var s0 = pt(i, R); g.beginPath(); g.moveTo(cx, cy); g.lineTo(s0[0], s0[1]); g.stroke(); }
-    // the player's shape
-    g.beginPath();
-    for (i = 0; i <= n; i++) {
-      var v = st[STAT_KEYS[i % n][0]];
-      var p = pt(i % n, R * Math.max(0.05, (v - 30) / 69));
-      if (i) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]);
-    }
-    var col = NS.Assets.hexToCss(teamObj.c1);
-    g.fillStyle = 'rgba(56,189,248,0.38)';
-    g.fill();
-    g.strokeStyle = '#7dd3fc';
-    g.lineWidth = 2;
-    g.stroke();
-    // names and values at the corners
-    g.textAlign = 'center';
-    g.textBaseline = 'middle';
-    for (i = 0; i < n; i++) {
-      var val = st[STAT_KEYS[i][0]];
-      var l = pt(i, R + 24);
-      g.font = 'bold 12px sans-serif';
-      g.fillStyle = '#cbd5e1';
-      g.fillText(T(STAT_KEYS[i][1]).toUpperCase(), l[0], l[1] - 7);
-      g.font = 'bold 15px sans-serif';
-      g.fillStyle = val >= 80 ? '#4ade80' : (val >= 65 ? '#facc15' : '#f87171');
-      g.fillText(String(val), l[0], l[1] + 7);
-    }
-    g.fillStyle = col;
-    g.beginPath(); g.arc(cx, cy, 3, 0, Math.PI * 2); g.fill();
-  }
-
-  function renderGamePlan(keepKey) {
+  // keys: [P1's cursor, P2's] after the redraw (none: as they are)
+  function renderGamePlan(keys) {
     var s = World.session;
-    var idx = s.editingSquadIdx;
-    var teamObj = NS.Teams.byId(idx === 0 ? s.homeTeamId : s.awayTeamId);
-    var formKey = s.formations[idx];
-    var layout = NS.FORMATIONS[formKey];
-    var roster = s.rosters[idx];
-    refs.gpHome.classList.toggle('sel', idx === 0);
-    refs.gpAway.classList.toggle('sel', idx === 1);
-    var fb = screens.GAMEPLAN.querySelectorAll('[data-form]');
-    for (var i = 0; i < fb.length; i++) fb[i].classList.toggle('sel', fb[i].getAttribute('data-form') === formKey);
-    refs.gpTitle.textContent = teamObj.name + ' (' + formKey + ')';
-    var trow = s.tactics[idx], hint = [];
-    if (trow[3] === undefined) trow[3] = 1;
-    for (var tb = 0; tb < 4; tb++) {
-      refs.tacBtns[tb].textContent = T('tac.b' + tb) + ': ' + T((tb === 3 ? 'tac.c' : 'tac.m') + trow[tb]);
-      for (var mk = 0; mk < 3; mk++) refs.tacBtns[tb].classList.toggle('m' + mk, trow[tb] === mk);
-      hint.push(T('tac.h' + tb + trow[tb]));
-    }
-    refs.tacHint.textContent = hint.join('  ·  ');
-    clear(refs.gpStarters);
-    clear(refs.gpSubs);
-
-    layout.forEach(function (slot, n) {
-      var b = btn('player' + (s.selectedStarterIdx === n ? ' sel' : ''), '', 's:' + n, function () {
-        s.selectedStarterIdx = n;
-        renderGamePlan('s:' + n);
-      });
-      b.appendChild(el('span', 'role', slot.role));
-      b.appendChild(el('span', 'pname', roster[n] || ('PLAYER ' + (n + 1))));
-      b.appendChild(el('span', 'ovr', String(NS.Players.statsFor(teamObj, roster[n]).ovr)));
-      b.appendChild(el('span', 'num', '#' + slot.num));
-      refs.gpStarters.appendChild(b);
-    });
-    for (var j = layout.length; j < roster.length; j++) {
-      (function (k) {
-        var b = btn('player sub', '', 'b:' + k, function () {
-          if (s.selectedStarterIdx === null) return;
-          var tmp = roster[s.selectedStarterIdx];
-          roster[s.selectedStarterIdx] = roster[k];
-          roster[k] = tmp;
-          var back1 = 's:' + s.selectedStarterIdx;
-          s.selectedStarterIdx = null;
-          if (matchRunning()) NS.Match.refreshFromSession();
-          renderGamePlan(back1);
+    keys = keys || [keyOf(focused), keyOf(focus2)];
+    var two = twoPlayers();
+    if (!s.selStarter) s.selStarter = [null, null];
+    [0, 1].forEach(function (t) {
+      var P = GP[t];
+      var teamObj = NS.Teams.byId(t === 0 ? s.homeTeamId : s.awayTeamId);
+      var formKey = s.formations[t];
+      var layout = NS.FORMATIONS[formKey];
+      var roster = s.rosters[t];
+      var picked = s.selStarter[t];
+      P.title.textContent = teamObj.name + '  ·  ' + formKey;
+      var own = two ? (panelOf(0) === t ? 0 : 1) : -1;
+      P.owner.textContent = own >= 0 ? 'P' + (own + 1) : '';
+      P.owner.className = 'owner-chip' + (own >= 0 ? ' p' + (own + 1) : ' hidden');
+      var fb = GP[t].title.parentNode.parentNode.querySelectorAll('[data-form]');
+      for (var i = 0; i < fb.length; i++) fb[i].classList.toggle('sel', fb[i].getAttribute('data-form') === formKey);
+      var trow = s.tactics[t], hint = [];
+      if (trow[3] === undefined) trow[3] = 1;
+      for (var tb = 0; tb < 4; tb++) {
+        P.tac[tb].textContent = T('tac.b' + tb) + ': ' + T((tb === 3 ? 'tac.c' : 'tac.m') + trow[tb]);
+        for (var mk = 0; mk < 3; mk++) P.tac[tb].classList.toggle('m' + mk, trow[tb] === mk);
+        hint.push(T('tac.h' + tb + trow[tb]));
+      }
+      P.hint.textContent = hint.join('  ·  ');
+      clear(P.starters);
+      clear(P.subs);
+      P.starters.parentNode.parentNode.classList.toggle('nobench', roster.length <= layout.length); // (no bench: two columns of starters)
+      layout.forEach(function (slot, n) {
+        var b = btn('player' + (picked === n ? ' sel' : ''), '', 's' + t + ':' + n, function () {
+          s.selStarter[t] = s.selStarter[t] === n ? null : n;
+          renderGamePlan(redrawKeys('s' + t + ':' + n));
         });
-        b.appendChild(el('span', 'role sub', T('gp.sub')));
-        b.appendChild(el('span', 'pname', roster[k]));
-        b.appendChild(el('span', 'ovr', String(NS.Players.statsFor(teamObj, roster[k]).ovr)));
-        b.appendChild(el('span', 'num good', s.selectedStarterIdx !== null ? T('gp.swap') : T('gp.ready')));
-        refs.gpSubs.appendChild(b);
-      })(j);
-    }
-    drawBoard(layout, roster, teamObj);
-    showStats(teamObj, roster[s.selectedStarterIdx !== null ? s.selectedStarterIdx : 0]);
-    if (keepKey) { focused = null; if (!focusByKey(keepKey)) focusDefault(); }
+        b.appendChild(el('span', 'role', slot.role));
+        b.appendChild(el('span', 'pname', roster[n] || ('PLAYER ' + (n + 1))));
+        b.appendChild(el('span', 'ovr', String(NS.Players.statsFor(teamObj, roster[n]).ovr)));
+        b.appendChild(el('span', 'num', '#' + slot.num));
+        P.starters.appendChild(b);
+      });
+      for (var j = layout.length; j < roster.length; j++) {
+        (function (k) {
+          var b = btn('player sub', '', 'b' + t + ':' + k, function () {
+            var at = s.selStarter[t];
+            if (at === null) return;
+            var tmp = roster[at];
+            roster[at] = roster[k];
+            roster[k] = tmp;
+            s.selStarter[t] = null;
+            if (matchRunning()) NS.Match.refreshFromSession();
+            renderGamePlan(redrawKeys('s' + t + ':' + at));
+          });
+          b.appendChild(el('span', 'role sub', T('gp.sub')));
+          b.appendChild(el('span', 'pname', roster[k]));
+          b.appendChild(el('span', 'ovr', String(NS.Players.statsFor(teamObj, roster[k]).ovr)));
+          b.appendChild(el('span', 'num good', picked !== null ? T('gp.swap') : T('gp.ready')));
+          P.subs.appendChild(b);
+        })(j);
+      }
+      P.stats.textContent = statLine(teamObj, roster[picked !== null ? picked : 0]);
+    });
+    refocus(keys[0], keys[1]);
   }
 
   /* ------------------------------ PAUSE ------------------------------ */
@@ -1051,7 +1102,7 @@
     var grid = el('div', 'cards two');
     var items = [
       ['resume', 'good', '▶', resumeMatch],
-      ['plan', 'sky', '📋', function () { World.session.selectedStarterIdx = null; show('GAMEPLAN'); }],
+      ['plan', 'sky', '📋', function () { World.session.selStarter = [null, null]; show('GAMEPLAN'); }],
       ['settings', 'amber', '⚙️', function () { show('SETTINGS'); }],
       ['sides', 'purple', '🎮', function () { show('SIDES'); }],
       ['controls', 'teal', '❓', function () { helpReturn = 'PAUSE'; show('HELP'); }],
@@ -2207,6 +2258,7 @@
 
   /* ------------------------------ BUTTON MAPPING ------------------------------ */
 
+  var mapP = 0;   // the player whose map the screen shows and changes
   function buildButtons() {
     var wrap = screens.BUTTONS;
     var head = el('div', 'screen-head');
@@ -2214,6 +2266,16 @@
     head.appendChild(el('p', 'muted small', T('map.sub')));
     refs.mapNote = el('p', 'map-note hidden', T('map.noraw'));
     head.appendChild(refs.mapNote);
+    // whose map: P1's or P2's (each player keeps his own, whatever controller he holds)
+    var who = el('div', 'row map-who');
+    refs.mapWho = [0, 1].map(function (n) {
+      var b = btn('opt p' + (n + 1), 'P' + (n + 1), 'mp:' + n, function () { mapP = n; renderButtons('mp:' + n); });
+      who.appendChild(b);
+      return b;
+    });
+    refs.mapDev = el('span', 'muted small');
+    who.appendChild(refs.mapDev);
+    head.appendChild(who);
     wrap.appendChild(head);
     refs.mapCols = el('div', 'help-cols map-cols');
     wrap.appendChild(refs.mapCols);
@@ -2223,7 +2285,7 @@
     var left = el('div', 'row');
     left.appendChild(btn('', T('nav.back'), 'back', back));
     left.appendChild(btn('danger', T('map.reset'), 'mapreset', function () {
-      NS.Bindings.reset();
+      NS.Bindings.reset(mapP);
       NS.Storage.saveBindings();
       renderButtons('mapreset');
       refs.mapMsg.textContent = T('map.reset.done');
@@ -2231,7 +2293,7 @@
     foot.appendChild(left);
     foot.appendChild(btn('', T('map.clear'), 'mapclear', function () {
       if (mapLast >= 0) {
-        NS.Bindings.clear(mapLast);
+        NS.Bindings.clear(mapLast, mapP);
         NS.Storage.saveBindings();
         renderButtons('mapclear');
         refs.mapMsg.textContent = T('map.cleared');
@@ -2268,9 +2330,9 @@
     var b = btn('map-row', '', 'mv:' + idx, function () { startCapture(idx); });
     b.setAttribute('data-mv', String(idx));
     b.appendChild(el('span', 'map-name', T(clap ? 'mv.clap' : (sprint ? 'mv.sprint' : 'mv.' + B.MOVES[idx].id))));
-    // one map for every controller and phone controller
-    var v = el('span', 'map-val pad' + (!sprint && !clap && !B.MOVES[idx].mask ? ' off' : ''),
-      clap ? B.maskLabel(B.clapMask()) : (sprint ? B.maskLabel(B.sprintMask()) : B.bindingLabel(idx)));
+    // the map of the player picked above (P1 / P2)
+    var v = el('span', 'map-val pad' + (!sprint && !clap && !B.maskOf(idx, mapP) ? ' off' : ''),
+      clap ? B.maskLabel(B.clapMask()) : (sprint ? B.maskLabel(B.sprintMask(mapP)) : B.bindingLabel(idx, mapP)));
     b.appendChild(v);
     return b;
   }
@@ -2279,6 +2341,11 @@
     var B = NS.Bindings;
     clear(refs.mapCols);
     refs.mapNote.classList.toggle('hidden', NS.Gamepad.live());
+    refs.mapWho[0].classList.toggle('sel', mapP === 0);
+    refs.mapWho[1].classList.toggle('sel', mapP === 1);
+    // the device this player plays with now (a keyboard: Enter / Space is A, Shift is X)
+    var dv = NS.Devices.of(mapP);
+    refs.mapDev.textContent = dv ? devName(dv).join(' ') + (NS.Devices.isKeys(dv) ? '  ·  ' + T('map.keys') : '') : T('map.nodev');
     var groups = [['map.group.move', 0], ['map.group.att', 1], ['map.group.def', 2]];
     groups.forEach(function (g) {
       var card = el('div', 'panel-card');
@@ -2317,11 +2384,11 @@
       } else if (clap) {
         msg = B.setClap(mask) ? T('mv.clap') + ' = ' + B.maskLabel(mask) : T('map.clapbusy');
       } else if (sprint) {
-        B.setSprint(mask);
+        B.setSprint(mask, mapP);
         msg = T('mv.sprint') + ' = ' + B.maskLabel(mask);
       } else {
-        var cleared = B.set(idx, mask);
-        msg = T('mv.' + B.MOVES[idx].id) + ' = ' + B.bindingLabel(idx) +
+        var cleared = B.set(idx, mask, mapP);
+        msg = 'P' + (mapP + 1) + '  ' + T('mv.' + B.MOVES[idx].id) + ' = ' + B.bindingLabel(idx, mapP) +
           (cleared >= 0 ? '   (' + T('mv.' + B.MOVES[cleared].id) + ': ' + T('map.conflict') + ')' : '');
       }
       if (mask) NS.Storage.saveBindings();
@@ -2398,7 +2465,7 @@
       if (!matchRunning()) return;
       if (id === 'restart') { startMatch(); return; }
       if (id === 'abandon') { NS.Match.exitToMenu(); return; }
-      if (id === 'plan') { World.session.selectedStarterIdx = null; show('GAMEPLAN'); }
+      if (id === 'plan') { World.session.selStarter = [null, null]; show('GAMEPLAN'); }
       else if (id === 'settings') show('SETTINGS');
       else if (id === 'sides') show('SIDES');
       else if (id === 'controls') { helpReturn = 'PAUSE'; show('HELP'); }
@@ -2412,18 +2479,23 @@
     onInput: function (action, pressed, repeat, dev) {
       if (NS.Mapper.active()) return; // the mapper is listening to the real buttons
       if (!pressed) return;
-      // the sides screen: left / right move player 1's icon (a controller moves its own, through padSide)
+      // the sides screen: left / right move this keyboard's icon (a controller moves its own, through padSide)
       if (current === 'SIDES' && (action === 'left' || action === 'right')) {
-        if (!repeat && !(/^pad/.test(dev || '') && NS.Gamepad && NS.Gamepad.live())) sideMove(0, action === 'left' ? -1 : 1);
+        if (!repeat && !/^pad/.test(dev || '')) sideMove(!dev || dev === 'touch' ? 'keys' : dev, action === 'left' ? -1 : 1);
         return;
       }
+      var c = DUAL[current] ? cursorOf(dev) : 0;
       switch (action) {
-        case 'left': move(0); break;
-        case 'right': move(1); break;
-        case 'up': move(2); break;
-        case 'down': move(3); break;
-        case 'confirm': if (!repeat && focused) focused.click(); break;
-        case 'cancel': if (!repeat) back(); break;
+        case 'left': move(0, c); break;
+        case 'right': move(1, c); break;
+        case 'up': move(2, c); break;
+        case 'down': move(3, c); break;
+        case 'confirm': if (!repeat && getF(c)) { actor = c; getF(c).click(); actor = 0; } break;
+        case 'cancel':
+          if (repeat) break;
+          if (DUAL[current] && panelBack(c)) break; // (a panel's own step back: its leagues, a pick undone)
+          if (c === 0) back();                     // (only P1 leaves the screen)
+          break;
         case 'menu':
           if (repeat) break;
           // + / Start: the screen's main button (next, kick off, play...); in the pause menu: resume

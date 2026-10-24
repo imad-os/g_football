@@ -1,5 +1,6 @@
-/* Per-player match input, fed only by game controllers (js/core/gamepad.js: physical pads and phone controllers).
- * The TV remote and the keyboard only drive the menus (NS.UI gets My PC's actions directly).
+/* Per-player match input (P1, P2), fed by the device each player picked on the sides screen: a game controller or a phone
+ * controller (js/core/gamepad.js), or the keyboard / TV remote (My PC's actions: arrows, Enter / Space = A, Shift = X;
+ * 'keys2', the second keyboard player, is W A S D with F and G). Menus get My PC's actions from every device.
  * pads[n]: x / y = direction (analog stick or D-pad), cur = buttons held (bit mask of NS.Bindings bits),
  * latch = buttons pressed since the last simulation step (a very short press is never lost), burst = a direction was
  * double-tapped (sprint burst). */
@@ -75,6 +76,81 @@
         p.x = 0; p.y = 0; p.rx = 0; p.ry = 0; p.cur = 0; p.latch = 0; p.ign = 0; p.burst = false;
         p.dir[0] = p.dir[1] = p.dir[2] = p.dir[3] = false;
       }
+      for (var d in keys) keys[d].l = keys[d].r = keys[d].u = keys[d].d = false;
+    },
+
+    // a keyboard / remote action during a match (My PC's onInput, dev 'keys' / 'keys2'): the player it belongs to plays
+    // with it. Enter / Space ('jump') is A, Shift ('run') is X; the rest of the keys are My PC's. False = not a player's.
+    key: function (dev, action, pressed) {
+      var n = Devices.player(dev);
+      if (n < 0) return false;
+      var k = keys[dev] || (keys[dev] = { l: false, r: false, u: false, d: false });
+      if (action === 'left') k.l = pressed;
+      else if (action === 'right') k.r = pressed;
+      else if (action === 'up') k.u = pressed;
+      else if (action === 'down') k.d = pressed;
+      else if (action === 'jump') { NS.Input.button(n, KEY_A, pressed); return true; }
+      else if (action === 'run') { NS.Input.button(n, KEY_X, pressed); return true; }
+      else return false;
+      NS.Input.direction(n, (k.r ? 1 : 0) - (k.l ? 1 : 0), (k.d ? 1 : 0) - (k.u ? 1 : 0));
+      return true;
     }
   };
+
+  var KEY_A = 8, KEY_X = 32; // (NS.Bindings bits)
+  var keys = {};             // keyboard device -> its arrows held
+
+  /* The devices and the two players. A device is the keyboard / TV remote ('keys'), a second keyboard player ('keys2',
+   * once it is used), or a controller ('pad0'..'pad3', phones 'pad101'...). On the sides screen each device has its own
+   * row and moves its own icon; the first two devices put on a side are P1 and P2 (session.padDev, their teams in
+   * session.pads). The competitions' fixed side modes use the default devices: the controllers first, then the keyboard. */
+  var keys2Seen = false;
+  var Devices = {
+    // every device that can play, in order: the controllers, then the keyboard(s)
+    list: function () {
+      var d = NS.Gamepad && NS.Gamepad.devs ? NS.Gamepad.devs() : null; // (trainer.html: no controllers)
+      var out = d && d.slice ? d.slice() : [];
+      out.push('keys');
+      if (keys2Seen) out.push('keys2');
+      return out;
+    },
+    seen: function (dev) {
+      if (dev === 'keys2' && !keys2Seen) { keys2Seen = true; if (NS.UI && NS.UI.padsChanged) NS.UI.padsChanged(); }
+    },
+    isKeys: function (dev) { return dev === 'keys' || dev === 'keys2' || dev === 'touch'; },
+    // 'pad', 'phone', 'keys', 'keys2'
+    kind: function (dev) {
+      if (dev === 'keys' || dev === 'touch') return 'keys';
+      if (dev === 'keys2') return 'keys2';
+      return /^pad1\d\d$/.test(String(dev)) ? 'phone' : 'pad';
+    },
+    // the device player n plays with (null: none)
+    of: function (n) {
+      var s = NS.World.session;
+      if (s.sideMode === 'CUSTOM') return s.padDev ? s.padDev[n] || null : null;
+      var l = this.list();
+      return l[n] || null;
+    },
+    // the player (0 / 1) a device plays as in a match, -1 none
+    player: function (dev) {
+      if (dev === 'touch') dev = 'keys';
+      if (this.of(0) === dev) return 0;
+      if (this.of(1) === dev) return 1;
+      return -1;
+    },
+    // CUSTOM sides: a player with a side and no device gets the first free one (the default P1: a controller, else the
+    // keyboard); a device that is gone frees its player
+    fix: function () {
+      var s = NS.World.session, l = this.list();
+      if (!s.padDev) s.padDev = [null, null];
+      for (var n = 0; n < 2; n++) {
+        if (s.padDev[n] && l.indexOf(s.padDev[n]) < 0) { s.padDev[n] = null; s.pads[n] = -1; }
+        if (s.pads[n] >= 0 && !s.padDev[n]) {
+          for (var i = 0; i < l.length; i++) if (l[i] !== s.padDev[1 - n]) { s.padDev[n] = l[i]; break; }
+          if (!s.padDev[n]) s.pads[n] = -1;
+        }
+      }
+    }
+  };
+  NS.Devices = Devices;
 })(window.RS6 = window.RS6 || {});
