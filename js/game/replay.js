@@ -14,7 +14,7 @@
   var World = NS.World;
   var HZ = 30, STEP = 1 / HZ;
   var Q = 100;
-  var H = 17, E = 15, MAX_E = 24;           // header numbers, numbers per body, bodies (22 players + the referee)
+  var H = 17, E = 19, MAX_E = 24;           // header numbers, numbers per body, bodies (22 players + the referee)
   var BALL_Y = 16;                          // (the ball's turn about the vertical)
   var FSM = H + MAX_E * E;                   // ring stride
   var CAP = 20 * HZ + 10;                    // ring frames (the longest replay length)
@@ -70,6 +70,9 @@
       b[o + 7] = me.leftLeg.rotation.x; b[o + 8] = me.rightLeg.rotation.x;
       b[o + 9] = me.leftArm.rotation.x; b[o + 10] = me.rightArm.rotation.x;
       b[o + 11] = me.leftArm.rotation.z; b[o + 12] = me.rightArm.rotation.z; b[o + 14] = me.rightLeg.rotation.z;
+      // knees and elbows (rounded models; 0 for the blocks)
+      b[o + 15] = me.leftKnee ? me.leftKnee.rotation.x : 0; b[o + 16] = me.leftKnee ? me.rightKnee.rotation.x : 0;
+      b[o + 17] = me.leftElbow ? me.leftElbow.rotation.x : 0; b[o + 18] = me.leftElbow ? me.rightElbow.rotation.x : 0;
       b[o + 13] = (me.root.visible ? 1 : 0) + (me.card.visible ? 2 : 0) + (me.card.material.color.getHex() === RED ? 4 : 0);
     }
   }
@@ -84,6 +87,8 @@
       me.leftLeg.rotation.x = b[o + 7]; me.rightLeg.rotation.x = b[o + 8];
       me.leftArm.rotation.x = b[o + 9]; me.rightArm.rotation.x = b[o + 10];
       me.leftArm.rotation.z = b[o + 11]; me.rightArm.rotation.z = b[o + 12];
+      me.leftLeg.rotation.z = -b[o + 14]; me.rightLeg.rotation.z = b[o + 14]; // feet apart
+      if (me.leftKnee) { me.leftKnee.rotation.x = b[o + 15]; me.rightKnee.rotation.x = b[o + 16]; me.leftElbow.rotation.x = b[o + 17]; me.rightElbow.rotation.x = b[o + 18]; }
       me.root.visible = (f & 1) !== 0;
       me.card.visible = (f & 2) !== 0;
       if (me.card.visible) me.card.material.color.setHex(f & 4 ? RED : YELLOW);

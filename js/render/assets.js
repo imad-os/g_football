@@ -402,19 +402,41 @@
     return out;
   }
 
-  // a limb hanging from its pivot: [radius, t] -> lathe from y = -len (the end) up to 0
-  function limbLathe(pts, h, len, seg) {
+  // a limb hanging from its pivot: [radius, t] -> lathe from y = -len (the end) up to 0; caps: both ends rounded (a
+  // joint: the thigh and the shin overlap at the knee, so a bent knee shows no gap)
+  function limbLathe(pts, h, len, seg, caps) {
     var out = [];
     for (var i = pts.length - 1; i >= 0; i--) out.push([pts[i][0] * h, -pts[i][1] * len]);
+    if (caps) {
+      var r0 = out[0][0], r1 = out[out.length - 1][0];
+      out.unshift([r0 * 0.72, out[0][1] - r0 * 0.55]);
+      out.push([r1 * 0.72, out[out.length - 1][1] + r1 * 0.55]);
+    }
     return lathe(out, seg);
   }
+  // the part of a limb profile between t0 and t1 (0 = its pivot, 1 = its end), as a profile of its own
+  function segment(pts, t0, t1) {
+    function rAt(t) {
+      for (var i = 1; i < pts.length; i++) {
+        if (t <= pts[i][1]) { var a = pts[i - 1], b = pts[i]; return a[0] + (b[0] - a[0]) * (t - a[1]) / (b[1] - a[1]); }
+      }
+      return pts[pts.length - 1][0];
+    }
+    var out = [[rAt(t0), 0]];
+    for (var i = 0; i < pts.length; i++) if (pts[i][1] > t0 && pts[i][1] < t1) out.push([pts[i][0], (pts[i][1] - t0) / (t1 - t0)]);
+    out.push([rAt(t1), 1]);
+    return out;
+  }
+  var KNEE = 0.5, ELBOW = 0.46;   // the knee at half the leg, the elbow a little above half the arm
 
   function bodyPart(m, seg, h, part, style) {
     var key = m + '|' + seg + '|' + Math.round(h * 100) + '|' + part + (style || '');
     if (bodyGeo[key]) return bodyGeo[key];
-    var b = BUILDS[m], g;
-    if (part === 'leg') g = limbLathe(b.leg, h, (b.hip - b.boot[1]) * h, seg);
-    else if (part === 'arm') g = limbLathe(b.arm, h, b.armL * h, seg);
+    var b = BUILDS[m], g, L = (b.hip - b.boot[1]) * h;
+    if (part === 'thigh') g = limbLathe(segment(b.leg, 0, KNEE), h, L * KNEE, seg, true);
+    else if (part === 'shin') g = limbLathe(segment(b.leg, KNEE, 1), h, L * (1 - KNEE), seg, true);
+    else if (part === 'uarm') g = limbLathe(segment(b.arm, 0, ELBOW), h, b.armL * h * ELBOW, seg, true);
+    else if (part === 'farm') g = limbLathe(segment(b.arm, ELBOW, 1), h, b.armL * h * (1 - ELBOW), seg, true);
     else if (part === 'boot') g = new THREE.SphereGeometry(1, seg, Math.max(4, Math.round(seg * 0.6)));
     else if (part === 'hair') {
       var k = style === 'afro' ? 1.32 : (style === 'buzz' ? 0.985 : 1), c = b.headC, pts = [];
@@ -477,6 +499,7 @@
     mesh.leftLeg = limb(body, geo.limb, shortsMat, -0.2, 0.03, 1.17);
     mesh.rightLeg = limb(body, geo.limb, shortsMat, 0.2, 0.03, 1.17);
     mesh.hip = HIP; mesh.legX = 0.2; mesh.legW = 0.14; mesh.legLen = 1.17 + 0.03;
+    mesh.leftKnee = mesh.rightKnee = mesh.leftElbow = mesh.rightElbow = null; // (blocks: no knees or elbows)
   }
 
   // ATHLETE / TOON: rounded bodies; ATHLETE players differ in height (1.72 - 1.92 m, keepers taller), hair and boots.
@@ -493,10 +516,14 @@
     var skinMat = new Mat({ color: look.skin });
     var hairMat = new Mat({ color: hairColor });
     var bootMat = new Mat({ color: boots });
-    // legs: shorts to mid-thigh, the knee, socks in the shirt colour; arms: sleeve, skin (a keeper: long sleeves, gloves)
-    var legMat = new Mat({ map: bandTexture([look.shorts, look.skin, look.c1], [0.3, 0.42, 1]) });
-    var armMat = new Mat({ map: look.gk ? bandTexture([look.c1, 0xf1f5f9], [0.8, 1]) : bandTexture([look.c1, look.skin], [0.3, 1]) });
-    mats.push(shirtMat, shortsMat, skinMat, hairMat, bootMat, legMat, armMat);
+    // thigh: shorts to mid-thigh, then the knee; shin: socks in the shirt colour from just below the knee;
+    // upper arm: the sleeve, then skin; forearm and hand (a keeper: long sleeves, gloves)
+    var thighMat = new Mat({ map: bandTexture([look.shorts, look.skin], [0.6, 1]) });
+    var shinMat = new Mat({ map: bandTexture([look.skin, look.c1], [0.12, 1]) });
+    var uarmMat = new Mat({ map: look.gk ? bandTexture([look.c1], [1]) : bandTexture([look.c1, look.skin], [0.6, 1]) });
+    var farmMat = look.gk ? new Mat({ map: bandTexture([look.c1, 0xf1f5f9], [0.62, 1]) }) : skinMat;
+    mats.push(shirtMat, shortsMat, skinMat, hairMat, bootMat, thighMat, shinMat, uarmMat);
+    if (farmMat !== skinMat) mats.push(farmMat);
 
     var hip = b.hip * h;
     var body = new THREE.Group();
@@ -518,21 +545,28 @@
       body.add(hair);
     }
     mesh.body = body;
-    var armG = bodyPart(m, seg, h, 'arm');
-    mesh.leftArm = limb(body, armG, armMat, -b.armX * h, b.armY * h, 0);
-    mesh.rightArm = limb(body, armG, armMat, b.armX * h, b.armY * h, 0);
-    var legG = bodyPart(m, seg, h, 'leg');
-    mesh.leftLeg = limb(body, legG, legMat, -b.legX * h, 0, 0);
-    mesh.rightLeg = limb(body, legG, legMat, b.legX * h, 0, 0);
-    // boots: a stretched ball at the end of each leg, toes forward
+    // arms: shoulder -> upper arm -> elbow -> forearm and hand; legs: hip -> thigh -> knee -> shin and boot. The elbow
+    // and the knee are pivots of their own (rotation.x: a bent knee folds the shin back, a bent elbow brings the forearm up)
+    var uaL = b.armL * h * ELBOW, L = (b.hip - b.boot[1]) * h, thL = L * KNEE;
+    var uarmG = bodyPart(m, seg, h, 'uarm'), farmG = bodyPart(m, seg, h, 'farm');
+    var thighG = bodyPart(m, seg, h, 'thigh'), shinG = bodyPart(m, seg, h, 'shin');
     var bootG = bodyPart(m, seg, h, 'boot');
+    mesh.leftArm = limb(body, uarmG, uarmMat, -b.armX * h, b.armY * h, 0);
+    mesh.rightArm = limb(body, uarmG, uarmMat, b.armX * h, b.armY * h, 0);
+    mesh.leftElbow = limb(mesh.leftArm, farmG, farmMat, 0, -uaL, 0);
+    mesh.rightElbow = limb(mesh.rightArm, farmG, farmMat, 0, -uaL, 0);
+    mesh.leftLeg = limb(body, thighG, thighMat, -b.legX * h, 0, 0);
+    mesh.rightLeg = limb(body, thighG, thighMat, b.legX * h, 0, 0);
+    mesh.leftKnee = limb(mesh.leftLeg, shinG, shinMat, 0, -thL, 0);
+    mesh.rightKnee = limb(mesh.rightLeg, shinG, shinMat, 0, -thL, 0);
+    // boots: a stretched ball at the end of each shin, toes forward
     for (var i = 0; i < 2; i++) {
       var boot = new THREE.Mesh(bootG, bootMat);
       boot.scale.set(b.boot[0] * h, b.boot[1] * h, b.boot[2] * h);
-      boot.position.set(0, -hip + b.boot[3] * h, b.boot[2] * h * 0.35);
-      (i ? mesh.rightLeg : mesh.leftLeg).add(boot);
+      boot.position.set(0, -(hip - thL) + b.boot[3] * h, b.boot[2] * h * 0.35);
+      (i ? mesh.rightKnee : mesh.leftKnee).add(boot);
     }
-    mesh.hip = hip; mesh.legX = b.legX * h; mesh.legW = b.legW * h; mesh.legLen = hip;
+    mesh.hip = hip; mesh.legX = b.legX * h; mesh.legW = b.legW * h; mesh.legLen = hip; mesh.thighLen = thL;
   }
 
   // Builds the body into mesh.root (kept: the player's position, facing and visibility stay as they are).

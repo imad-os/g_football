@@ -392,6 +392,17 @@ that differ from both teams.
   is a real size 5 ball at that scale: 22 cm across (68-70 cm round), radius 0.176, about 1/8 of a player's height. On the
   grass it rolls without slipping about the right axis (a quaternion turn per step), in the air it keeps its spin, and its
   shadow on the grass shows how high it flies.
+* **Shoulder to shoulder** (pressing the carrier): mostly a nuisance, not a tackle (half the odds of winning the ball it
+  had): the carrier is bumped and for 1.2 s runs 15% slower and is off balance (passes and shots miss by 2.2 x more and
+  carry 12% less pace); the challenger is 8% slower for 0.8 s.
+* **Restarts**: at a kick-off everyone stays in his own half until it is taken, and the team not kicking off outside the
+  centre circle; at a free kick the opponents are put and kept 10 m from the ball until it is taken. A throw-in always
+  goes to a team-mate (the one the stick points at, else the nearest within 24 units) and comes down to his waist where
+  he will be; the player it was thrown to brings it down off his chest up to 2.3 units high.
+* **Knees and elbows** (ATHLETE, TOON): thigh / shin and upper arm / forearm on their own pivots: a running leg folds
+  as it swings through, the back-swing of a kick folds the knee, the slide folds the back leg, players kneel on their
+  shins; the forearms come up with the pace; keepers crouch set for a shot (bent knees, arms out low, elbows bent),
+  catch with bent elbows and hold the ball at the chest. Replays keep them.
 * **Through the legs (nutmegs)**: a low ball whose path crosses the line between a player's feet, with room for it on both
   sides, goes on past him. The legs are taken in their pose of that step (stride, lunge, wide stance when jockeying, lean),
   so a player standing with his feet together cannot be nutmegged, while a lunging defender can. An opponent may still close

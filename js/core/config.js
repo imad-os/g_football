@@ -2,7 +2,7 @@
 (function (NS) {
   'use strict';
 
-  NS.VERSION = '1.33.0';
+  NS.VERSION = '1.34.0';
 
   // Pitch geometry (world units; x = length, z = width, y = up). The players and the goal are drawn ~1.5x real size,
   // so the markings around the goal are the real ones scaled to the goal (BOX_K), not to the pitch: the boxes look
@@ -49,7 +49,6 @@
   NS.GOAL_HEIGHT = 3.6;
   // A real size 5 ball: 68-70 cm round, 22 cm across, about 1/8 of a player's height (it fits between his legs)
   NS.BALL_R = 0.11 * NS.M;
-
   // Debug matches (js/game/debug.js): the event counter, null outside a debug run
   NS.dbg = null;
 

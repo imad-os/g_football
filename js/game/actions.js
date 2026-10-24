@@ -12,6 +12,9 @@
   var DRAG_K = NS.PHYS.ROLL_K; // ground speed needed per unit of distance
   var AIR_K = NS.PHYS.AIR_K;
   var R0 = NS.BALL_R;
+  var THROW_Y = 1.2;  // a throw-in comes down to the receiver at this height (his waist)
+  // pressed shoulder to shoulder (Actions.shoulder): for BUMP_T seconds his kicks miss by BUMP_ACC x more, BUMP_POW of the pace
+  var BUMP_T = 1.2, BUMP_ACC = 2.2, BUMP_POW = 0.88;
   // shot: speed from SHOT_MIN (a tap) to SHOT_MAX (from half the bar); GH = [gauge, height at the goal line]
   var SHOT_MIN = 26, SHOT_MAX = 58; // a struck shot: much faster than a long ball, so its flight stays flat
   var GH = [[0.10, NS.BALL_R], [0.11, 0.6], [0.30, 1.1], [0.40, 1.7], [0.50, 3.6], [1.0, 9.0]];
@@ -182,8 +185,8 @@
           var side = aimed ? (az > 0 ? 1 : -1) : (p.pos.z > 0 ? -1 : 1);
           var curveZ = -side * (GOAL_HALF_W + 2);
           angle = Math.atan2(goalX - p.pos.x, curveZ - p.pos.z);
-          angle += (Math.random() - 0.5) * (1.05 - power) * 0.1 * (accuracy || 1);
-          speed = 30 + power * 12;
+          angle += (Math.random() - 0.5) * (1.05 - power) * 0.1 * (accuracy || 1) * (p.bumpT > 0 ? BUMP_ACC : 1);
+          speed = (30 + power * 12) * (p.bumpT > 0 ? BUMP_POW : 1);
           var cvx = goalX - p.pos.x, cvz = curveZ - p.pos.z;
           var cT = Math.sqrt(cvx * cvx + cvz * cvz) / speed;
           vy = Math.min(9, (1.3 + power * 0.9 - ball.pos.y) / cT + 0.5 * G * cT);
@@ -223,6 +226,9 @@
       }
 
       var mate = forceTarget || this.pickTarget(p, ax, az, type);
+      // a throw-in always goes to a team-mate (never thrown into empty space, often straight out again): the one the
+      // stick points at, else the nearest one in reach of a throw
+      if (!mate && p.throwT > 0.35) mate = this.nearestMate(p, 24);
       this.lastTarget = mate;
       ball.spinY = 0;
       if (!mate) {
@@ -316,8 +322,9 @@
       ball.shotD = sd; // the keeper sees a shot from range coming for longer
       // his Shoot rating: accuracy (a great finisher misses by much less) and pace
       var err = (0.016 + sd * 0.0015) * (accuracy || 1) * (0.6 + g * 0.7) * (1.7 - p.st.sht / 99 * 1.1);
+      if (p.bumpT > 0) err *= BUMP_ACC; // pressed shoulder to shoulder: off balance
       var angle = Math.atan2(sdx, sdz) + gaussR() * err;
-      var speed = this.shotSpeed(g) * (0.9 + p.st.sht / 99 * 0.14);
+      var speed = this.shotSpeed(g) * (0.9 + p.st.sht / 99 * 0.14) * (p.bumpT > 0 ? BUMP_POW : 1);
       var ty = this.gaugeHeight(g);
       var vy;
       if (ty < 0) {
@@ -354,6 +361,8 @@
     launch: function (p, type, tx, tz, mate, accuracy, forceTarget) {
       var ball = World.ball;
       var angle, speed, vy, d;
+      var bumped = p.bumpT > 0;
+      if (bumped) accuracy = (accuracy || 1) * BUMP_ACC; // pressed shoulder to shoulder: off balance
       var dx = tx - p.pos.x;
       var dz = tz - p.pos.z;
       d = Math.sqrt(dx * dx + dz * dz);
@@ -363,12 +372,13 @@
 
       if (type === ACT.LONG && d > 18) d *= 1 + gaussR() * 0.06 * (accuracy || 1);
       if (p.throwT > 0.35) {
-        // thrown from over the head: a flat lob that lands at the target (a long throw reaches ~24 m)
+        // thrown from over the head: a flat arc that comes down to waist height where the receiver will be (he stops
+        // there and takes it on the thigh / chest) rather than at his feet beyond him, over his head (~24 m at most)
         if (d > 24) { dx *= 24 / d; dz *= 24 / d; d = 24; }
-        var Tt = clamp(d / 20, 0.4, 1.05);
+        var Tt = clamp(d / 22, 0.4, 0.95);
         speed = airSpeed(d, Tt);
-        vy = (R0 - ball.pos.y) / Tt + 0.5 * G * Tt;
-        if (mate) { mate.runToX = p.pos.x + dx; mate.runToZ = p.pos.z + dz; mate.runToT = Tt + 0.4; }
+        vy = (THROW_Y - ball.pos.y) / Tt + 0.5 * G * Tt;
+        if (mate) { mate.runToX = p.pos.x + dx; mate.runToZ = p.pos.z + dz; mate.runToT = Tt + 0.6; }
       } else if (type === ACT.LONG) {
         // lobbed: flight time T, vertical speed from gravity, horizontal speed = distance / T
         var T = clamp(d / 30, 0.75, 1.6);
@@ -399,6 +409,7 @@
         speed *= pw;
         if (type === ACT.LONG) vy /= pw;
       }
+      if (bumped) { speed *= BUMP_POW; vy *= BUMP_POW; }
       ball.vel.set(Math.sin(angle) * speed, vy, Math.cos(angle) * speed);
       ball.receiver = mate || null;
       ball.thru = !!mate && type === ACT.THROUGH && !(p.throwT > 0.35);
@@ -461,16 +472,21 @@
       p.shoulderDir = (Math.cos(p.facing) * dx - Math.sin(p.facing) * dz) > 0 ? 1 : -1;
       // body strength ~ Defense and Header (aerial / physical) against his Dribble and balance
       var strength = (p.st.def * 0.6 + p.st.hdr * 0.4) / 99;
-      var chance = (skill || 0.3) * (0.55 + strength * 0.7) * (1.35 - c.st.drb / 99 * 0.7);
+      // (a shoulder is mostly a nuisance, not a tackle: half the odds a tackle-like challenge would have)
+      var chance = (skill || 0.3) * (0.55 + strength * 0.7) * (1.35 - c.st.drb / 99 * 0.7) * 0.5;
       if (front < -0.55) chance *= 0.3;       // from behind: his back shields the ball
       else if (front > 0.45) chance *= 0.8;  // in front: it is a tackle's job
       if (c.dribbling) chance *= 0.8;
-      // the bump: the carrier is pushed away from the challenger and slowed, the challenger loses a little speed
+      // the bump: the carrier is pushed away from the challenger and slowed, the challenger loses a little speed;
+      // for a moment the carrier stays slower and off balance (his passes and shots lose accuracy and power, see
+      // launch / driveShot), the challenger a little slower too
       var nx = dx / d, nz = dz / d;
       c.vel.x = c.vel.x * 0.8 + nx * 2.6; c.vel.z = c.vel.z * 0.8 + nz * 2.6;
       p.vel.x *= 0.85; p.vel.z *= 0.85;
+      c.bumpT = BUMP_T; c.bumpK = 0.85;
+      if (!(p.bumpT > 0.5)) { p.bumpT = 0.8; p.bumpK = 0.92; }
       NS.Audio.tackle();
-      if (Math.random() >= clamp(chance, 0.03, 0.6)) { if (NS.dbg) NS.dbg('shoulder_failed', p.team); return false; }
+      if (Math.random() >= clamp(chance, 0.02, 0.3)) { if (NS.dbg) NS.dbg('shoulder_failed', p.team); return false; }
       ball.receiver = null;
       ball.contester = null;
       if (Math.random() < 0.5) {
@@ -747,6 +763,18 @@
       ball.kicker = p;
       ball.kickerT = hardShot ? 0.25 : 0.35;
       return false;
+    },
+
+    // Nearest outfield team-mate of p within maxD (null if none).
+    nearestMate: function (p, maxD) {
+      var players = World.players, best = null, bestD = maxD * maxD;
+      for (var i = 0; i < players.length; i++) {
+        var q = players[i];
+        if (q.team !== p.team || q === p || q.role === 'GK' || q.stun > 0) continue;
+        var dx = q.pos.x - p.pos.x, dz = q.pos.z - p.pos.z, d = dx * dx + dz * dz;
+        if (d < bestD && d > 4) { bestD = d; best = q; }
+      }
+      return best;
     },
 
     // Nearest outfield team-mate to the ball, skipping the excluded players.

@@ -64,6 +64,12 @@
     var roll = 0;
     var H0 = mesh.hip, hs = H0 / HIP; // this model's hip height (the drops below are for the 1.2 of the blocks)
     var hipY = H0 + Math.abs(Math.cos(p.animPhase)) * 0.09 * hs * run;
+    // knees and elbows (the rounded models): a running leg folds as it swings through (most at mid-swing) and is
+    // nearly straight while it carries him; the forearms come up with the pace
+    var cph = Math.cos(p.animPhase);
+    var kneeL = run * (0.12 + 1.15 * (cph < 0 ? -cph : 0)) + (run ? 0 : 0.08);
+    var kneeR = run * (0.12 + 1.15 * (cph > 0 ? cph : 0)) + (run ? 0 : 0.08);
+    var elbL = -0.15 - 1.1 * run, elbR = elbL;
     var u, b;
 
     if (p.diveT > 0) {
@@ -75,6 +81,7 @@
       armL = armR = -2.9 * b;
       outL = outR = 0.25 * b;
       legL = 0.2 * b; legR = -0.2 * b; lean = 0; spread = 0.2 * b;
+      kneeL = kneeR = 0.3 * b; elbL = elbR = -0.05; // fully stretched
     } else if (p.headT > 0) {
       // header: a crouch, a real jump (the whole body leaves the grass), arch back, snap the head through the ball
       u = 1 - p.headT / 0.55;
@@ -86,6 +93,7 @@
       legL = 0.45 * b - 0.3 * crouch; legR = -0.35 * b - 0.3 * crouch;
       armL = armR = -1.1 * b;
       outL = outR = 0.08 + 0.6 * b; spread = 0.1 * b;
+      kneeL = kneeR = 0.9 * crouch + 0.55 * b; elbL = elbR = -0.6 * b; // spring from bent knees, tucked in the air
     } else if (p.catchT > 0) {
       // keeper catch: both hands up to the ball
       u = 1 - p.catchT / 0.4;
@@ -93,13 +101,16 @@
       armL = armR = -2.1 * b - 1.3 * (1 - b);
       outL = outR = 0.12;
       lean = -0.1 * b;
+      elbL = elbR = -0.5 - 0.4 * (1 - b); kneeL = kneeR = 0.25; // hands up and behind the ball, knees soft
     } else if (p.throwIn && World.ball.owner === p) {
       // ready to throw in: both hands over the head holding the ball
       armL = armR = -2.95; outL = outR = 0.12; lean = -0.12;
+      elbL = elbR = -1.4; // the ball behind his head
     } else if (p.throwT > 0) {
       // the throw: arms come over from behind the head
       u = 1 - p.throwT / 0.4;
       armL = armR = -3.3 + u * 2.2; outL = outR = 0.12; lean = -0.2 + u * 0.45;
+      elbL = elbR = -1.4 * (1 - u); // the arms whip straight as it goes
     } else if (p.slideT > 0) {
       // slide tackle: lean far back, hips near the grass, front leg out, back leg folded
       u = 1 - p.slideT / 0.85;
@@ -110,6 +121,7 @@
       legL = legL * (1 - b) + 0.75 * b;
       armL = armL * (1 - b) - 0.5 * b; armR = armR * (1 - b) - 0.2 * b;
       outL = 0.08 + 0.9 * b; outR = 0.08 + 0.6 * b; spread = 0.25 * b;
+      kneeL = kneeL * (1 - b) + 1.6 * b; kneeR = kneeR * (1 - b) + 0.05 * b; // the back leg folded under him
     } else if (p.fallT > 0) {
       // lost the ball in a tackle: knocked off balance
       u = 1 - p.fallT / 0.55;
@@ -119,6 +131,7 @@
       hipY = H0 - 0.2 * hs * b;
       outL = outR = 0.08 + 0.9 * b;
       legL = 0.3 * b; legR = -0.4 * b; spread = 0.2 * b;
+      kneeL = kneeR = 0.45 * b;
     } else if (p.shoulderT > 0) {
       // shoulder to shoulder: leans sideways into the other player, arm tucked in
       u = 1 - p.shoulderT / 0.32;
@@ -134,6 +147,7 @@
       legL = legL * (1 - b) + 0.45 * b;
       hipY = H0 - 0.16 * hs * b;
       outL = outR = 0.08 + 0.55 * b; spread = 0.05 + 0.32 * b; // legs wide open: the ball can go through
+      kneeR = kneeR * (1 - b) + 0.05 * b; kneeL = kneeL * (1 - b) + 0.55 * b; // the stretched leg straight, the other bent
     } else if (p.kickT > 0) {
       // kick: back-swing then strike through the ball (bigger swing and lean-back for shots and long balls)
       var dur = p.kickHard ? 0.36 : 0.28;
@@ -147,6 +161,7 @@
       armL = 0.4; armR = -0.3;
       outL = 0.95; outR = 0.45; spread = 0.08;
       hipY = H0;
+      kneeR = k > 0 ? 0.25 + 1.3 * k : 0.08; kneeL = 0.22; // the back-swing folds the knee, the strike snaps it straight
     } else if (p.mood === 1 || (p.mood === 4 && sp < 2.5)) {
       // celebrating: jumping, both arms up, waving
       b = Math.abs(Math.sin(breakClock * 7 + p.index));
@@ -156,19 +171,27 @@
       outL = outR = 0.35;
       lean = -0.1;
       legL = 0.25 * b; legR = -0.25 * b; spread = 0.12 * b;
+      kneeL = kneeR = 0.15 + 0.7 * b; elbL = elbR = -0.3;
     } else if (p.mood === 4) {
       // the scorer's run to the corner: arms spread like wings
-      outL = outR = 1.45; armL = armR = 0; lean = 0.25;
+      outL = outR = 1.45; armL = armR = 0; lean = 0.25; elbL = elbR = -0.1;
     } else if (p.mood === 2) {
       // dejected: head down, arms hanging, slow walk
       lean = 0.38; outL = outR = 0.02; armL *= 0.3; armR *= 0.3; hipY -= 0.05 * hs;
     } else if (p.mood === 3) {
       // on the knees
-      hipY = H0 * 0.56; lean = 0.25; legL = -1.45; legR = -1.45; armL = armR = 0.15; outL = outR = 0.12;
+      lean = 0.25; armL = armR = 0.15; outL = outR = 0.12; elbL = elbR = -0.1;
+      if (mesh.leftKnee) { hipY = mesh.thighLen + 0.07 * hs; legL = legR = 0.05; kneeL = kneeR = 1.55; } // kneeling: shins on the grass
+      else { hipY = H0 * 0.56; legL = -1.45; legR = -1.45; }
     } else if (p.stun > 0) {
-      lean = 0.3; outL = outR = 0.4; spread = 0.15;
+      lean = 0.3; outL = outR = 0.4; spread = 0.15; kneeL = kneeR = 0.3;
     } else if (p.gkHands && World.ball.owner === p) {
       armL = armR = -1.3; outL = outR = 0.1; // ball held in front
+      elbL = elbR = -1.0; // (hands together at the chest)
+    } else if (p.role === 'GK' && sp < 3 && !p.mood) {
+      // a keeper set for a shot: crouched on bent knees, feet apart, arms out low with the elbows bent, palms forward
+      armL = armR = -0.5; outL = outR = 0.42; elbL = elbR = -0.95;
+      kneeL = kneeR = 0.4; spread = 0.14; lean = 0.18; hipY = H0 - 0.09 * hs;
     }
 
     mesh.body.position.y = hipY;
@@ -182,12 +205,41 @@
     mesh.rightArm.rotation.x = armR;
     mesh.leftArm.rotation.z = -outL;
     mesh.rightArm.rotation.z = outR;
+    if (mesh.leftKnee) {
+      mesh.leftKnee.rotation.x = kneeL; mesh.rightKnee.rotation.x = kneeR;
+      mesh.leftElbow.rotation.x = elbL; mesh.rightElbow.rotation.x = elbR;
+    }
   }
 
   function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
   // the voice commentator (js/game/commentary.js): an event code of its library; nothing when it is off
   function say(ev, team) { if (NS.Commentary) NS.Commentary.event(ev, team); }
+
+  // Restarts: the free-kick distance (10 m), and where players may stand at a kick-off.
+  var FK_DIST = 10 * NS.M;
+  function keepAway(p, x, z, r) {
+    var dx = p.pos.x - x, dz = p.pos.z - z, d2 = dx * dx + dz * dz;
+    if (d2 >= r * r) return;
+    var d = Math.sqrt(d2);
+    if (d < 0.1) { dx = -NS.attack(p.team); dz = 0; d = 1; }
+    p.pos.x = clamp(x + dx / d * r, -HALF_W + 0.5, HALF_W - 0.5);
+    p.pos.z = clamp(z + dz / d * r, -HALF_H + 0.5, HALF_H - 0.5);
+  }
+  function keepKickoff(p) {
+    var a = NS.attack(p.team);
+    if (p.pos.x * a > -0.4) p.pos.x = -a * 0.4;  // his own half (the half he defends)
+    var o = World.ball.owner;
+    if (o && o.team !== p.team) {
+      // the team not kicking off: outside the centre circle (and still in its own half)
+      var dx = p.pos.x, dz = p.pos.z, d = Math.sqrt(dx * dx + dz * dz);
+      if (d < NS.CIRCLE_R) {
+        if (d < 0.1) { dx = -a; dz = 0; d = 1; }
+        p.pos.x = dx / d * NS.CIRCLE_R; p.pos.z = dz / d * NS.CIRCLE_R;
+        if (p.pos.x * a > -0.4) { p.pos.x = -a * 0.4; p.pos.z = (dz >= 0 ? 1 : -1) * Math.sqrt(Math.max(0, NS.CIRCLE_R * NS.CIRCLE_R - 0.16)); }
+      }
+    }
+  }
 
   // Where a leg meets the ball's height (drop = hips - ball centre), across (x) and along his facing (z): legPX / legPZ.
   // A leg lifted over the ball (a stride, a kick) gives its foot instead, and legLow = false: the ball rolls under it.
@@ -881,17 +933,17 @@
       taker.carry = 0.95;
       m.restart = 5;
     } else {
-      // free kick (a foul, or offside): opponents at least 9 m from the ball
+      // free kick (a foul, or offside): opponents at least FK_DIST (10 m) from the ball
       taker = taker || nearestOf(t, bx, bz, null);
       for (i = 0; i < players.length; i++) {
         p = players[i];
         if (p.team === t) continue;
         var dx = p.pos.x - bx, dz = p.pos.z - bz;
         var dd = Math.sqrt(dx * dx + dz * dz);
-        if (dd < 9) {
+        if (dd < FK_DIST) {
           if (dd < 0.1) { dx = -a; dz = 0; dd = 1; }
-          p.pos.x = clamp(bx + dx / dd * 9, -HALF_W + 1, HALF_W - 1);
-          p.pos.z = clamp(bz + dz / dd * 9, -HALF_H + 1, HALF_H - 1);
+          p.pos.x = clamp(bx + dx / dd * FK_DIST, -HALF_W + 1, HALF_W - 1);
+          p.pos.z = clamp(bz + dz / dd * FK_DIST, -HALF_H + 1, HALF_H - 1);
         }
       }
       m.restart = 1; // he has to play it (pass or shot), not run with it
@@ -1008,7 +1060,7 @@
             kickT: 0, kickHard: false, lungeT: 0, slideT: 0, fallT: 0, diveT: 0, diveRoll: 0, headT: 0, catchT: 0, ftT: 0,
             gkHands: false, diveCd: 0, diveHigh: false, mood: 0, celX: 0, celZ: 0, slid: false,
             fouls: 0, card: 0, // yellow cards, and the card shown: 2 yellow, 3 red (sent off)
-            throwIn: false, throwT: 0, shoulderT: 0, shoulderDir: 1, shCd: 0, offside: false,
+            throwIn: false, throwT: 0, shoulderT: 0, shoulderDir: 1, shCd: 0, offside: false, bumpT: 0, bumpK: 1,
             // AI brain state
             mark: null, icX: 0, icZ: 0, drX: 0, drZ: 0, runT: 0, runCd: 0, runX: 0, runZ: 0,
             aiT: 0, tgtX: 0, tgtZ: 0, tgtS: 8, gkRT: 0,
@@ -1057,7 +1109,7 @@
         p.facing = NS.attack(p.team) * Math.PI / 2;
         p.stun = 0; p.tackleT = 0; p.tackleCd = 0; p.runToT = 0; p.returnTo = null; p.dribbling = false;
         p.kickT = 0; p.lungeT = 0; p.slideT = 0; p.fallT = 0; p.diveT = 0; p.headT = 0; p.catchT = 0; p.gkHands = false;
-        p.mood = 0; p.slid = false; p.throwIn = false; p.throwT = 0; p.shoulderT = 0; p.offside = false;
+        p.mood = 0; p.slid = false; p.throwIn = false; p.throwT = 0; p.shoulderT = 0; p.offside = false; p.bumpT = 0;
         animate(p, 0);
         p.mark = null; p.drX = 0; p.drZ = 0; p.runT = 0; p.runCd = 0; p.aiT = 0; p.gkRT = 0; p.stamina = Math.min(100, p.stamina + 30); p.gkHold = 0;
       }
@@ -1085,6 +1137,8 @@
         m.setTaker = kicker;
         m.protectT = 99;
         kicker.aiT = 0;
+        // (formation places can be in the other half or in the circle: everyone starts where the rule allows)
+        for (var kp = 0; kp < World.players.length; kp++) if (World.players[kp] !== kicker) keepKickoff(World.players[kp]);
       }
       assignKickoffCursors();
       lastOwner = World.ball.owner;
@@ -1358,6 +1412,8 @@
 
         // pace from his Speed rating, less when he is tired; stamina drains when he runs hard (his Stamina rating)
         var pace = p.mSpd * fatigue(p);
+        // bumped shoulder to shoulder (Actions.shoulder): slower for a moment
+        if (p.bumpT > 0) { p.bumpT -= dt; pace *= p.bumpK; }
         if (!p.isCtl) {
           var run = Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z);
           if (run > 6.5) p.stamina = Math.max(5, p.stamina - (run - 6.5) * 0.325 * dt * p.drain);
@@ -1369,6 +1425,10 @@
         var over = p.isCtl ? 1.5 : 0.3;
         p.pos.x = clamp(nx, -HALF_W - over, HALF_W + over);
         p.pos.z = clamp(nz, -HALF_H - over, HALF_H + over);
+        // a kick-off: everybody stays in his own half until it is taken, and the other team out of the centre circle
+        if (m.restart === 6 && p !== m.setTaker) keepKickoff(p);
+        // a free kick: the opponents stay FK_DIST (10 m) from the ball until it is taken
+        if (m.restart === 1 && p.team !== m.setTeam) keepAway(p, m.setX, m.setZ, FK_DIST);
         // a goal kick: the opponents stay out of the box until it is taken
         if (m.restart === 5 && p.team !== m.setTeam) {
           var ownX = -NS.attack(m.setTeam) * HALF_W;
@@ -1495,8 +1555,10 @@
               takerD = d2;
               taker = p;
             }
-          } else if (ball.pickupCooldown <= 0 && (ball.pos.y < 1.9 ? d2 < takerD : (ball.pos.y < 2.6 && d2 < Math.min(takerD, 0.6)))) {
-            // at his feet, or a ball at chest height that hits his body
+          } else if (ball.pickupCooldown <= 0 && (ball.pos.y < (p === ball.receiver ? 2.3 : 1.9) ? d2 < takerD :
+              (ball.pos.y < 2.6 && d2 < Math.min(takerD, 0.6)))) {
+            // at his feet, or a ball at chest height that hits his body (the player it was played to brings it down
+            // off his chest: he set himself for it)
             takerD = d2;
             taker = p;
           }
