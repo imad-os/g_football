@@ -1705,22 +1705,110 @@
   }
 
   // ---- learning from data
-  function loadSet(J, id) {
-    var meta = findSet(id), list = dsets[id] || (dsets[id] = []);
-    var i = 0;
-    function next() {
-      while (i < meta.chunks && list[i]) i++;
-      if (i >= meta.chunks || J.stopReq) return Promise.resolve();
-      var at = i++;
-      J.loadMsg = (at + 1) + ' / ' + meta.chunks;
-      jobNotify(J);
-      return dataGet('c_' + id + '_' + at).then(function (d) {
-        if (d && d.F === F) list[at] = { x: new Int8Array(unb64(d.x).buffer), a: new Int8Array(unb64(d.a).buffer), n: d.count };
-        else J.skipped = (J.skipped || 0) + 1; // missing, or recorded with other inputs
-        return next();
-      });
+  // A set is learnt a window of chunks at a time (DT_WIN, 100 by default): the window's chunks are fetched from the
+  // cloud while it already trains on the ones that came in (it never runs ahead of them: each decision gets its
+  // passes, whatever order the chunks arrive in), the next window is fetched meanwhile, and a finished window leaves
+  // memory. After the last window a new round starts from the first (cfg.rounds, 0 = until stopped / the time
+  // limit). The brain is saved every SAVE_MS with where it got to: a stopped or crashed run goes on from that window.
+  var LOAD_PAR = 4;          // chunks fetched at the same time
+  var LOAD_TRIES = 3;
+  var VAL_MAX = 20000;       // held-out decisions kept for the score (a random sample of all the windows seen)
+  var SAVE_MS = 60000;
+
+  function chunkKeep(id, c) { return !cloud || !!(dmiss[id] && dmiss[id][c]); } // (only in this session's memory)
+  // one chunk from the cloud (tried again), into the set's list; null when missing or recorded with other inputs
+  function fetchChunk(J, at, tryN) {
+    var id = J.setId, list = dsets[id] || (dsets[id] = []);
+    if (list[at]) return Promise.resolve(list[at]);
+    return dataGet('c_' + id + '_' + at).then(function (d) {
+      if (!d || d.F !== F) return null;
+      return (list[at] = { x: new Int8Array(unb64(d.x).buffer), a: new Int8Array(unb64(d.a).buffer), n: d.count });
+    }, function (e) {
+      if ((tryN || 0) + 1 >= LOAD_TRIES || J.stopReq) { J.loadErr = e && e.message ? e.message : 'network'; return null; }
+      return new Promise(function (res) { setTimeout(res, 2000 * (tryN + 1)); }).then(function () { return fetchChunk(J, at, (tryN || 0) + 1); });
+    });
+  }
+  // keeps LOAD_PAR fetches going: the current window first, then the next one
+  function pumpLoad(J) {
+    while (J.inFlight < LOAD_PAR && J.state === 'running' && !J.stopReq) {
+      var lim = Math.min(J.N, J.w0 + 2 * J.win), at = -1;
+      for (var c = Math.max(J.w0, J.nextLoad); c < lim; c++) if (!J.asked[c]) { at = c; break; }
+      if (at < 0) return;
+      J.asked[at] = 1;
+      J.nextLoad = at + 1;
+      J.inFlight++;
+      (function (at) {
+        fetchChunk(J, at, 0).then(function (ch) {
+          J.inFlight--;
+          J.got[at] = ch || 0;
+          if (!ch) J.skipped = (J.skipped || 0) + 1;
+          if (at >= J.w0 && at < J.w0 + J.win) ingest(J, at);
+          pumpLoad(J);
+        });
+      })(at);
     }
-    return next();
+  }
+  // a chunk of the current window joins the training: its decisions, their passes (owed steps), the held-out share
+  function ingest(J, c) {
+    var ch = J.got[c];
+    J.winIn++;
+    if (!ch) return;
+    var ci = J.ch.length, fresh = c >= J.known;   // (a chunk the brain has not learnt from yet: the catch-up passes)
+    J.ch.push(ch);
+    var nOld = 0, nNew = 0, V = J.valCh;
+    for (var i = 0; i < ch.n; i++) {
+      var ref = (ci << 16) | i;
+      if (i % 20 === 0) {
+        // the score: a fixed-size random sample of every held-out decision seen so far
+        J.valSeen++;
+        var slot = V.n < VAL_MAX ? V.n++ : Math.floor(Math.random() * J.valSeen);
+        if (slot < VAL_MAX) { V.x.set(ch.x.subarray(i * F, i * F + F), slot * F); V.a.set(ch.a.subarray(i * DA, i * DA + DA), slot * DA); }
+        continue;
+      }
+      if (fresh) nNew++; else nOld++;
+      if (ch.a[i * DA + 2] > 0) { J.press.push(ref); if (fresh) J.npress.push(ref); }
+      else { J.move.push(ref); if (fresh) J.nmove.push(ref); }
+    }
+    var p = J.cfg.passes;
+    J.remOld += p * nOld; J.remNew += (p + J.prev) * nNew;
+    J.total += p * nOld + (p + J.prev) * nNew;
+    J.winDec += nOld + nNew;
+    if (fresh) J.newN += nNew;
+    if (!J.score0 && V.n >= 200) { validate(J, J.b); J.score0 = J.score; }
+  }
+  // a new window from chunk w0: what is already fetched joins at once, the rest is fetched (and the next window after it)
+  function openWindow(J, w0) {
+    var id = J.setId, list = dsets[id] || [];
+    J.w0 = w0;
+    J.ch = []; J.press = []; J.move = []; J.nmove = []; J.npress = [];
+    J.remOld = 0; J.remNew = 0; J.winIn = 0; J.winDec = 0;
+    J.winN = Math.min(J.win, J.N - w0);
+    J.nextLoad = w0;
+    for (var c = w0; c < w0 + J.winN; c++) {
+      if (J.got[c] === undefined && list[c]) { J.got[c] = list[c]; J.asked[c] = 1; }
+      if (J.got[c] !== undefined) ingest(J, c);
+    }
+    pumpLoad(J);
+  }
+  // the window is learnt: progress into the brain, its chunks leave memory, on to the next one (or a new round)
+  function closeWindow(J) {
+    var id = J.setId, list = dsets[id] || [], end = J.w0 + J.winN;
+    J.chunksDone = Math.max(J.chunksDone, end);
+    for (var c = J.w0; c < end; c++) { delete J.got[c]; delete J.asked[c]; if (list[c] && !chunkKeep(id, c)) list[c] = null; }
+    J.wins++;
+    if (end >= J.N) {
+      J.round++;
+      J.known = Math.max(J.known, J.N); // (every chunk has had its passes now)
+      noteData(J, J.b, 0);
+      if ((J.cfg.rounds > 0 && J.round >= J.cfg.rounds) || J.stopReq) return false;
+      var meta = findSet(id);
+      J.N = meta ? meta.chunks : J.N;   // (chunks recorded meanwhile join the next round)
+      openWindow(J, 0);
+    } else {
+      noteData(J, J.b, end);
+      openWindow(J, end);
+    }
+    return true;
   }
   // one decision of the data: dequantized into rx, its labels into lab
   var lab = new Int8Array(DA);
@@ -1754,9 +1842,9 @@
   // presses (and his odds of it), and presses where Legend pressed nothing (ball at his feet)
   function validate(J, b) {
     var v = { n: 0, dir: 0, pn: 0, same: 0, odds: 0, cn: 0, extra: 0 };
-    var V = J.val, step = Math.max(1, Math.floor(V.length / 4000));
-    for (var k = 0; k < V.length; k += step) {
-      sampleOf(J.ch[V[k] >> 16], V[k] & 0xffff);
+    var V = J.valCh, step = Math.max(1, Math.floor(V.n / 4000));
+    for (var k = 0; k < V.n; k += step) {
+      sampleOf(V, k);
       forward(b, rx);
       softmax(O_ST, NST, null, 1);
       var ex = 0, ez = 0;
@@ -1774,19 +1862,38 @@
     J.score = v;
     J.scores.push([J.steps, v.n ? v.dir / v.n : 0, v.pn ? v.same / v.pn : 0]);
   }
-  // what the brain has learnt from the set so far: kept in the brain, so the next run goes on from here
-  function noteData(J, b) {
-    var id = J.cfg.sets[0], meta = findSet(id), size = J.move.length + J.press.length;
-    if (!meta || !size) return;
+  // what the brain has learnt from the set so far (kept in the brain): the passes over it (the steps since the last
+  // note, over the set's size), the chunks it has had all their passes of, and the window a new run goes on from
+  function noteData(J, b, next) {
+    var id = J.setId, meta = findSet(id);
+    if (!meta || !b) return;
     var d = b.data[id] || (b.data[id] = { name: meta.name, chunks: 0, passes: 0, steps: 0 });
+    var size = Math.max(1, Math.round(meta.samples * 19 / 20)), add = J.steps - J.noted;
+    J.noted = J.steps;
     d.name = meta.name;
-    d.passes = Math.round((d.passes + J.steps / size) * 100) / 100;  // (new data caught up to the old, so one average)
-    d.chunks = J.chunksSeen; d.steps += J.steps; d.when = Date.now();
+    d.passes = Math.round((d.passes + add / size) * 100) / 100;  // (new data caught up to the old, so one average)
+    d.chunks = Math.max(d.chunks, J.chunksDone);
+    d.steps += add; d.when = Date.now();
+    d.next = next;
+  }
+  function saveProgress(J) {
+    J.lastSave = performance.now();
+    noteData(J, J.b, J.w0);
+    saveBrain(J.b);
+    J.saves++;
   }
   function learnSlice(J) {
     if (J.state !== 'running') return;
-    var b = J.b, t0 = performance.now(), PS = J.press.length, MS = J.move.length;
+    var b = J.b, t0 = performance.now();
     while (performance.now() - t0 < 25) {
+      if (J.remOld + J.remNew <= 0) {
+        // the window has had its passes: the next one when all of it came in, else wait for its chunks
+        if (J.winIn < J.winN) break;
+        if (!closeWindow(J)) { J.finished = true; break; }
+        continue;
+      }
+      var PS = J.press.length, MS = J.move.length;
+      if (!PS && !MS) { J.remOld = J.remNew = 0; continue; }
       for (var k = 0; k < 64; k++) {
         // data this brain has not seen yet (or seen fewer times) is drawn in proportion to what it still owes
         var nw = J.remNew > 0 && Math.random() * (J.remNew + J.remOld) < J.remNew;
@@ -1797,70 +1904,59 @@
         sampleOf(J.ch[ref >> 16], ref & 0xffff);
         if (dataStep(b)) J.learnt++;
         J.steps++;
+        if (J.remOld + J.remNew <= 0) break;
       }
-      if (J.steps >= J.total) break;
     }
-    if (J.steps - J.lastVal >= 50000 || J.steps >= J.total) { J.lastVal = J.steps; validate(J, b); }
-    if (performance.now() - J.lastSave > 120000) { J.lastSave = performance.now(); saveBrain(b); }
+    J.waiting = !J.finished && J.remOld + J.remNew <= 0 && J.winIn < J.winN;
+    if (J.steps - J.lastVal >= 50000 || J.finished) { J.lastVal = J.steps; if (J.valCh.n) validate(J, b); }
+    if (performance.now() - J.lastSave > SAVE_MS) saveProgress(J);
     var timeUp = J.cfg.hours > 0 && Date.now() - J.started >= J.cfg.hours * 3600000;
-    if (J.stopReq || J.steps >= J.total || timeUp) {
+    if (J.stopReq || J.finished || timeUp) { endLearn(J, J.stopReq || timeUp && !J.finished ? 'stopped' : 'done'); return; }
+    jobNotify(J);
+    NS.Debug.later(function () { learnSlice(J); }, J.waiting ? 50 : 0);
+  }
+  // the end of a run (done, stopped, or an error): what it learnt is noted and saved
+  function endLearn(J, state, err) {
+    var b = J.b;
+    J.state = state;
+    J.ended = Date.now();
+    if (err) J.error = err;
+    if (b) {
       if (b.gN) adamStep(b);
-      J.state = J.stopReq ? 'stopped' : 'done';
-      J.ended = Date.now();
+      noteData(J, b, J.finished ? 0 : J.w0);
       var sc = J.score || {};
-      noteData(J, b);
       b.log('data', { set: J.setName, steps: J.steps, dir: sc.n ? Math.round(sc.dir * 100 / sc.n) : 0, same: sc.pn ? Math.round(sc.same * 100 / sc.pn) : 0 });
       saveBrain(b);
-      if (J.state === 'done' && NS.Audio.chime) NS.Audio.chime();
-      jobNotify(J);
-      return;
     }
+    // the chunks it held leave memory (those only in this session's memory stay)
+    var list = dsets[J.setId] || [];
+    for (var c = 0; c < list.length; c++) if (list[c] && !chunkKeep(J.setId, c)) list[c] = null;
+    if (state === 'done' && NS.Audio && NS.Audio.chime) NS.Audio.chime();
     jobNotify(J);
-    NS.Debug.later(function () { learnSlice(J); }, 0);
   }
   function startLearn(J) {
-    var ids = J.cfg.sets, i;
-    var p = Promise.resolve();
-    ids.forEach(function (id) { p = p.then(function () { return loadSet(J, id); }); });
-    return Promise.all([getBrain(J.cfg.brain), p]).then(function (r) {
-      var b = J.b = r[0];
+    getBrain(J.cfg.brain).then(function (b) {
+      if (J.stopReq) { J.state = 'stopped'; jobNotify(J); return; }
+      J.b = b;
       b.frozen = false;
       if (!b.learns()) throw new Error(NS.I18n.t('aima.d.nolearn'));
-      // every decision of the sets: (chunk << 16) | index; one in 20 for the score only
-      J.ch = []; J.press = []; J.move = []; J.val = []; J.nmove = []; J.npress = [];
-      var g = 0, prev = b.data[ids[0]] || null, nOld = 0, nNew = 0;
-      J.prev = prev ? prev.passes : 0;
-      J.chunksSeen = (findSet(ids[0]) || {}).chunks || 0;
-      ids.forEach(function (id) {
-        var list = dsets[id] || [];
-        for (var c = 0; c < list.length; c++) {
-          if (!list[c]) continue;
-          var ci = J.ch.length, ch = list[c];
-          J.ch.push(ch);
-          for (i = 0; i < ch.n; i++, g++) {
-            var ref = (ci << 16) | i;
-            var fresh = !prev || c >= prev.chunks;  // (a chunk the brain has not learnt from yet)
-            if (g % 20 === 0) J.val.push(ref);
-            else {
-              if (fresh) nNew++; else nOld++;
-              if (ch.a[i * DA + 2] > 0) { J.press.push(ref); if (fresh) J.npress.push(ref); }
-              else { J.move.push(ref); if (fresh) J.nmove.push(ref); }
-            }
-          }
-        }
-      });
-      if (!J.move.length && !J.press.length) throw new Error(NS.I18n.t('aima.d.empty'));
-      // old data: the passes asked for; new data: those too, plus the ones the old data already had (it catches up)
-      J.newN = nNew;
-      J.remOld = J.cfg.passes * nOld; J.remNew = (J.cfg.passes + J.prev) * nNew;
-      J.total = J.remOld + J.remNew;
+      var id = J.setId, meta = findSet(id), prev = b.data[id] || null;
+      if (!meta.chunks) throw new Error(NS.I18n.t('aima.d.empty'));
+      J.N = meta.chunks;
+      // a run that stopped half way goes on from its window (the rest of that round is not behind: no catch-up passes);
+      // otherwise chunks recorded since the last run catch up with the passes the others already had
+      var from = prev && prev.next > 0 && prev.next < J.N ? prev.next : 0;
+      J.prev = prev && !from ? Math.round(prev.passes) : 0;
+      J.known = prev ? (from ? J.N : prev.chunks) : 0;
       J.state = 'running';
-      J.loadMsg = '';
-      validate(J, b);
-      J.score0 = J.score;
+      J.from = from;
+      openWindow(J, from);
       jobNotify(J);
       learnSlice(J);
-    }).catch(function (e) { J.state = 'error'; J.error = e && e.message ? e.message : String(e); jobNotify(J); });
+    }).catch(function (e) {
+      if (J.b && J.state === 'running') { endLearn(J, 'error', e && e.message ? e.message : String(e)); return; }
+      J.state = 'error'; J.error = e && e.message ? e.message : String(e); jobNotify(J);
+    });
   }
 
   function jobNotify(J) { if (Aima.onData) Aima.onData(J); }
@@ -1873,11 +1969,20 @@
       L.push(T('aima.d.samples') + ': ' + J.samples + '   ' + T('aima.d.presses') + ': ' + J.presses + '   ' + T('aima.d.saved') + ': ' + J.uploaded +
         (J.pending ? '  (' + J.pending + ' ' + T('aima.d.sending') + ')' : '') + (missOf(J.set) ? '   ' + T('aima.d.unsaved') + ': ' + missOf(J.set) : ''));
     } else {
-      L.push(T('aima.d.learn') + ': ' + (J.b ? J.b.name : '?') + '  <-  "' + J.setName + '"  (' + J.cfg.passes + ' ' + T('aima.d.passes') + ')  ' + T('aima.ss.' + J.state));
-      if (J.loadMsg) L.push(T('aima.d.loading') + ' ' + J.loadMsg);
+      L.push(T('aima.d.learn') + ': ' + (J.b ? J.b.name : '?') + '  <-  "' + J.setName + '"  (' + J.cfg.passes + ' ' + T('aima.d.passes') + ', ' +
+        T('aima.d.win') + ' ' + J.win + ', ' + T('aima.d.rounds') + ' ' + (J.cfg.rounds || '∞') + ')  ' + T('aima.ss.' + J.state));
+      if (J.N) {
+        var nw = Math.ceil(J.N / J.win), wi = Math.floor(J.w0 / J.win) + 1;
+        L.push(T('aima.d.window') + ' ' + wi + ' / ' + nw + '  (' + T('aima.d.chunk') + ' ' + (J.w0 + 1) + '-' + (J.w0 + J.winN) + ' / ' + J.N + ')   ' +
+          T('aima.d.round') + ' ' + (J.cfg.rounds ? Math.min(J.round + 1, J.cfg.rounds) + ' / ' + J.cfg.rounds : J.round + 1) + '   ' + T('aima.d.loaded') + ' ' + J.winIn + ' / ' + J.winN +
+          (J.waiting ? '   ' + T('aima.d.waiting') : '') + (J.from && !J.wins ? '   (' + T('aima.d.resumed') + ' ' + (J.from + 1) + ')' : ''));
+      }
       if (J.total && (J.prev || J.newN)) L.push(T('aima.d.cont') + ': ' + J.prev + ' ' + T('aima.d.passes') + ' ' + T('aima.d.before') + (J.newN ? '   +' + J.newN + ' ' + T('aima.d.newdec') : ''));
       if (J.total) L.push(T('aima.d.steps') + ': ' + J.steps + ' / ' + J.total + '   ' + T('aima.d.learnt') + ' ' + pctOf(J.learnt, J.steps) +
-        '   (' + T('aima.d.sets') + ': ' + J.move.length + ' + ' + J.press.length + ' ' + T('aima.d.presses') + ', ' + J.val.length + ' ' + T('aima.d.check') + ')');
+        '   (' + T('aima.d.sets') + ': ' + J.move.length + ' + ' + J.press.length + ' ' + T('aima.d.presses') + ', ' + J.valCh.n + ' ' + T('aima.d.check') + ')');
+      if (J.b) L.push(T('aima.d.autosave') + ': ' + (canWrite() ? J.saves + '  ·  ' + T('aima.k.cloud') + ' ' + Aima.cloud +
+        (J.b.saved ? '  ·  ' + new Date(J.b.saved).toLocaleTimeString() : '') : T('aima.d.local')));
+      if (J.loadErr) L.push(T('aima.d.loaderr') + ': ' + J.loadErr);
       s = J.score;
       if (s) {
         var s0 = J.score0 || s;
@@ -1896,6 +2001,33 @@
 
   var Aima = {
     ALG: ALG, F: F, NOUT: NOUT, STYLES: STYLES, SIZES: SIZES,
+    // options shared by the game's checkoAI screens and trainer.html: a brain's settings [cfg key, label, [[value, text key]...]],
+    // training sessions [key, values], learning from data (passes, chunks per window, rounds: 0 = until stopped)
+    OPTS: [
+      ['learn', 'aima.o.learn', [[true, 'opt.on'], [false, 'opt.off']]],
+      ['mine', 'aima.o.mine', [[true, 'opt.on'], [false, 'opt.off']]],
+      ['style', 'aima.o.style', [['BALANCED', 'aima.st.BALANCED'], ['ATTACKER', 'aima.st.ATTACKER'], ['PLAYMAKER', 'aima.st.PLAYMAKER'], ['DEFENDER', 'aima.st.DEFENDER']]],
+      ['lr', 'aima.o.lr', [[0, 'opt.low'], [1, 'opt.normal'], [2, 'opt.high']]],
+      ['explore', 'aima.o.explore', [[0, 'opt.low'], [1, 'opt.normal'], [2, 'opt.high']]],
+      ['clap', 'aima.o.clap', [[0, 'opt.low'], [1, 'opt.normal'], [2, 'opt.high']]],
+      ['help', 'aima.o.help', [['AUTO', 'opt.auto'], ['H0', 'aima.h0'], ['H30', 'aima.h30'], ['H60', 'aima.h60'], ['H100', 'aima.h100']]],
+      ['tick', 'aima.o.tick', [[0, 'aima.fast'], [1, 'opt.normal'], [2, 'aima.slow']]],
+      ['look', 'aima.o.look', [[0, 'aima.short'], [1, 'opt.normal'], [2, 'aima.long']]],
+      ['mineW', 'aima.o.mineW', [[0, 'opt.low'], [1, 'opt.normal'], [2, 'opt.high']]],
+      ['mem', 'aima.o.mem', [[0, '3 000'], [1, '6 000'], [2, '12 000']]],
+      ['past', 'aima.o.past', [[1, 'opt.on'], [0, 'opt.off']]],
+      ['size', 'aima.o.size', [['TINY', 'aima.sz.TINY'], ['MEDIUM', 'aima.sz.MEDIUM'], ['LARGE', 'aima.sz.LARGE'], ['HUGE', 'aima.sz.HUGE']]]
+    ],
+    TR_OPTS: [
+      ['matches', [5, 10, 20, 30, 50, 100, 200, 500, 1000, 0]], // 0 = continuous
+      ['size', [11, 7]],
+      ['stadium', ['COMPACT', 'CLASSIC', 'GRAND', 'MEGA', 'ULTRA']],
+      ['length', [3, 5, 10]],
+      ['hours', [0, 1, 2, 5, 8, 12]] // a time limit: the session stops by itself (0 = none)
+    ],
+    DT_PASSES: [1, 2, 5, 10, 20],
+    DT_WIN: [25, 50, 100, 200],
+    DT_ROUNDS: [1, 2, 5, 10, 0],
     sizeKB: 0, cloud: 'off',
     hasCloud: function () { return !!cloudCfg(); },
     // the active brain (what the Stats / Settings tabs show)
@@ -2264,13 +2396,17 @@
       pump();
       return J;
     },
-    // cfg: { brain: id, sets: [id], passes, hours }
+    // cfg: { brain: id, sets: [id], passes, win (chunks per window, 100), rounds (0 = until stopped), hours }
     startLearn: function (cfg) {
       if (!trainer || !cfg.sets.length || Aima.inUse(cfg.brain)) return null;
       var meta = findSet(cfg.sets[0]);
       if (!meta || meta.F !== F) return null;
-      var J = { id: ++jobSeq, kind: 'learn', cfg: cfg, setName: meta.name, state: 'loading', started: Date.now(), steps: 0, learnt: 0, total: 0,
-        lastVal: 0, lastSave: performance.now(), scores: [], stopReq: false, move: [], press: [], val: [] };
+      if (cfg.rounds === undefined) cfg.rounds = 1;
+      var J = { id: ++jobSeq, kind: 'learn', cfg: cfg, setId: meta.id, setName: meta.name, state: 'loading', started: Date.now(), steps: 0, learnt: 0,
+        total: 0, newN: 0, lastVal: 0, lastSave: performance.now(), saves: 0, noted: 0, scores: [], stopReq: false,
+        win: cfg.win > 0 ? cfg.win : 100, N: 0, w0: 0, winN: 0, winIn: 0, winDec: 0, round: 0, wins: 0, chunksDone: 0, from: 0,
+        got: {}, asked: {}, inFlight: 0, nextLoad: 0, remOld: 0, remNew: 0, ch: [], move: [], press: [], nmove: [], npress: [],
+        valCh: { x: new Int8Array(VAL_MAX * F), a: new Int8Array(VAL_MAX * DA), n: 0 }, valSeen: 0 };
       jobs.push(J);
       jobNotify(J);
       startLearn(J);
@@ -2285,6 +2421,7 @@
           if (recording === J) NS.Debug.stop();
           else { J.state = 'stopped'; J.ended = Date.now(); jobNotify(J); }
         } else if (J.state === 'loading') { J.state = 'stopped'; jobNotify(J); }
+        // (a running learn job stops at its next slice: what it learnt is noted and saved)
       }
     },
     removeJob: function (id) { jobs = jobs.filter(function (J) { return J.id !== id || J.state === 'running' || J.state === 'loading'; }); },

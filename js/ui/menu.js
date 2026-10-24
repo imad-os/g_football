@@ -1391,34 +1391,14 @@
 
   var AIMA_SUBS = ['stats', 'settings', 'brains', 'train'];
   var aimaSub = 'stats';
-  // option rows of the active brain: [cfg key, label, [[value, text key]...]]
-  var AIMA_OPTS = [
-    ['learn', 'aima.o.learn', [[true, 'opt.on'], [false, 'opt.off']]],
-    ['mine', 'aima.o.mine', [[true, 'opt.on'], [false, 'opt.off']]],
-    ['style', 'aima.o.style', [['BALANCED', 'aima.st.BALANCED'], ['ATTACKER', 'aima.st.ATTACKER'], ['PLAYMAKER', 'aima.st.PLAYMAKER'], ['DEFENDER', 'aima.st.DEFENDER']]],
-    ['lr', 'aima.o.lr', [[0, 'opt.low'], [1, 'opt.normal'], [2, 'opt.high']]],
-    ['explore', 'aima.o.explore', [[0, 'opt.low'], [1, 'opt.normal'], [2, 'opt.high']]],
-    ['clap', 'aima.o.clap', [[0, 'opt.low'], [1, 'opt.normal'], [2, 'opt.high']]],
-    ['help', 'aima.o.help', [['AUTO', 'opt.auto'], ['H0', 'aima.h0'], ['H30', 'aima.h30'], ['H60', 'aima.h60'], ['H100', 'aima.h100']]],
-    ['tick', 'aima.o.tick', [[0, 'aima.fast'], [1, 'opt.normal'], [2, 'aima.slow']]],
-    ['look', 'aima.o.look', [[0, 'aima.short'], [1, 'opt.normal'], [2, 'aima.long']]],
-    ['mineW', 'aima.o.mineW', [[0, 'opt.low'], [1, 'opt.normal'], [2, 'opt.high']]],
-    ['mem', 'aima.o.mem', [[0, '3 000'], [1, '6 000'], [2, '12 000']]],
-    ['past', 'aima.o.past', [[1, 'opt.on'], [0, 'opt.off']]],
-    ['size', 'aima.o.size', [['TINY', 'aima.sz.TINY'], ['MEDIUM', 'aima.sz.MEDIUM'], ['LARGE', 'aima.sz.LARGE'], ['HUGE', 'aima.sz.HUGE']]]
-  ];
+  // option rows of a brain, training and data options: shared with trainer.html (js/game/aima.js)
+  var AIMA_OPTS = NS.Aima.OPTS;
   var aimaSel = '';       // the brain every sub-tab shows (default: the active one)
   var selLoading = '';
   var aimaConfirm = '';   // a size change / reset / delete waits for a second press
   var aimaMsg = '';
   // training options (cycled like the debug screen)
-  var TR_OPTS = [
-    ['matches', [5, 10, 20, 30, 50, 100, 200, 500, 1000, 0]], // 0 = continuous
-    ['size', [11, 7]],
-    ['stadium', ['COMPACT', 'CLASSIC', 'GRAND', 'MEGA', 'ULTRA']],
-    ['length', [3, 5, 10]],
-    ['hours', [0, 1, 2, 5, 8, 12]] // a time limit: the session stops by itself (0 = none)
-  ];
+  var TR_OPTS = NS.Aima.TR_OPTS;
   var trSel = { matches: 1, size: 0, stadium: 1, length: 0, hours: 0, brain: '', opp: 'NORMAL' };
   var trView = { id: 0, full: false };   // the session whose summary / full stats are open
   var trMsg = '';
@@ -1829,8 +1809,8 @@
   }
 
   // ---- recorded data (Legend v Legend, named sets in the cloud) and learning from it: a card of its own on the Training tab
-  var DT_PASSES = [1, 2, 5, 10, 20];
-  var dtSel = { set: '', passes: 1 };
+  var DT_PASSES = NS.Aima.DT_PASSES, DT_WIN = NS.Aima.DT_WIN, DT_ROUNDS = NS.Aima.DT_ROUNDS;
+  var dtSel = { set: '', passes: 1, win: DT_WIN.indexOf(100), rounds: 0 };
   var dtMsg = '', dtAsked = false;
   var jobRefs = {}, jobState = {};
   function onData(J) {
@@ -1870,6 +1850,14 @@
       dtSel.passes = (dtSel.passes + 1) % DT_PASSES.length;
       again('dt:passes');
     }));
+    opts.appendChild(btn('opt dbg-opt', T('aima.d.win') + ': ' + DT_WIN[dtSel.win], 'dt:win', function () {
+      dtSel.win = (dtSel.win + 1) % DT_WIN.length;
+      again('dt:win');
+    }));
+    opts.appendChild(btn('opt dbg-opt', T('aima.d.rounds') + ': ' + (DT_ROUNDS[dtSel.rounds] || '∞'), 'dt:rounds', function () {
+      dtSel.rounds = (dtSel.rounds + 1) % DT_ROUNDS.length;
+      again('dt:rounds');
+    }));
     c.appendChild(opts);
     var row = el('div', 'row aima-actions');
     var name = document.createElement('input');
@@ -1886,7 +1874,8 @@
     }));
     row.appendChild(btn('', T('aima.d.learnbtn'), 'dt:learn', function () {
       if (!me || !cur) { dtMsg = T('aima.d.pickset'); again('dt:learn'); return; }
-      var J = A.startLearn({ brain: me.id, sets: [cur.id], passes: DT_PASSES[dtSel.passes], hours: TR_OPTS[4][1][trSel.hours] });
+      var J = A.startLearn({ brain: me.id, sets: [cur.id], passes: DT_PASSES[dtSel.passes], win: DT_WIN[dtSel.win], rounds: DT_ROUNDS[dtSel.rounds],
+        hours: TR_OPTS[4][1][trSel.hours] });
       dtMsg = J ? '' : T('aima.d.cant');
       again('dt:learn');
     }));

@@ -1038,6 +1038,16 @@
     'aima.d.skipped': 'trozos saltados', 'aima.d.cloud': 'Nube', 'aima.d.local': 'no guardado en la nube (sin sesion)',
     'aima.d.nolearn': 'el aprendizaje esta desactivado para este cerebro', 'aima.d.empty': 'el conjunto esta vacio', 'aima.d.oldF': 'otras entradas: grabar de nuevo',
     'aima.h.data': 'aprendio de datos', 'aima.d.unsaved': 'aun no en la nube', 'aima.d.resend': 'Reenviar trozos', 'aima.d.resending': 'Enviando de nuevo...', 'aima.d.signfirst': 'Nada que enviar (inicia sesion, o graba de nuevo).' });
+  // learning a window of chunks at a time (fetched while it trains), rounds, the save every minute
+  Object.assign(D.en, { 'aima.d.win': 'Chunks per window', 'aima.d.rounds': 'Rounds', 'aima.d.window': 'Window', 'aima.d.chunk': 'chunks',
+    'aima.d.round': 'Round', 'aima.d.loaded': 'loaded', 'aima.d.waiting': 'waiting for chunks...', 'aima.d.resumed': 'went on from chunk',
+    'aima.d.autosave': 'Saved (every minute)', 'aima.d.loaderr': 'Load error' });
+  Object.assign(D.fr, { 'aima.d.win': 'Morceaux par fenetre', 'aima.d.rounds': 'Tours', 'aima.d.window': 'Fenetre', 'aima.d.chunk': 'morceaux',
+    'aima.d.round': 'Tour', 'aima.d.loaded': 'charges', 'aima.d.waiting': 'attente des morceaux...', 'aima.d.resumed': 'repris au morceau',
+    'aima.d.autosave': 'Enregistre (chaque minute)', 'aima.d.loaderr': 'Erreur de chargement' });
+  Object.assign(D.es, { 'aima.d.win': 'Trozos por ventana', 'aima.d.rounds': 'Rondas', 'aima.d.window': 'Ventana', 'aima.d.chunk': 'trozos',
+    'aima.d.round': 'Ronda', 'aima.d.loaded': 'cargados', 'aima.d.waiting': 'esperando trozos...', 'aima.d.resumed': 'siguio desde el trozo',
+    'aima.d.autosave': 'Guardado (cada minuto)', 'aima.d.loaderr': 'Error de carga' });
 
   var lang = 'en';
 

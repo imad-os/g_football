@@ -172,6 +172,13 @@ the top-right corner shows what it is thinking.
   (over 90% sure of Legend's stick and button) skipped, the value head learns the 10-second outcome. A twentieth of the set is
   never learnt from: the score (direction, same button at Legend's presses, his odds of it, presses where Legend pressed
   nothing) before and after. A set recorded with other inputs cannot be used (record again). Delete removes it from the cloud.
+  **Windows**: a set is learnt a window of chunks at a time (Chunks per window: 25 / 50 / 100 (default) / 200). Training
+  starts as soon as the first chunk is in; the rest of the window and the next window are fetched meanwhile (4 at a
+  time, each tried 3 times), training never runs ahead of what came in, and a finished window leaves memory, so a set of
+  any size fits. After the last window a new round starts from the first (Rounds: 1, 2, 5, 10 or ∞ until stopped / the
+  time limit; chunks recorded meanwhile join the next round). The score uses a fixed random sample of 20,000 held-out
+  decisions from every window seen. **The brain is saved every minute** with where it got to (passes, chunks, the next
+  window): after a stop, a crash or a closed page the next run on that set goes on from that window.
   A chunk the cloud refuses (rules not applied yet, network) is tried again 3 times (8 s, 20 s, 45 s); one given up stays in
   memory and the card shows **Resend unsaved chunks** (works while the app stays open; a restart loses what was not sent).
 - **Work** (Stats > Work): each brain counts the arithmetic operations it does (playing and learning), per second of
@@ -182,6 +189,15 @@ the top-right corner shows what it is thinking.
   in with Google, once on a computer; if the popup is blocked inside My PC, open `aima-login.html` in a browser and paste
   the code). The token is kept in the profile's My PC save, so his TV and other devices are signed in too.
 - **Everyone else**: signs in anonymously and plays a fresh copy of the active brain (read only).
+- **Trainer page** (`trainer.html`, `https://imad-os.github.io/g_football/trainer.html`): checkoAI's training in a plain
+  browser tab, dark, without My PC, the 3D view or the menus: brains (show, use in the game, new, clone, rename, delete,
+  every setting, save, reset), learn from data (passes, chunks per window, rounds, time limit), record Legend v Legend,
+  training matches, every job with its live text and progress, the brain's numbers and history. It loads the game's own
+  files (simulation, js/game/aima.js, the debug runner) with small stand-ins for the screen side (js/trainer/host.js), so
+  every game update reaches it; option lists live in `NS.Aima` (OPTS, TR_OPTS, DT_*) for both screens. Sign in with
+  Google there (or paste a code from `aima-login.html`); on the same site the game's sign-in is picked up by itself. It
+  keeps training in a background tab and asks before the page is closed while a job runs. `?aimatrainer=1` tries it
+  without signing in (nothing is written to the cloud).
 - **Store**: its own Firebase project (`js/data/aima-cloud.js`, public web config; the app config `aimaFirebase`
   overrides it), through the REST APIs: `aima/index` (the list and the active brain) and `aima/b_<id>` per brain;
   recorded data in its own collection: `aimaData/index` (the named sets) and `aimaData/c_<set>_<n>` (its chunks).
