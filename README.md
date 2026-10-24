@@ -33,9 +33,13 @@ working on his own side at the same time (both on one side: P1 his, P2 the CPU t
 Kick off) are for both, only P1's Back leaves a screen. Teams: each side picks its league or continent first, then a team
 (Back: the leagues again). Game plan: the two sides next to each other, each with its formation, tactics, starters and bench.
 
-Every move has **its own button** (or a two-button combination). **Each player has his own map** (Settings > Button
-mapping: P1 / P2), whatever controller he holds, using the standard button positions (shown with your controller's own
-names: Xbox, PlayStation, Nintendo by position); checkoAI plays with P1's. There are no tap / hold gestures: **holding a
+Every move has **its own button** (or a two-button combination). There are **two maps** (Settings > Button mapping):
+the **controllers'** (every game controller and phone controller, by the standard button positions, shown with your
+controller's own names: Xbox, PlayStation, Nintendo by position; checkoAI plays with it too) and the **keyboard's**: My
+PC gives games only two keys, Enter / Space and Shift (a second keyboard: F and G), so moves are mapped to either or both
+together (default: Enter pass / press, Shift shot / tackle, both a long ball / slide). Each player plays with his
+device's map. The sides screen: the first device to take a side is P1 (when P1 goes back to the middle, P2 becomes P1);
+when it opens for the first time, the device that used the menus is P1. There are no tap / hold gestures: **holding a
 button never changes the move**, only how it is played:
 
 * the power bar fills in 0.5 s by default (**Settings > Gameplay > Power bar speed**: slow 1 s, normal 0.75 s, fast 0.5 s, very fast 0.35 s)

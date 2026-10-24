@@ -96,7 +96,7 @@
     var i = action.charAt(0) === 'b' ? +action.slice(1) : -1;
     var bit = i >= 0 && i < BIT.length ? BIT[i] : 0;
     if (!bit) return;
-    if (NS.Mapper && NS.Mapper.active()) { NS.Mapper.button(bit, down, 'keys'); return; }
+    if (NS.Mapper && NS.Mapper.active()) { NS.Mapper.button(bit, down, 'padtouch'); return; } // (a controller's buttons: the controllers' map)
     var tn = NS.Devices.player('keys');
     NS.Input.button(tn >= 0 ? tn : 0, bit, down);
   }
@@ -159,6 +159,7 @@
     live: function () { return order.length > 0; },
     count: function () { return order.length; },
     devs: function () { return order; },
+    touching: function () { return touchOn; },
     kind: function () { return kind; },
     // display name of a standard button index on this controller (L / ZL on Nintendo, LB / LT on Xbox...)
     label: function (index) { return index >= 12 && index <= 15 ? DPAD_NAMES[index - 12] : (NAMES[kind][index] || ('#' + (index + 1))); },

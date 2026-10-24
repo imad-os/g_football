@@ -696,8 +696,8 @@
   function updateSideSlots() {
     var s = World.session, D = NS.Devices;
     if (s.sideMode !== 'CUSTOM') {
-      s.padDev = [D.of(0), D.of(1)]; // (the side mode's default devices)
       s.pads = NS.sidePads().slice();
+      s.padDev = [null, null]; // (fix: P1 is the device on the menus now)
       s.sideMode = 'CUSTOM';
     }
     D.fix();
@@ -2258,7 +2258,7 @@
 
   /* ------------------------------ BUTTON MAPPING ------------------------------ */
 
-  var mapP = 0;   // the player whose map the screen shows and changes
+  var mapP = 0;   // the map the screen shows and changes: 0 the game controllers', 1 the keyboard's
   function buildButtons() {
     var wrap = screens.BUTTONS;
     var head = el('div', 'screen-head');
@@ -2266,10 +2266,10 @@
     head.appendChild(el('p', 'muted small', T('map.sub')));
     refs.mapNote = el('p', 'map-note hidden', T('map.noraw'));
     head.appendChild(refs.mapNote);
-    // whose map: P1's or P2's (each player keeps his own, whatever controller he holds)
+    // which map: the game controllers' or the keyboard's (each player plays with the one of his device)
     var who = el('div', 'row map-who');
     refs.mapWho = [0, 1].map(function (n) {
-      var b = btn('opt p' + (n + 1), 'P' + (n + 1), 'mp:' + n, function () { mapP = n; renderButtons('mp:' + n); });
+      var b = btn('opt', T(n ? 'map.kb' : 'map.pads'), 'mp:' + n, function () { mapP = n; renderButtons('mp:' + n); });
       who.appendChild(b);
       return b;
     });
@@ -2332,7 +2332,7 @@
     b.appendChild(el('span', 'map-name', T(clap ? 'mv.clap' : (sprint ? 'mv.sprint' : 'mv.' + B.MOVES[idx].id))));
     // the map of the player picked above (P1 / P2)
     var v = el('span', 'map-val pad' + (!sprint && !clap && !B.maskOf(idx, mapP) ? ' off' : ''),
-      clap ? B.maskLabel(B.clapMask()) : (sprint ? B.maskLabel(B.sprintMask(mapP)) : B.bindingLabel(idx, mapP)));
+      clap ? B.maskLabel(B.clapMask()) : (sprint ? B.maskLabel(B.sprintMask(mapP), mapP) : B.bindingLabel(idx, mapP)));
     b.appendChild(v);
     return b;
   }
@@ -2343,9 +2343,8 @@
     refs.mapNote.classList.toggle('hidden', NS.Gamepad.live());
     refs.mapWho[0].classList.toggle('sel', mapP === 0);
     refs.mapWho[1].classList.toggle('sel', mapP === 1);
-    // the device this player plays with now (a keyboard: Enter / Space is A, Shift is X)
-    var dv = NS.Devices.of(mapP);
-    refs.mapDev.textContent = dv ? devName(dv).join(' ') + (NS.Devices.isKeys(dv) ? '  ·  ' + T('map.keys') : '') : T('map.nodev');
+    // the keyboard has two keys to play with (My PC keeps the others): what this map can use
+    refs.mapDev.textContent = mapP ? T('map.keys') : '';
     var groups = [['map.group.move', 0], ['map.group.att', 1], ['map.group.def', 2]];
     groups.forEach(function (g) {
       var card = el('div', 'panel-card');
@@ -2353,7 +2352,7 @@
       var list = el('div', 'stack');
       if (g[1] === 0) {
         list.appendChild(mapRow(-1));
-        if (NS.Aima && NS.Aima.isImad()) { list.appendChild(mapRow(-2)); list.appendChild(mapRow(-3)); } // checkoAI's clap / punishment: the trainer only
+        if (NS.Aima && NS.Aima.isImad() && !mapP) { list.appendChild(mapRow(-2)); list.appendChild(mapRow(-3)); } // checkoAI's clap / punishment: the trainer only (a controller)
       }
       else for (var i = 0; i < B.MOVES.length; i++) if (B.MOVES[i].ctx === g[1]) list.appendChild(mapRow(i));
       card.appendChild(list);
@@ -2385,10 +2384,10 @@
         msg = B.setClap(mask) ? T('mv.clap') + ' = ' + B.maskLabel(mask) : T('map.clapbusy');
       } else if (sprint) {
         B.setSprint(mask, mapP);
-        msg = T('mv.sprint') + ' = ' + B.maskLabel(mask);
+        msg = T('mv.sprint') + ' = ' + B.maskLabel(mask, mapP);
       } else {
         var cleared = B.set(idx, mask, mapP);
-        msg = 'P' + (mapP + 1) + '  ' + T('mv.' + B.MOVES[idx].id) + ' = ' + B.bindingLabel(idx, mapP) +
+        msg = T(mapP ? 'map.kb' : 'map.pads') + ':  ' + T('mv.' + B.MOVES[idx].id) + ' = ' + B.bindingLabel(idx, mapP) +
           (cleared >= 0 ? '   (' + T('mv.' + B.MOVES[cleared].id) + ': ' + T('map.conflict') + ')' : '');
       }
       if (mask) NS.Storage.saveBindings();
@@ -2397,10 +2396,10 @@
       NS.Input.clearEdges();
       NS.Input.block(350); // the button just mapped must not also press the focused row again
     }, function (mask) {
-      refs.capLive.textContent = T('map.detected') + ' ' + B.maskLabel(mask);
+      refs.capLive.textContent = T('map.detected') + ' ' + B.maskLabel(mask, mapP);
     }, function (secs) {
       refs.capCount.textContent = T('map.countdown').replace('%s', secs);
-    });
+    }, function (dev) { return NS.Devices.isKeys(dev) === (mapP === 1); }); // (only the map's own kind of device)
   }
 
   /* ------------------------------ public ------------------------------ */
@@ -2429,7 +2428,6 @@
       buildResult();
       buildLearn();
       NS.Match.syncRosters();
-      updateSideSlots();
       lastFocusKey.TEAMS = 'h:' + World.session.homeTeamId;
     },
     show: show,
@@ -2477,7 +2475,12 @@
       refs.statGoals.textContent = st.goals;
     },
     onInput: function (action, pressed, repeat, dev) {
-      if (NS.Mapper.active()) return; // the mapper is listening to the real buttons
+      if (NS.Mapper.active()) {
+        // the mapper is listening to the real buttons: a controller's come from js/core/gamepad.js, the keyboard's two
+        // keys from here (Enter / Space = 'jump', Shift = 'run'; a second keyboard: F / G)
+        if (NS.Devices.isKeys(dev || 'keys') && (action === 'jump' || action === 'run')) NS.Mapper.button(action === 'jump' ? 8 : 32, pressed, dev || 'keys');
+        return;
+      }
       if (!pressed) return;
       // the sides screen: left / right move this keyboard's icon (a controller moves its own, through padSide)
       if (current === 'SIDES' && (action === 'left' || action === 'right')) {

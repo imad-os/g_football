@@ -12,6 +12,7 @@
   var cbDone = null;
   var cbLive = null;
   var cbTick = null;
+  var cbAccept = null;
   var held = 0;
   var peak = 0;
   var firstAt = 0;
@@ -50,9 +51,11 @@
     TIMEOUT: TIMEOUT,
     active: function () { return on; },
 
-    // onDone(mask) (mask 0 = nothing detected in time), onLive(mask) while buttons are down, onTick(secondsLeft).
-    start: function (onDone, onLive, onTick) {
+    // onDone(mask) (mask 0 = nothing detected in time), onLive(mask) while buttons are down, onTick(secondsLeft),
+    // accept(dev): the devices listened to (none: all)
+    start: function (onDone, onLive, onTick, accept) {
       on = true;
+      cbAccept = accept || null;
       held = 0;
       peak = 0;
       ignore = 0;
@@ -76,9 +79,9 @@
       cbTick = null;
     },
 
-    // Fed by NS.Input for every button press / release while capturing.
-    button: function (bit, pressed) {
-      if (!on) return;
+    // Fed for every button press / release while capturing (a controller's: js/core/gamepad.js; the keyboard's: the menu)
+    button: function (bit, pressed, dev) {
+      if (!on || (cbAccept && dev && !cbAccept(dev))) return;
       if (pressed) {
         if (performance.now() - startAt < 300) { ignore |= bit; return; }
         if (!held) { firstAt = performance.now(); peak = 0; }

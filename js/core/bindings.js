@@ -1,9 +1,10 @@
-/* Button maps: one per player (P1, P2), each one binding per move, whatever controller the player holds (they all use
- * the standard button positions: A B X Y, L R, ZL ZR, L3 R3, shown with the controller's own names; a keyboard player's
- * Enter / Space is A and Shift is X). A binding is a button or a two-button combination. There are no tap / hold
- * gestures: the buttons alone decide the move, holding only changes how it is played.
- * MOVES[k].mask is P1's map (checkoAI plays with it too), P2's is kept apart; use(n) picks the map the move engine reads
- * (js/game/match.js sets it before each player's controls, and back to P1 after).
+/* Button maps: one for the game controllers (every controller and phone controller: the standard button positions A B X Y,
+ * L R, ZL ZR, L3 R3, shown with the controller's own names) and one for the keyboard / TV remote, which My PC gives only
+ * two keys to play with: Enter / Space (bit KA) and Shift (bit KX); a second keyboard player has F and G for them. A
+ * binding is a button or a two-button combination. There are no tap / hold gestures: the buttons alone decide the move,
+ * holding only changes how it is played.
+ * MOVES[k].mask is the controller map (checkoAI plays with it too), the keyboard's is kept apart; use(n) picks the map
+ * the move engine reads (js/game/match.js sets it before each player's controls: his device's kind, and back after).
  *
  * Moves have a context (1 = with the ball, 2 = without it) and a kind:
  *   0 instant    with the ball: fires on release, a longer hold = more power (passes)
@@ -23,7 +24,7 @@
   var PAD_FALLBACK = ['A', 'B', 'X', 'Y', 'L', 'R', 'ZL', 'ZR', '', '', 'L3', 'R3', 'D-pad \u2191', 'D-pad \u2193', 'D-pad \u2190', 'D-pad \u2192'];
   function padName(i) { return NS.Gamepad ? NS.Gamepad.label(i) : PAD_FALLBACK[i]; }
 
-  var SAVE_VERSION = 4; // v4: a map per player; v3: one map for all (it becomes both); v2: its pad side is kept
+  var SAVE_VERSION = 5; // v5: controllers + keyboard; v4 (a map per player) / v3 (one map): the controllers' map; v2: its pad side
   var ALL = 131071;
 
   function pop(m) { var c = 0; while (m) { c += m & 1; m >>>= 1; } return c; }
@@ -48,9 +49,14 @@
   var DEF = [];
   for (var i = 0; i < MOVES.length; i++) DEF.push(MOVES[i].mask);
   var DEF_SPRINT = PR;
+  // the keyboard: its two keys and both together (no sprint key by default: a double tap of an arrow is the burst)
+  var KA = PA, KX = PX;
+  var DEFK = { lowpass: KA, long: KA | KX, shoot: KX, tackle: KX, slide: KA | KX, press: KA };
+  var DEF2 = [];
+  for (i = 0; i < MOVES.length; i++) DEF2.push(DEFK[MOVES[i].id] || 0);
 
-  var sprint = [DEF_SPRINT, DEF_SPRINT];   // per player
-  var m2 = DEF.slice();                    // P2's moves (P1's are MOVES[k].mask)
+  var sprint = [DEF_SPRINT, 0];            // controllers, keyboard
+  var m2 = DEF2.slice();                   // the keyboard's moves (the controllers' are MOVES[k].mask)
   var cur = 0;                             // the map the move engine reads now
   var DEF_CLAP = PDU;           // checkoAI's clap (the trainer's profile only): D-pad up
   var DEF_PUNISH = PDD;         // checkoAI's punishment ("that was bad"): D-pad down
@@ -133,19 +139,19 @@
     },
     clear: function (idx, p) { setMask(idx, p === 1 ? 1 : 0, 0); recompute(); },
     setSprint: function (mask, p) { if (mask) sprint[p === 1 ? 1 : 0] = mask; },
-    // p: one player's map back to the defaults; none: both (and the clap / punishment)
+    // p: one map back to the defaults (0 controllers, 1 keyboard); none: both (and the clap / punishment)
     reset: function (p) {
       for (var k = 0; k < MOVES.length; k++) {
         if (p !== 1) MOVES[k].mask = DEF[k];
-        if (p !== 0) m2[k] = DEF[k];
+        if (p !== 0) m2[k] = DEF2[k];
       }
       if (p !== 1) sprint[0] = DEF_SPRINT;
-      if (p !== 0) sprint[1] = DEF_SPRINT;
+      if (p !== 0) sprint[1] = 0;
       if (p === undefined) { clapMask = DEF_CLAP; punishMask = DEF_PUNISH; }
       recompute();
     },
 
-    // Saved form: { v: 4, s / s2: sprint, c, p, m / m2: { id: mask } } (P1 / P2)
+    // Saved form: { v: 5, s / s2: sprint, c, p, m / m2: { id: mask } } (controllers / keyboard)
     serialize: function () {
       var out = { v: SAVE_VERSION, s: sprint[0], s2: sprint[1], c: clapMask, p: punishMask, m: {}, m2: {} };
       for (var k = 0; k < MOVES.length; k++) { out.m[MOVES[k].id] = MOVES[k].mask; out.m2[MOVES[k].id] = m2[k]; }
@@ -155,7 +161,7 @@
       this.reset();
       if (!saved || typeof saved !== 'object' || !saved.m || typeof saved.m !== 'object') return;
       var k, v;
-      if (saved.v === SAVE_VERSION || saved.v === 3) {
+      if (saved.v === SAVE_VERSION || saved.v === 4 || saved.v === 3) {
         if (okMask(saved.s)) sprint[0] = saved.s;
         // (ZL was the clap before the D-pad could be mapped: it moves to D-pad up)
         if (okMask(saved.c) && saved.c !== PZL) clapMask = saved.c;
@@ -164,34 +170,39 @@
           v = saved.m[MOVES[k].id];
           if (v === 0 || okMask(v)) MOVES[k].mask = v;
         }
-        // P2: its own map (v4), else the one map of v3
+        // the keyboard's own map (v5 only; before it there was none: its defaults)
         var o2 = saved.v === SAVE_VERSION && saved.m2 && typeof saved.m2 === 'object' ? saved.m2 : null;
-        sprint[1] = o2 && okMask(saved.s2) ? saved.s2 : sprint[0];
-        for (k = 0; k < MOVES.length; k++) {
-          v = o2 ? o2[MOVES[k].id] : MOVES[k].mask;
-          m2[k] = v === 0 || okMask(v) ? v : DEF[k];
+        if (o2) {
+          sprint[1] = saved.s2 === 0 || okMask(saved.s2) ? saved.s2 : 0;
+          for (k = 0; k < MOVES.length; k++) { v = o2[MOVES[k].id]; m2[k] = v === 0 || okMask(v) ? v : DEF2[k]; }
         }
       } else if (saved.v === 2) {
         // the gamepad side of the previous version is the map now
-        if (okMask(saved.ps)) sprint[0] = sprint[1] = saved.ps;
+        if (okMask(saved.ps)) sprint[0] = saved.ps;
         for (k = 0; k < MOVES.length; k++) {
           v = saved.m[MOVES[k].id];
-          if (v && v.length >= 2 && (v[1] === 0 || okMask(v[1]))) MOVES[k].mask = m2[k] = v[1];
+          if (v && v.length >= 2 && (v[1] === 0 || okMask(v[1]))) MOVES[k].mask = v[1];
         }
       }
       recompute();
     },
 
-    // Readable name of a button combination ("A", "L + X", "LB + ✕"...)
-    maskLabel: function (mask) {
+    // Readable name of a button combination ("A", "L + X", "LB + ✕"...; the keyboard's: "Enter", "Enter + Shift")
+    maskLabel: function (mask, p) {
       if (!mask) return NS.I18n.t('map.unbound');
       var out = '';
+      if (p === 1) {
+        if (mask & KA) out = NS.I18n.t('key.a');
+        if (mask & KX) out += (out ? ' + ' : '') + NS.I18n.t('key.x');
+        return out || NS.I18n.t('map.unbound');
+      }
       for (var k = 0; k < BIT_INDEX.length; k++) {
         if (mask & BIT_INDEX[k][0]) out += (out ? ' + ' : '') + padName(BIT_INDEX[k][1]);
       }
       return out;
     },
-    bindingLabel: function (idx, p) { return this.maskLabel(maskOf(idx, p === 1 ? 1 : 0)); },
+    KEYS: KA | KX,
+    bindingLabel: function (idx, p) { return this.maskLabel(maskOf(idx, p === 1 ? 1 : 0), p === 1 ? 1 : 0); },
     maskOf: function (idx, p) { return maskOf(idx, p === 1 ? 1 : 0); }
   };
   NS.Bindings = B;

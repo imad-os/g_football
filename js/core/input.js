@@ -115,6 +115,7 @@
       return out;
     },
     seen: function (dev) {
+      if (dev) this.last = dev === 'touch' ? 'keys' : dev;
       if (dev === 'keys2' && !keys2Seen) { keys2Seen = true; if (NS.UI && NS.UI.padsChanged) NS.UI.padsChanged(); }
     },
     isKeys: function (dev) { return dev === 'keys' || dev === 'keys2' || dev === 'touch'; },
@@ -128,9 +129,20 @@
     of: function (n) {
       var s = NS.World.session;
       if (s.sideMode === 'CUSTOM') return s.padDev ? s.padDev[n] || null : null;
-      var l = this.list();
-      return l[n] || null;
+      // a fixed side mode (the competitions): P1 the device that used the menus last, P2 the first other one
+      var l = this.list(), d0 = l.indexOf(this.last) >= 0 ? this.last : l[0];
+      if (n === 0) return d0 || null;
+      for (var i = 0; i < l.length; i++) if (l[i] !== d0) return l[i];
+      return null;
     },
+    // the button map player n plays with: 1 the keyboard's (a keyboard player), 0 the controllers' (a controller, or the
+    // phone's own touch pad, which has a controller's buttons)
+    mapOf: function (n) {
+      var d = this.of(n);
+      return d && this.isKeys(d) && !(NS.Gamepad && NS.Gamepad.touching && NS.Gamepad.touching()) ? 1 : 0;
+    },
+    // the device that used the menus last (it is P1 when the sides screen opens for the first time)
+    last: 'keys',
     // the player (0 / 1) a device plays as in a match, -1 none
     player: function (dev) {
       if (dev === 'touch') dev = 'keys';
@@ -138,17 +150,23 @@
       if (this.of(1) === dev) return 1;
       return -1;
     },
-    // CUSTOM sides: a player with a side and no device gets the first free one (the default P1: a controller, else the
-    // keyboard); a device that is gone frees its player
+    // CUSTOM sides: a player with a side and no device gets the device that used the menus last (else the first free
+    // one); a device that is gone frees its player; P1 is always the first of them (P2 alone becomes P1)
     fix: function () {
       var s = NS.World.session, l = this.list();
       if (!s.padDev) s.padDev = [null, null];
       for (var n = 0; n < 2; n++) {
         if (s.padDev[n] && l.indexOf(s.padDev[n]) < 0) { s.padDev[n] = null; s.pads[n] = -1; }
         if (s.pads[n] >= 0 && !s.padDev[n]) {
-          for (var i = 0; i < l.length; i++) if (l[i] !== s.padDev[1 - n]) { s.padDev[n] = l[i]; break; }
+          if (l.indexOf(this.last) >= 0 && this.last !== s.padDev[1 - n]) s.padDev[n] = this.last;
+          for (var i = 0; i < l.length && !s.padDev[n]; i++) if (l[i] !== s.padDev[1 - n]) s.padDev[n] = l[i];
           if (!s.padDev[n]) s.pads[n] = -1;
         }
+        if (s.pads[n] < 0) s.padDev[n] = null;
+      }
+      if (!s.padDev[0] && s.padDev[1]) {
+        s.padDev[0] = s.padDev[1]; s.pads[0] = s.pads[1];
+        s.padDev[1] = null; s.pads[1] = -1;
       }
     }
   };
