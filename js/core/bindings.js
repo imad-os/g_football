@@ -23,7 +23,7 @@
   var PAD_FALLBACK = ['A', 'B', 'X', 'Y', 'L', 'R', 'ZL', 'ZR', '', '', 'L3', 'R3', 'D-pad \u2191', 'D-pad \u2193', 'D-pad \u2190', 'D-pad \u2192'];
   function padName(i) { return NS.Gamepad ? NS.Gamepad.label(i) : PAD_FALLBACK[i]; }
 
-  var SAVE_VERSION = 6; // v6: controllers + keyboard keys; v5 / v4 / v3: the controllers' map (keyboard: defaults); v2: its pad side
+  var SAVE_VERSION = 7; // v7: controllers + keyboard keys; v6..v3: the controllers' map (keyboard: the defaults); v2: its pad side
   var ALL = 131071;
 
   function pop(m) { var c = 0; while (m) { c += m & 1; m >>>= 1; } return c; }
@@ -51,8 +51,9 @@
   // The keyboard (read directly, js/core/keyboard.js): each move is one key or two together, by KeyboardEvent.code; the
   // arrows move the player, Esc / Backspace open the menu. The keys in use get a bit each (KEY_BITS, in the order they
   // are met) so the move engine reads the keyboard like a controller: m2 / sprint[1] are those bits.
-  var DEFK = { lowpass: ['KeyS'], through: ['KeyW'], long: ['KeyA'], shoot: ['KeyD'], curve: ['KeyE'], chip: ['KeyQ'],
-    onetwo: ['KeyZ'], lobthrough: ['KeyX'], tackle: ['KeyA'], slide: ['KeyD'], press: ['KeyS'], teampress: ['KeyW'], switch: ['KeyQ'] };
+  // (keys My PC lets through to a game in its frame: W A S D F G, Enter (Space, Z), Shift (X); js/core/keyboard.js)
+  var DEFK = { lowpass: ['KeyS'], through: ['KeyW'], long: ['KeyA'], shoot: ['KeyD'], curve: ['KeyF'], chip: ['KeyG'],
+    tackle: ['KeyA'], slide: ['KeyD'], press: ['KeyS'], teampress: ['KeyW'], switch: ['KeyG'] };
   var DEFK_SPRINT = ['ShiftLeft'];
   var KEY_BITS = [PA, PB, PX, PY, PL, PR, PZL, PZR, PL3, PR3, PDU, PDD, PDL, PDR];
   var NOT_MAPPABLE = { ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1, Escape: 1, Backspace: 1, Tab: 1 };
@@ -222,7 +223,7 @@
       this.reset();
       if (!saved || typeof saved !== 'object' || !saved.m || typeof saved.m !== 'object') return;
       var k, v;
-      if (saved.v === SAVE_VERSION || saved.v === 5 || saved.v === 4 || saved.v === 3) {
+      if (saved.v >= 3 && saved.v <= SAVE_VERSION) {
         if (okMask(saved.s)) sprint[0] = saved.s;
         // (ZL was the clap before the D-pad could be mapped: it moves to D-pad up)
         if (okMask(saved.c) && saved.c !== PZL) clapMask = saved.c;
@@ -231,7 +232,7 @@
           v = saved.m[MOVES[k].id];
           if (v === 0 || okMask(v)) MOVES[k].mask = v;
         }
-        // the keyboard's keys (v6; before it only Enter / Shift were known: its defaults)
+        // the keyboard's keys (v7; v6 had defaults My PC does not let through: the new defaults)
         function codes(a) {
           if (!Array.isArray(a)) return null;
           var o = [];

@@ -35,13 +35,14 @@ Kick off) are for both, only P1's Back leaves a screen. Teams: each side picks i
 
 Every move has **its own button** (or a two-button combination). There are **two maps** (Settings > Button mapping):
 the **controllers'** (every game controller and phone controller, by the standard button positions, shown with your
-controller's own names: Xbox, PlayStation, Nintendo by position; checkoAI plays with it too) and the **keyboard's**: any
+controller's own names: Xbox, PlayStation, Nintendo by position; checkoAI plays with it too) and the **keyboard's**: a
 key or two together, the arrows moving the player and Esc opening the menu. Defaults: with the ball S pass, W through
-ball, A long ball, D shot, E curl, Q chip, Z one-two, X lofted through ball; without it S press, W team press, A tackle,
-D slide, Q switch; left Shift sprint. Each player plays with his device's map. The keyboard is read directly
-(js/core/keyboard.js, an exception to My PC's "no keydown of your own", asked for by the owner: My PC passes games only
-the arrows, Enter / Space, Shift and Esc); if no key event ever reaches the game, Enter / Space and Shift still play as
-the keyboard map's pass and shot. A second keyboard player (My PC's W A S D, F, G) shares those letters with the first. The sides screen: the first device to take a side is P1 (when P1 goes back to the middle, P2 becomes P1);
+ball, A long ball, D shot, F curl, G chip; without it S press, W team press, A tackle, D slide, G switch; Shift sprint;
+Enter (the TV remote's OK) passes unless mapped. Each player plays with his device's map.
+Inside My PC the game is a frame and My PC keeps the keyboard: it sends only actions, and js/core/keyboard.js turns the
+ones that tell keys apart back into keys: Enter (Space and Z send the same), Shift (X too) and My PC's second-keyboard
+keys W A S D F G (so there is one keyboard player; those are his). Opened in a browser (or once the game has the focus)
+every key reaches the game and is read directly (an exception to My PC's "no keydown of your own", asked for by the owner). The sides screen: the first device to take a side is P1 (when P1 goes back to the middle, P2 becomes P1);
 when it opens for the first time, the device that used the menus is P1. There are no tap / hold gestures: **holding a
 button never changes the move**, only how it is played:
 

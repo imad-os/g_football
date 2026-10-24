@@ -86,7 +86,9 @@
       if (NS.Replay.justEnded()) return; // (the rest of the press that closed the replay)
       if (NS.UI.isOpen()) { NS.UI.onInput(action, pressed, repeat, dev); return; }
       if ((action === 'menu' || (action === 'cancel' && NS.Devices.isKeys(dev))) && pressed && !repeat) { NS.Match.requestMenu(); return; }
-      if (World.match.running && NS.Devices.isKeys(dev) && !repeat) NS.Input.key(dev, action, pressed);
+      if (!World.match.running || repeat) return;
+      if (NS.Keyboard.virtual(dev, action, pressed)) return; // (My PC's actions that stand for a key: the keyboard map)
+      if (NS.Devices.isKeys(dev)) NS.Input.key(dev, action, pressed);                    // (the arrows)
     },
     applySettings: function () {
       var s = World.settings;

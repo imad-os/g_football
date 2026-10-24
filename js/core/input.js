@@ -1,7 +1,7 @@
 /* Per-player match input (P1, P2), fed by the device each player picked on the sides screen: a game controller or a phone
- * controller (js/core/gamepad.js), or the keyboard / TV remote: the arrows through My PC's actions, its other keys read
- * directly (js/core/keyboard.js, the keyboard map). 'keys2', My PC's second keyboard player, is W A S D with F and G (its
- * pass / shot keys). Menus get My PC's actions from every device.
+ * controller (js/core/gamepad.js), or the keyboard / TV remote: the arrows through My PC's actions, its other keys through
+ * js/core/keyboard.js (the keyboard map; My PC's second-keyboard keys W A S D F G are extra keys of the one keyboard
+ * player). Menus get My PC's actions from every device.
  * pads[n]: x / y = direction (analog stick or D-pad), cur = buttons held (bit mask of NS.Bindings bits),
  * latch = buttons pressed since the last simulation step (a very short press is never lost), burst = a direction was
  * double-tapped (sprint burst). */
@@ -80,8 +80,8 @@
       for (var d in keys) keys[d].l = keys[d].r = keys[d].u = keys[d].d = false;
     },
 
-    // a keyboard / remote action during a match (My PC's onInput, dev 'keys' / 'keys2'): the player it belongs to plays
-    // with it. Enter / Space ('jump') is A, Shift ('run') is X; the rest of the keys are My PC's. False = not a player's.
+    // the keyboard's arrows during a match (My PC's onInput, dev 'keys'): its player's direction (its other keys:
+    // js/core/keyboard.js). False = not a player's.
     key: function (dev, action, pressed) {
       var n = Devices.player(dev);
       if (n < 0) return false;
@@ -90,14 +90,7 @@
       else if (action === 'right') k.r = pressed;
       else if (action === 'up') k.u = pressed;
       else if (action === 'down') k.d = pressed;
-      else if (action === 'jump' || action === 'run') {
-        // the keyboard is read directly (js/core/keyboard.js): its own keys play. If no key event ever reached the game
-        // (My PC kept them), Enter / Space and Shift are the keyboard map's pass and shot keys.
-        if (dev === 'keys' && NS.Keyboard && NS.Keyboard.live()) return true;
-        var B = NS.Bindings, m = B.maskOf(B.index(action === 'jump' ? 'lowpass' : 'shoot'), 1);
-        if (m) NS.Input.button(n, m, pressed);
-        return true;
-      } else return false;
+      else return false;
       NS.Input.direction(n, (k.r ? 1 : 0) - (k.l ? 1 : 0), (k.d ? 1 : 0) - (k.u ? 1 : 0));
       return true;
     }
@@ -105,23 +98,20 @@
 
   var keys = {};             // keyboard device -> its arrows held
 
-  /* The devices and the two players. A device is the keyboard / TV remote ('keys'), a second keyboard player ('keys2',
-   * once it is used), or a controller ('pad0'..'pad3', phones 'pad101'...). On the sides screen each device has its own
+  /* The devices and the two players. A device is the keyboard / TV remote ('keys'; My PC's second-keyboard keys 'keys2'
+   * are its extra keys), or a controller ('pad0'..'pad3', phones 'pad101'...). On the sides screen each device has its own
    * row and moves its own icon; the first two devices put on a side are P1 and P2 (session.padDev, their teams in
    * session.pads). The competitions' fixed side modes use the default devices: the controllers first, then the keyboard. */
-  var keys2Seen = false;
   var Devices = {
     // every device that can play, in order: the controllers, then the keyboard(s)
     list: function () {
       var d = NS.Gamepad && NS.Gamepad.devs ? NS.Gamepad.devs() : null; // (trainer.html: no controllers)
       var out = d && d.slice ? d.slice() : [];
-      out.push('keys');
-      if (keys2Seen) out.push('keys2');
+      out.push('keys'); // (one keyboard player: My PC's second-keyboard keys are his extra keys)
       return out;
     },
     seen: function (dev) {
-      if (dev) this.last = dev === 'touch' ? 'keys' : dev;
-      if (dev === 'keys2' && !keys2Seen) { keys2Seen = true; if (NS.UI && NS.UI.padsChanged) NS.UI.padsChanged(); }
+      if (dev) this.last = dev === 'touch' || dev === 'keys2' ? 'keys' : dev;
     },
     isKeys: function (dev) { return dev === 'keys' || dev === 'keys2' || dev === 'touch'; },
     // 'pad', 'phone', 'keys', 'keys2'

@@ -2484,12 +2484,13 @@
       refs.statGoals.textContent = st.goals;
     },
     onInput: function (action, pressed, repeat, dev) {
-      // the mapper is listening to the real buttons / keys (js/core/gamepad.js, js/core/keyboard.js)
-      if (NS.Mapper.active()) return;
+      // the mapper is listening to the real buttons / keys (js/core/gamepad.js, js/core/keyboard.js; My PC's actions that
+      // stand for a key go there too)
+      if (NS.Mapper.active()) { NS.Keyboard.virtual(dev, action, pressed); return; }
       if (!pressed) return;
       // the sides screen: left / right move this keyboard's icon (a controller moves its own, through padSide)
       if (current === 'SIDES' && (action === 'left' || action === 'right')) {
-        if (!repeat && !/^pad/.test(dev || '')) sideMove(!dev || dev === 'touch' ? 'keys' : dev, action === 'left' ? -1 : 1);
+        if (!repeat && !/^pad/.test(dev || '')) sideMove('keys', action === 'left' ? -1 : 1); // (the keyboard, remote, A / D)
         return;
       }
       var c = DUAL[current] ? cursorOf(dev) : 0;
