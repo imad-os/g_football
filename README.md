@@ -450,7 +450,13 @@ that differ from both teams.
   The other team's restart: a checkoAI taker plays it with the CPU's set play (it used to wait up to 10 s for its
   network to press a button), and pressing your pass or shot button (A / B, or the keyboard's) has the CPU take it at
   once (also pressed during the walk-up: he plays it as soon as he reaches the ball).
-* **Settings > Graphics > Ball size**: Small (the real size, as before), Normal (+10%, the default) or Big (+20%).
+* **Goalkeepers**: with the ball far up the pitch the keeper stands off his line (about 4 m out with it at halfway,
+  up to 11 m with it at the other end) and drops back as it comes, so he can sweep up a long ball over his defenders
+  (he comes for a ball dropping anywhere in his box that he reaches first). **Rush**: a man through on goal with
+  nobody in his way (or one man, once he is in the box), and now and then the keeper comes out to close him down and
+  block at his feet; the better the keeper (difficulty), the more often. In a test of 30 breakaways from 30 m he came
+  out in most, won 5 balls, and let in 21 (24 without the rush).
+* **Settings > Graphics > Ball size**: Size 5 (the real size of an adult ball, 22 cm; the default), Bigger (+10%) or Big (+20%).
   Only the picture changes (the ball, its shadow and its shot streak); its physics keep the real size.
 * **Camera near the goals**: as the ball nears a goal the view swings on towards it, so the goal and the box stay on
   screen on every pitch size and camera (the goal sits at 73-85% of the screen width with the ball on the goal line;

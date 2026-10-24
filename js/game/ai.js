@@ -1340,6 +1340,21 @@
     return true;
   }
 
+  // How many of team t's outfield players stand in the carrier c's way to their goal (in a lane ~3 m either side of his
+  // line to the goal centre, a little wider further on): 0 = he is through on goal.
+  function blockersToGoal(c, t, goalX) {
+    var players = World.players, lx = goalX - c.pos.x, lz = -c.pos.z, ll = Math.sqrt(lx * lx + lz * lz) || 1, n = 0;
+    for (var i = 0; i < players.length; i++) {
+      var q = players[i];
+      if (q.team !== t || q.role === 'GK' || q.stun > 0) continue;
+      var qx = q.pos.x - c.pos.x, qz = q.pos.z - c.pos.z;
+      var along = (qx * lx + qz * lz) / ll;
+      if (along < -0.5 || along > ll) continue;
+      if (Math.abs(qx * lz - qz * lx) / ll < 3 * NS.M + along * 0.15) n++;
+    }
+    return n;
+  }
+
   function aiGoalkeeper(p, dt, prof) {
     var ball = World.ball;
     var a = attackOf(p);
@@ -1409,13 +1424,36 @@
 
     // the keeper button held (a human's team): off his line flat out, to claim a loose ball or go in on the man who
     // has it (a block at his feet when he is close)
+    // His own rush (the CPU's keepers, and a human team's): a man through on goal with nobody left between them, and now
+    // and then (a roll every 0.4 s, more often for the better keepers) he comes out to close him down instead of waiting
     var mt = World.match;
-    if (World.gkRush[p.team] > 0 && !mt.restart && !mt.penalty && !(ball.owner && ball.owner.team === p.team)) {
-      var c = ball.owner;
+    var c = ball.owner;
+    if (p.rushT > 0) p.rushT -= dt;
+    if (p.rushCd > 0) p.rushCd -= dt;
+    if (c && c.team !== p.team && !mt.restart && !mt.penalty && !(p.rushT > 0) && !(p.rushCd > 0)) {
+      p.rushCd = 0.4;
+      var along = (c.pos.x - ownGoalX) * a; // how far the man is from our goal line
+      if (along < NS.BOX_D + 9 * NS.M && along > 4 && Math.abs(c.pos.z) < NS.BOX_HW + 2 && c.vel.x * -a > 2) {
+        // clean through: his usual chance; one man still in the way but the attacker already in the box: 70% of it
+        var bl = blockersToGoal(c, p.team, ownGoalX);
+        var odds = [0.14, 0.22, 0.28, 0.32][prof.iq] * (bl === 0 ? 1 : (bl === 1 && along < NS.BOX_D ? 0.7 : 0));
+        if (Math.random() < odds) {
+          p.rushT = 1.4;
+          if (NS.dbg) NS.dbg('gk_rush', p.team);
+        }
+      }
+    }
+    if (p.rushT > 0 && (!c || c.team === p.team)) p.rushT = 0; // the ball is ours (or loose: claimed as usual below)
+    var rush = World.gkRush[p.team] > 0 || p.rushT > 0;
+    if (rush && !mt.restart && !mt.penalty && !(c && c.team === p.team)) {
       if (c) {
         var cx = c.pos.x + c.vel.x * 0.25, cz = c.pos.z + c.vel.z * 0.25;
         var cdx = c.pos.x - p.pos.x, cdz = c.pos.z - p.pos.z;
-        if (cdx * cdx + cdz * cdz < 5.3 && p.tackleCd <= 0 && !c.gkHands) { Actions.startTackle(p, c, true, false); return; }
+        if (cdx * cdx + cdz * cdz < 5.3 && p.tackleCd <= 0 && !c.gkHands) {
+          p.rushT = 0;
+          Actions.startTackle(p, c, World.gkRush[p.team] > 0, false);
+          return;
+        }
         moveToward(p, cx, cz, 12.4 * prof.speedMul, dt);
       } else {
         interceptTime(p, 12.4, 3.2);
@@ -1424,17 +1462,26 @@
       return;
     }
 
-    // loose ball in or near the box that we reach first: come and claim it
-    if (!ball.owner && Math.abs(ball.pos.x - ownGoalX) < 16 && Math.abs(ball.pos.z) < 13) {
+    // loose ball in or near the box that we reach first: come and claim it (a long ball dropping into the box too, which
+    // the keeper standing up off his line can reach)
+    var bAlong = (ball.pos.x - ownGoalX) * a;
+    var dropIn = ball.vel.x * -a > 4 && bAlong < NS.BOX_D - 0.8 && Math.abs(ball.pos.z) < NS.BOX_HW - 1;
+    if (!ball.owner && ((Math.abs(ball.pos.x - ownGoalX) < 16 && Math.abs(ball.pos.z) < 13) || dropIn)) {
       var gt = interceptTime(p, 10.5, 3.2);
-      if (gt < O.chaseT - 0.1 && gt < 1.6) { moveToward(p, ICX, ICZ, 11 * prof.speedMul, dt); return; }
+      if (gt < O.chaseT - 0.1 && gt < 1.6 && (ICX - ownGoalX) * a < NS.BOX_D - 0.5) {
+        moveToward(p, ICX, ICZ, 11 * prof.speedMul, dt); return;
+      }
     }
 
     // angle play: stand on the line from the goal centre to the ball, further out when the ball is close
     var bdx = ball.pos.x - ownGoalX, bdz = ball.pos.z;
     var bd = Math.sqrt(bdx * bdx + bdz * bdz) || 1;
     var off = bd < 30 ? clamp(1.4 + (30 - bd) * 0.1, 1.4, 4) : 1.6;
-    if (T.phase === 1) off = 3.2; // our ball: step up to be an option
+    // the ball far up the pitch: he steps up off his line (up to 11 m out with the ball at the other end) to sweep up a
+    // long ball over his defenders, and drops back as it comes
+    var L = 2 * HALF_W, sweep = clamp((bAlong - L * 0.35) / (L * 0.45), 0, 1);
+    if (sweep > 0) off = Math.max(off, 1.6 + sweep * (11 * NS.M - 1.6));
+    if (T.phase === 1) off = Math.max(off, 3.2); // our ball: step up to be an option
     var tx = ownGoalX + bdx / bd * off;
     var tz = clamp(bdz / bd * off * 1.3, -limit, limit);
     moveToward(p, tx, tz, 9 * prof.speedMul, dt);
