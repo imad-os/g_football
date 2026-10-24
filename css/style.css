@@ -472,6 +472,22 @@ h1, h2, p { margin: 0; }
 .aima-code { min-width: 14rem; padding: 0.4rem 0.6rem; border-radius: 0.5rem; border: 1px solid var(--line); background: rgba(2, 6, 15, 0.85); color: #e2e8f0; }
 .aima-note { margin-top: 0.5rem; }
 @media (max-width: 900px) { .aima-cols { grid-template-columns: minmax(0, 1fr); } }
+/* checkoAI: what he is learning in this match (the pause menu) */
+#screen-aimalearn { gap: 0.6rem; }
+.learn-head { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; margin: 0.2rem 0 0.5rem; font-size: 1.05rem; }
+.learn-total, .learn-val { color: #4ade80; font-variant-numeric: tabular-nums; }
+.learn-total { margin-left: auto; font-weight: 700; }
+.learn-total.neg, .learn-val.neg { color: #f87171; }
+.aima-bar.learn-bar { grid-template-columns: 9.5rem minmax(0, 1fr) 3.4rem; }
+.aima-bar.learn-bar b { background: linear-gradient(90deg, #16a34a, #4ade80); }
+.aima-bar.learn-bar b.neg { background: linear-gradient(90deg, #dc2626, #f87171); }
+.learn-bar .learn-val { text-align: right; }
+.learn-line { display: grid; grid-template-columns: 2.4rem minmax(0, 1fr) auto; gap: 0.5rem; font-size: 0.82rem; padding: 0.12rem 0; }
+.learn-hint { font-size: 0.8rem; }
+/* CPU v CPU on the sides screen: each side's level, stacked so up / down walk them */
+.panel-card.cvc { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; margin-top: 0.7rem; }
+.cvc-opt { min-width: 22rem; }
+.cvc-opt.sub { font-size: 0.85em; opacity: 0.9; }
 
 /* checkoAI sub-tabs, brains, history, training output */
 .aima-subs { margin: 0.2rem 0 0.7rem; }

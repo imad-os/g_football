@@ -201,6 +201,8 @@
       compType: 'EXHIBITION',
       sideMode: '1P_CPU', // 1P_CPU | 1P_2P | COOP_CPU | CPU_CPU (competitions) | CUSTOM (the sides screen: pads)
       pads: [0, -1],      // CUSTOM: the team of player 1 / player 2 (0 home, 1 away, -1 none: the CPU plays)
+      cpuLevels: null,    // CPU v CPU (nobody on either team): each side's level ('EASY'..'LEGEND', 'AIMA'); null = the setting
+      cpuBrains: ['', ''], // ... and for a checkoAI side, its brain ('' = the active one)
       activeCategory: 'LEAGUE_MAR',
       homeTeamId: 'WAC',
       awayTeamId: 'RCA',

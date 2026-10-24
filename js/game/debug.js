@@ -474,7 +474,7 @@
     //       brains: [home, away] (optional: the loaded checkoAI brain of each AIMA side, null = the active one) }
     start: function (cfg, onProgress, onDone) {
       if (run) return;
-      if (cfg.brains && NS.Aima) NS.Aima.setDebugBrains(cfg.brains);
+      if (NS.Aima) NS.Aima.setDebugBrains(cfg.brains || null); // (null: not a CPU v CPU match's picks either)
       var s = World.session, st = World.settings;
       saved = { stadium: st.stadium, teamSize: st.teamSize, duration: st.durationMins, sideMode: s.sideMode,
         home: s.homeTeamId, away: s.awayTeamId, comp: s.compActive, exit: NS.Match.exitToMenu };

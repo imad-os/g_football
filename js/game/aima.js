@@ -624,13 +624,30 @@
   }
 
   var matchReward = [0, 0];
+  // what this match's rewards were for (the in-match "what he learns" page): per team, the sum and count of each reason,
+  // and the latest ones (the carrying trickle only in the sums)
+  var WHY = ['goal', 'conceded', 'shot', 'ontarget', 'pass', 'won', 'lost', 'carry', 'foul', 'clap', 'punish'];
+  var W_GOAL = 0, W_CONC = 1, W_SHOT = 2, W_ON = 3, W_PASS = 4, W_WON = 5, W_LOST = 6, W_CARRY = 7, W_FOUL = 8, W_CLAP = 9, W_PUN = 10;
+  var whySum = [new Float64Array(WHY.length), new Float64Array(WHY.length)];
+  var whyN = [new Int32Array(WHY.length), new Int32Array(WHY.length)];
+  var feed = [], FEED_KEEP = 16;
+  // a brain's counters at kick-off (taken on its first step), so the page shows this match only
+  var SNAP_K = ['decisions', 'modelDec', 'rl', 'im', 'passes', 'passOk', 'fwdPass', 'shots', 'onTarget', 'goals', 'won', 'lost', 'tackles', 'fouls', 'claps', 'punish'];
+  var matchSnap = [null, null];
+  function tally(team, k, r) {
+    whySum[team][k] += r; whyN[team][k]++;
+    if (k === W_CARRY) return;
+    feed.push({ t: World.match.timeSeconds, team: team, k: k, r: r });
+    if (feed.length > FEED_KEEP * 2) feed.shift();
+  }
   // a reward for player p's last decision (his own move), or (no p) for the whole team's: every player's last decision.
-  // own: the result of his own move (in a Legend spell only those still reach his last decisions)
-  function addReward(team, r, own, p) {
+  // own: the result of his own move (in a Legend spell only those still reach his last decisions). why: a W_ reason
+  function addReward(team, r, own, p, why) {
     var s = World.aiSlots[team];
     if (!s || !s.active || !s.brain) return;
     s.brain.st.reward += r;
     matchReward[team] += r;
+    if (why !== undefined) tally(team, why, r);
     if (p) { var v = slotOf(p); if (v && !v.watch) rewardTo(v.c, r, own); return; }
     for (var i = 0; i < vlist.length; i++) if (vlist[i].team === team && !vlist[i].watch) rewardTo(vlist[i].c, r, own);
   }
@@ -663,7 +680,9 @@
       c.tr[idx] += r;
       b.st.reward += r;
       matchReward[s.team] += r;
-    } else if (!copied) addReward(s.team, r, true);
+      tally(s.team, r > 0 ? W_CLAP : W_PUN, r);
+    } else if (!copied) addReward(s.team, r, true, null, r > 0 ? W_CLAP : W_PUN);
+    else tally(s.team, r > 0 ? W_CLAP : W_PUN, 0); // (only the copied moves were weighted: no reward, still counted)
   }
 
   // the player a clap is for: the last one who made a move (a button, a ball won) just before it, else the featured one
@@ -795,7 +814,7 @@
     var st = sc.brain.st;
     if (type >= ACT.SHOOT) {
       st.shots++; pendShot = p; pendShotT = 4; pendShotOn = false;
-      addReward(p.team, 0.15 * sc.brain.styleW(1), false, p);
+      addReward(p.team, 0.15 * sc.brain.styleW(1), false, p, W_SHOT);
     } else {
       st.passes++;
     }
@@ -830,17 +849,17 @@
         lastScore[t] = m.score[t];
         if (diff <= 0) continue;
         b = brainOfTeam(t);
-        addReward(t, 1.0 * (b ? b.styleW(0) : 1));
-        addReward(1 - t, -0.8);
+        addReward(t, 1.0 * (b ? b.styleW(0) : 1), false, null, W_GOAL);
+        addReward(1 - t, -0.8, false, null, W_CONC);
         if (actK[t] === ACT_SHOT && actT[t] < 5) actRes[t] = 1;
-        if (pendShot && pendShot.team === t && b) { b.st.goals++; b.st.onTarget++; addReward(t, 0.5 * b.styleW(0), true, pendShot); pendShot = null; }
+        if (pendShot && pendShot.team === t && b) { b.st.goals++; b.st.onTarget++; addReward(t, 0.5 * b.styleW(0), true, pendShot, W_GOAL); pendShot = null; }
       }
       if (tackleT[t] > 0) tackleT[t] -= dt;
     }
     if (pendShot) {
       pendShotT -= dt;
       b = brainOfTeam(pendShot.team);
-      if (b && !pendShotOn && (ball.gkTried & (1 << (1 - pendShot.team)))) { pendShotOn = true; b.st.onTarget++; addReward(pendShot.team, 0.1, true, pendShot); }
+      if (b && !pendShotOn && (ball.gkTried & (1 << (1 - pendShot.team)))) { pendShotOn = true; b.st.onTarget++; addReward(pendShot.team, 0.1, true, pendShot, W_ON); }
       if (pendShotT <= 0) pendShot = null;
     }
     if (o && o !== lastOwner) {
@@ -848,16 +867,16 @@
         var lt = lastOwner.team, a = NS.attack(lt);
         b = brainOfTeam(lt);
         if (lastOwnerAi && b) {
-          if (o.team !== lt) { b.st.lost++; addReward(lt, -0.25 * b.styleW(5), false, lastOwner); }
+          if (o.team !== lt) { b.st.lost++; addReward(lt, -0.25 * b.styleW(5), false, lastOwner, W_LOST); }
           else if (modelPass) {
             b.st.passOk++;
             var gain = (o.pos.x - lastOwner.pos.x) * a;
-            addReward(lt, 0.08 * b.styleW(2) + (gain > 5 ? 0.12 * b.styleW(3) : 0), true, lastOwner);
+            addReward(lt, 0.08 * b.styleW(2) + (gain > 5 ? 0.12 * b.styleW(3) : 0), true, lastOwner, W_PASS);
             if (gain > 5) b.st.fwdPass++;
           }
         }
         var bo = brainOfTeam(o.team);
-        if (bo && aiOf(o) && o.team !== lt) { bo.st.won++; addReward(o.team, 0.25 * bo.styleW(4), false, o); markNote(slotOf(o)); }
+        if (bo && aiOf(o) && o.team !== lt) { bo.st.won++; addReward(o.team, 0.25 * bo.styleW(4), false, o, W_WON); markNote(slotOf(o)); }
       }
       lastOwner = o;
       lastOwnerAi = aiOf(o);
@@ -865,12 +884,12 @@
     if (o && aiOf(o)) {
       b = brainOfTeam(o.team);
       b.st.carryT += dt;
-      addReward(o.team, 0.004 * b.styleW(6) * o.vel.x * NS.attack(o.team) * dt, false, o);
+      addReward(o.team, 0.004 * b.styleW(6) * o.vel.x * NS.attack(o.team) * dt, false, o, W_CARRY);
     }
     if (m.setPiece !== lastSetPiece) {
       var ft = 1 - m.setTeam;
       if ((m.setPiece === 1 || m.setPiece === 2) && m.setPieceTimer > 0 && tackleT[ft] > 0 && World.aiSlots[ft].active && World.aiSlots[ft].brain) {
-        World.aiSlots[ft].brain.st.fouls++; addReward(ft, -0.3);
+        World.aiSlots[ft].brain.st.fouls++; addReward(ft, -0.3, false, null, W_FOUL);
       }
       lastSetPiece = m.setPiece;
     }
@@ -2044,6 +2063,22 @@
     // the model the status box belongs to (the one playing the team it follows)
     modelName: function () { var s = World.aiSlots[showTeam()], b = s && s.brain || active; return b ? b.name : ''; },
     clapFrac: function () { return clapOn ? Math.min(1, (performance.now() - clapDown) / 1000 / CLAP_FULL) : -1; },
+    // what each checkoAI team of the match in progress is learning (the pause menu's page; built on demand, not per frame):
+    // [{ team, b, reward, why: [{ k, r, n }] (biggest first), d: this match's counters, help, feed: [{ t, k, r }] (latest first) }]
+    learnView: function () {
+      var out = [];
+      for (var t = 0; t < 2; t++) {
+        var s = World.aiSlots[t], sn = matchSnap[t];
+        if (!s.active || !s.brain) continue;
+        var b = s.brain, d = {}, why = [], f = [], i;
+        for (i = 0; i < SNAP_K.length; i++) d[SNAP_K[i]] = (b.st[SNAP_K[i]] || 0) - (sn && sn.b === b ? sn[SNAP_K[i]] : b.st[SNAP_K[i]] || 0);
+        for (i = 0; i < WHY.length; i++) if (whyN[t][i]) why.push({ k: WHY[i], r: whySum[t][i], n: whyN[t][i] });
+        why.sort(function (x, y) { return Math.abs(y.r) - Math.abs(x.r); });
+        for (i = feed.length - 1; i >= 0 && f.length < FEED_KEEP; i--) if (feed[i].team === t) f.push({ t: feed[i].t, k: WHY[feed[i].k], r: feed[i].r });
+        out.push({ team: t, b: b, reward: matchReward[t], why: why, d: d, help: b.help(), feed: f });
+      }
+      return out;
+    },
     account: function () { return auth && !auth.anon ? (auth.email || auth.uid || '?') : ''; },
     signIn: signIn,
     signInCode: function (code) { return useRefresh(code, '', ''); },
@@ -2148,6 +2183,8 @@
       poss[0] = poss[1] = 0; shotsT[0] = shotsT[1] = 0;
       lastOwner = null; lastOwnerAi = false; lastScore[0] = lastScore[1] = 0; matchOn = false;
       matchReward[0] = matchReward[1] = 0;
+      whySum[0].fill(0); whySum[1].fill(0); whyN[0].fill(0); whyN[1].fill(0); feed.length = 0;
+      matchSnap[0] = matchSnap[1] = null;
       pendShot = null; lastSetPiece = 0; tackleT[0] = tackleT[1] = 0;
       pastReset();
     },
@@ -2202,6 +2239,10 @@
       }
       if (!anyAi()) return;
       matchOn = true;
+      // the status box's timers: a clap / punishment shows for a moment, then his thoughts come back
+      if (thoughtT > 0) thoughtT -= dt;
+      if (happyT > 0) happyT -= dt;
+      if (sorryT > 0) sorryT -= dt;
       for (var t = 0; t < 2; t++) {
         var s = World.aiSlots[t];
         if (s.active && s.brain && !(t === 1 && World.aiSlots[0].active && World.aiSlots[0].brain === s.brain)) s.brain.st.mins += dt / 60;
@@ -2217,6 +2258,11 @@
         b = as.brain = teamBrains[t] || active;
         if (!b) return;
         var help = b.help();
+        if (!matchSnap[t] || matchSnap[t].b !== b) { // (once a match: this brain's counters at kick-off)
+          var sn = { b: b };
+          for (i = 0; i < SNAP_K.length; i++) sn[SNAP_K[i]] = b.st[SNAP_K[i]] || 0;
+          matchSnap[t] = sn;
+        }
         teamClock[t] += dt;
         b.st.playT += dt; b.st.opsT += dt;
         for (i = 0; i < players.length; i++) {

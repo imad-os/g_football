@@ -323,8 +323,14 @@
     return (World.slots[0].active && World.slots[0].team === team) || (World.slots[1].active && World.slots[1].team === team);
   }
 
-  // World.levels = ["HARD", "EASY"] lets each CPU team play at its own level (used by the balancing tests).
-  function levelOf(team) { return World.levels ? World.levels[team] : World.settings.difficulty; }
+  // World.levels = ["HARD", "EASY"] lets each CPU team play at its own level (used by the balancing tests). A CPU v CPU
+  // match picked on the sides screen (nobody on either team) uses that screen's level for each side.
+  function levelOf(team) {
+    if (World.levels) return World.levels[team];
+    var s = World.session;
+    if (s.sideMode === 'CUSTOM' && s.cpuLevels && s.cpuLevels[team] && s.pads[0] < 0 && s.pads[1] < 0) return s.cpuLevels[team];
+    return World.settings.difficulty;
+  }
 
   // AI.MA: a CPU team on the AI.MA level has its learning player (js/game/aima.js) on the selected player; the rest of
   // the team is the Legend CPU

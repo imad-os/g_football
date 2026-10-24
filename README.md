@@ -5,7 +5,9 @@ Static site, no build step. Plug it into the My PC App Store with the address `h
 
 ## Game modes
 
-* **Exhibition**: controller sides, both teams, game plan, kick off.
+* **Exhibition**: controller sides, both teams, game plan, kick off. With nobody on either team (CPU v CPU) the sides
+  screen picks each side's level (Easy, Normal, Hard, Legend, checkoAI) and, for a checkoAI side, the brain that plays it
+  (up / down walk these, left / right still move the controller icons).
 * **League season**: pick a club; its whole league is the season (everyone once), with the table after every matchday.
 * **Continental cup**: pick any club; 15 opponents are drawn, then round of 16, quarter-finals, semi-finals and the final.
 * **World cup**: pick a nation; 15 more are drawn into four groups of four, the top two go to the knockout rounds.
@@ -134,7 +136,10 @@ top, cross, chip to a runner). A checkoAI side is named with its brain and its L
 A learning team named after the owner's white rooster (js/game/aima.js). On a CPU team at level checkoAI one network
 plays every outfield player, each through his own virtual controller with the same stick, sprint, buttons and hold times
 as a human (the violet arrow shows the player with the ball, or nearest to it); the keeper is the game's. A small box in
-the top-right corner shows what it is thinking.
+the top-right corner shows what it is thinking (a clap / punishment shows there for 1.5-2.5 s, then his thoughts again).
+**Pause > checkoAI** shows what he is learning in the match in progress: how many decisions were his own (and Legend's
+help), lessons from rewards and from copying Legend, his passes / shots / balls won and lost, where the match's rewards
+came from (bars: green = do more of it, red = less) and the latest rewards with their minute.
 
 - **Brains**: several networks, each with its own settings, stats and history (Settings > checkoAI > Brains: use, clone,
   rename, new, delete). The active brain (★) plays the matches and is the one every other profile gets. Sizes SMALL

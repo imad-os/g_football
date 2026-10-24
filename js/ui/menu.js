@@ -9,7 +9,7 @@
 
   var root;
   var screens = {};
-  var order = ['MAIN', 'SIDES', 'TEAMS', 'GAMEPLAN', 'COMPPICK', 'COMPHUB', 'PAUSE', 'SETTINGS', 'HELP', 'BUTTONS', 'DEBUG', 'RESULT'];
+  var order = ['MAIN', 'SIDES', 'TEAMS', 'GAMEPLAN', 'COMPPICK', 'COMPHUB', 'PAUSE', 'SETTINGS', 'HELP', 'BUTTONS', 'DEBUG', 'RESULT', 'AIMALEARN'];
   var current = 'MAIN';
   var open = true;
   var focused = null;
@@ -187,7 +187,7 @@
     NS.Gamepad.touchPad(false); // (a menu: My PC's own pad serves it)
     if (matchRunning()) { World.match.paused = true; NS.Audio.crowd(false); }
     for (var i = 0; i < order.length; i++) screens[order[i]].classList.toggle('hidden', order[i] !== key);
-    root.classList.toggle('menu-wide', key === 'SETTINGS'); // the settings use the whole screen
+    root.classList.toggle('menu-wide', key === 'SETTINGS' || key === 'AIMALEARN'); // these use the whole screen
     trainDot();
     refs.badge.textContent = T('step.' + key.toLowerCase());
     refreshNav();
@@ -202,6 +202,7 @@
     if (key === 'BUTTONS') renderButtons();
     if (key === 'DEBUG') renderDebug();
     if (key === 'PAUSE') updatePauseSummary();
+    if (key === 'AIMALEARN') renderLearn();
     if (key === 'RESULT') renderResult();
     NS.UI.refreshStats();
     NS.Input.clearEdges();
@@ -228,6 +229,7 @@
 
   function back() {
     if (current === 'BUTTONS') { show('SETTINGS'); return; }
+    if (current === 'AIMALEARN') { show(matchRunning() ? 'PAUSE' : 'MAIN'); return; }
     if (current === 'DEBUG') { if (!NS.Debug.running()) show('SETTINGS'); return; }
     if (current === 'RESULT') { if (resView !== 'sum') { resView = 'sum'; renderResult(); } else resultExit(); return; }
     if (current === 'SETTINGS' && NS.Aima && NS.Aima.training()) return; // a checkoAI training is running
@@ -256,12 +258,15 @@
   function startMatch() {
     if (!NS.Comp.active()) World.session.compActive = false;
     hide();
-    NS.Match.start();
-    NS.App.syncMenuItems();
+    cvcBrains(function () {
+      NS.Match.start();
+      NS.App.syncMenuItems();
+    });
   }
 
   function updatePauseSummary() {
     var s = World.session;
+    refs.pzAima.classList.toggle('hidden', !(NS.Aima && (World.aiSlots[0].active || World.aiSlots[1].active)));
     refs.pauseScore.textContent = NS.Teams.byId(s.homeTeamId).name + ' ' + World.match.score[0] + ' - ' +
       World.match.score[1] + ' ' + NS.Teams.byId(s.awayTeamId).name;
   }
@@ -592,11 +597,14 @@
     row.appendChild(mid);
     row.appendChild(away);
     wrap.appendChild(row);
+    refs.cvc = el('div', 'panel-card cvc hidden');
+    wrap.appendChild(refs.cvc);
 
     var foot = el('div', 'foot');
     foot.appendChild(btn('', T('nav.back'), 'back', back));
     refs.sidesNext = plusKey(btn('primary', T('nav.next_teams'), 'next', function () {
-      if (matchRunning()) { NS.Match.applySides(); show('PAUSE'); } else show('TEAMS');
+      if (matchRunning()) cvcBrains(function () { NS.Match.applySides(); show('PAUSE'); });
+      else show('TEAMS');
     }));
     refs.sidesNext.setAttribute('data-default', '1');
     foot.appendChild(refs.sidesNext);
@@ -622,6 +630,55 @@
     for (var t = 0; t < 2; t++) {
       if (s.pads[0] !== t && s.pads[1] !== t) zones[String(t)].appendChild(el('div', 'slot cpu', T('slot.cpu')));
     }
+    renderCvc();
+  }
+
+  // CPU v CPU (nobody on either team): each side's level, and for a checkoAI side the brain that plays it. Up / down
+  // walk these buttons (left / right move the controller icons on this screen)
+  var CVC_LV = ['EASY', 'NORMAL', 'HARD', 'LEGEND', 'AIMA'];
+  function cvcOn() { var s = World.session; return s.sideMode === 'CUSTOM' && s.pads[0] < 0 && s.pads[1] < 0; }
+  function lvName(lv) { return T('opt.' + lv.toLowerCase()); }
+  function cvcBrainName(t) {
+    var s = World.session, id = s.cpuBrains[t], list = NS.Aima.brains();
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i].name;
+    s.cpuBrains[t] = ''; // (deleted since)
+    var a = NS.Aima.brain();
+    return T('dbg.active') + (a ? ' (' + a.name + ')' : '');
+  }
+  function renderCvc() {
+    var box = refs.cvc, s = World.session, on = cvcOn();
+    if (!box) return;
+    box.classList.toggle('hidden', !on);
+    if (!on) return;
+    var keep = focused && box.contains(focused) ? focused.getAttribute('data-k') : '';
+    if (!s.cpuLevels) s.cpuLevels = [World.settings.difficulty, World.settings.difficulty];
+    clear(box);
+    box.appendChild(el('div', 'tag amber', T('cvc.title')));
+    [0, 1].forEach(function (t) {
+      box.appendChild(btn('opt cvc-opt', T(t ? 'sides.away' : 'sides.home') + ':  ' + lvName(s.cpuLevels[t]), 'cvc:lv' + t, function () {
+        s.cpuLevels[t] = CVC_LV[(CVC_LV.indexOf(s.cpuLevels[t]) + 1) % CVC_LV.length];
+        renderCvc();
+      }));
+      if (s.cpuLevels[t] === 'AIMA' && NS.Aima) {
+        box.appendChild(btn('opt cvc-opt sub', T('dbg.brain') + ':  ' + cvcBrainName(t), 'cvc:br' + t, function () {
+          var ids = [''].concat(NS.Aima.brains().map(function (e) { return e.id; }));
+          s.cpuBrains[t] = ids[(ids.indexOf(s.cpuBrains[t]) + 1) % ids.length];
+          renderCvc();
+        }));
+      }
+    });
+    if (keep) { focused = null; if (!focusByKey(keep)) focusDefault(); }
+  }
+  // the brains a CPU v CPU match's checkoAI sides picked (loaded first, from the cloud when not in memory), else none
+  function cvcBrains(then) {
+    var s = World.session;
+    if (!NS.Aima) { then(); return; }
+    var want = [0, 1].map(function (t) { return cvcOn() && s.cpuLevels && s.cpuLevels[t] === 'AIMA' ? s.cpuBrains[t] : ''; });
+    if (!want[0] && !want[1]) { NS.Aima.setDebugBrains(null); then(); return; }
+    Promise.all(want.map(function (id) { return id ? NS.Aima.getBrain(id).catch(function () { return null; }) : null; })).then(function (bs) {
+      NS.Aima.setDebugBrains(bs); // (a brain that failed to load: the active one plays that side)
+      then();
+    });
   }
 
   // player n pushed his stick / D-pad left (-1) or right (+1) on this screen
@@ -1002,12 +1059,14 @@
         hide();
         if (!NS.Replay.playLast(function () { show('PAUSE'); })) show('PAUSE');
       }],
+      ['aima', 'purple', '🧠', function () { show('AIMALEARN'); }],
       ['restart', 'orange', '🔄', function () { startMatch(); }],
       ['quit', 'rose', '🏠', function () { NS.Match.exitToMenu(); }]
     ];
     items.forEach(function (it, i) {
       var b = btn('row-card tone-' + it[1], '', 'pz:' + it[0], it[3]);
       if (i === 0) b.setAttribute('data-default', '1');
+      if (it[0] === 'aima') refs.pzAima = b; // (only while a checkoAI team plays)
       b.appendChild(el('div', 'card-icon sm', it[2]));
       var box = el('div');
       box.appendChild(el('div', 'row-title', T('pause.' + it[0])));
@@ -1016,6 +1075,81 @@
       grid.appendChild(b);
     });
     wrap.appendChild(grid);
+  }
+
+  /* ------------------------------ checkoAI: what he is learning in this match (from the pause menu) ------------------------------ */
+
+  function buildLearn() {
+    var wrap = screens.AIMALEARN;
+    refs.learnBody = el('div', 'learn-body');
+    wrap.appendChild(refs.learnBody);
+    wrap.appendChild(el('p', 'muted learn-hint', T('learn.hint')));
+    var foot = el('div', 'foot');
+    var b = btn('primary', T('nav.back'), 'back', back);
+    b.setAttribute('data-default', '1');
+    foot.appendChild(b);
+    wrap.appendChild(foot);
+  }
+
+  function signed(v) { return (v >= 0 ? '+' : '') + v.toFixed(2); }
+  function renderLearn() {
+    var body = refs.learnBody, list = NS.Aima ? NS.Aima.learnView() : [];
+    clear(body);
+    if (!list.length) { body.appendChild(el('p', 'muted', T('learn.none'))); return; }
+    var s = World.session;
+    list.forEach(function (v) {
+      var d = v.d, team = NS.Teams.byId(v.team ? s.awayTeamId : s.homeTeamId);
+      var head = el('div', 'learn-head');
+      head.appendChild(el('span', 'tag ' + (v.team ? 'blue' : 'red'), team.name));
+      head.appendChild(el('b', null, 'checkoAI  ' + v.b.name));
+      head.appendChild(el('span', 'learn-total' + (v.reward < 0 ? ' neg' : ''), T('learn.reward') + '  ' + signed(v.reward)));
+      body.appendChild(head);
+      var cols = el('div', 'aima-cols');
+
+      // this match's counters: how much he decided himself, what he practised, how it went
+      var c1 = aimaCard(T('learn.c.match'));
+      var g = el('div', 'aima-grid');
+      kv(g, T('learn.k.own'), (d.decisions ? pct(d.modelDec / d.decisions) : '-') + '   (' + T('learn.k.help') + ' ' + pct(v.help) + ')');
+      kv(g, T('learn.k.lessons'), d.rl + ' ' + T('learn.k.fromrew') + ' + ' + d.im + ' ' + T('learn.k.fromcopy'));
+      kv(g, T('aima.k.passes'), d.passes + '  (' + (d.passes ? pct(Math.min(1, d.passOk / d.passes)) : '-') + ', ' + T('aima.k.fwd') + ' ' + d.fwdPass + ')');
+      kv(g, T('aima.k.shots'), d.shots + '  (' + T('aima.k.ontarget') + ' ' + d.onTarget + ', ' + T('aima.k.goals').toLowerCase() + ' ' + d.goals + ')');
+      kv(g, T('aima.k.wonlost'), d.won + ' / ' + d.lost);
+      kv(g, T('aima.k.tackles'), d.tackles + '   ' + T('aima.k.fouls') + ' ' + d.fouls);
+      kv(g, T('aima.k.claps'), d.claps + '   ' + T('aima.k.punish') + ' ' + d.punish);
+      c1.appendChild(g);
+      cols.appendChild(c1);
+
+      // where the rewards came from: green pushes him to do more of it, red less
+      var c2 = aimaCard(T('learn.c.why'));
+      var mx = 0.01;
+      v.why.forEach(function (w) { mx = Math.max(mx, Math.abs(w.r)); });
+      if (!v.why.length) c2.appendChild(el('div', 'aima-k', T('learn.empty')));
+      v.why.forEach(function (w) {
+        var row = el('div', 'aima-bar learn-bar');
+        row.appendChild(el('span', 'aima-k', T('learn.w.' + w.k) + (w.k === 'carry' ? '' : ' ×' + w.n)));
+        var tr = el('i');
+        var fill = el('b', w.r < 0 ? 'neg' : null);
+        fill.style.width = Math.round(Math.abs(w.r) / mx * 100) + '%';
+        tr.appendChild(fill);
+        row.appendChild(tr);
+        row.appendChild(el('span', 'learn-val' + (w.r < 0 ? ' neg' : ''), signed(w.r)));
+        c2.appendChild(row);
+      });
+      cols.appendChild(c2);
+
+      // the latest rewards, newest first
+      var c3 = aimaCard(T('learn.c.feed'));
+      if (!v.feed.length) c3.appendChild(el('div', 'aima-k', T('learn.empty')));
+      v.feed.forEach(function (f) {
+        var line = el('div', 'learn-line');
+        line.appendChild(el('span', 'aima-k', Math.floor(f.t / 60) + "'"));
+        line.appendChild(el('span', null, T('learn.w.' + f.k)));
+        line.appendChild(el('b', 'learn-val' + (f.r < 0 ? ' neg' : ''), signed(f.r)));
+        c3.appendChild(line);
+      });
+      cols.appendChild(c3);
+      body.appendChild(cols);
+    });
   }
 
   /* ------------------------------ FULL TIME: the result and the statistics ------------------------------ */
@@ -2221,6 +2355,7 @@
       buildButtons();
       buildDebug();
       buildResult();
+      buildLearn();
       NS.Match.syncRosters();
       updateSideSlots();
       lastFocusKey.TEAMS = 'h:' + World.session.homeTeamId;

@@ -1104,6 +1104,48 @@
   Object.assign(D.ar, { 'opt.st.compact': 'صغير 65x45 م (7 ضد 7)', 'opt.st.small': 'متوسط 75x49 م', 'opt.st.standard': 'قياسي 85x55 م',
     'opt.st.grand': 'كبير 105x68 م (حقيقي)', 'opt.st.ultra': 'ضخم 110x72 م' });
 
+  // CPU v CPU: each side's level; checkoAI: what he is learning in this match (the pause menu)
+  Object.assign(D.en, { 'cvc.title': 'CPU v CPU: each side\'s level', 'step.aimalearn': 'checkoAI LEARNING',
+    'pause.aima': 'checkoAI', 'pause.aima.d': 'What he is learning in this match',
+    'learn.none': 'No checkoAI team in this match.', 'learn.reward': 'Reward this match', 'learn.empty': 'Nothing yet',
+    'learn.c.match': 'This match', 'learn.c.why': 'Rewards came from', 'learn.c.feed': 'Latest rewards',
+    'learn.k.own': 'His own decisions', 'learn.k.help': 'Legend\'s help', 'learn.k.lessons': 'Lessons',
+    'learn.k.fromrew': 'from rewards', 'learn.k.fromcopy': 'from copying Legend',
+    'learn.w.goal': 'Goal scored', 'learn.w.conceded': 'Goal conceded', 'learn.w.shot': 'Shot', 'learn.w.ontarget': 'Shot on target',
+    'learn.w.pass': 'Pass completed', 'learn.w.won': 'Ball won', 'learn.w.lost': 'Ball lost', 'learn.w.carry': 'Carrying forward',
+    'learn.w.foul': 'Foul', 'learn.w.clap': 'Your clap', 'learn.w.punish': 'Your punishment',
+    'learn.hint': 'Every reward is a lesson for the moves that led to it: green ones make him do more of that, red ones less. Lessons from copying Legend teach him how a good player moves.' });
+  Object.assign(D.fr, { 'cvc.title': 'CPU contre CPU : le niveau de chaque equipe', 'step.aimalearn': 'APPRENTISSAGE checkoAI',
+    'pause.aima': 'checkoAI', 'pause.aima.d': 'Ce qu\'il apprend pendant ce match',
+    'learn.none': 'Aucune equipe checkoAI dans ce match.', 'learn.reward': 'Recompense du match', 'learn.empty': 'Rien pour l\'instant',
+    'learn.c.match': 'Ce match', 'learn.c.why': 'D\'ou viennent les recompenses', 'learn.c.feed': 'Dernieres recompenses',
+    'learn.k.own': 'Ses propres decisions', 'learn.k.help': 'aide de Legend', 'learn.k.lessons': 'Lecons',
+    'learn.k.fromrew': 'des recompenses', 'learn.k.fromcopy': 'en copiant Legend',
+    'learn.w.goal': 'But marque', 'learn.w.conceded': 'But encaisse', 'learn.w.shot': 'Tir', 'learn.w.ontarget': 'Tir cadre',
+    'learn.w.pass': 'Passe reussie', 'learn.w.won': 'Ballon gagne', 'learn.w.lost': 'Ballon perdu', 'learn.w.carry': 'Conduite vers l\'avant',
+    'learn.w.foul': 'Faute', 'learn.w.clap': 'Votre applaudissement', 'learn.w.punish': 'Votre punition',
+    'learn.hint': 'Chaque recompense est une lecon pour les gestes qui y ont mene : en vert il le fera plus, en rouge moins. Copier Legend lui apprend comment bouge un bon joueur.' });
+  Object.assign(D.es, { 'cvc.title': 'CPU contra CPU: el nivel de cada equipo', 'step.aimalearn': 'APRENDIZAJE checkoAI',
+    'pause.aima': 'checkoAI', 'pause.aima.d': 'Lo que esta aprendiendo en este partido',
+    'learn.none': 'No hay equipo checkoAI en este partido.', 'learn.reward': 'Recompensa del partido', 'learn.empty': 'Nada por ahora',
+    'learn.c.match': 'Este partido', 'learn.c.why': 'De donde vienen las recompensas', 'learn.c.feed': 'Ultimas recompensas',
+    'learn.k.own': 'Sus propias decisiones', 'learn.k.help': 'ayuda de Legend', 'learn.k.lessons': 'Lecciones',
+    'learn.k.fromrew': 'de recompensas', 'learn.k.fromcopy': 'copiando a Legend',
+    'learn.w.goal': 'Gol marcado', 'learn.w.conceded': 'Gol recibido', 'learn.w.shot': 'Tiro', 'learn.w.ontarget': 'Tiro a puerta',
+    'learn.w.pass': 'Pase completado', 'learn.w.won': 'Balon recuperado', 'learn.w.lost': 'Balon perdido', 'learn.w.carry': 'Conduccion hacia delante',
+    'learn.w.foul': 'Falta', 'learn.w.clap': 'Tu aplauso', 'learn.w.punish': 'Tu castigo',
+    'learn.hint': 'Cada recompensa es una leccion para las jugadas que llevaron a ella: en verde hara mas de eso, en rojo menos. Copiar a Legend le ensena como se mueve un buen jugador.' });
+  Object.assign(D.ar, { 'cvc.title': 'الكمبيوتر ضد الكمبيوتر: مستوى كل فريق', 'step.aimalearn': 'تعلم checkoAI',
+    'pause.aima': 'checkoAI', 'pause.aima.d': 'ما يتعلمه في هذه المباراة',
+    'learn.none': 'لا يوجد فريق checkoAI في هذه المباراة.', 'learn.reward': 'مكافأة المباراة', 'learn.empty': 'لا شيء بعد',
+    'learn.c.match': 'هذه المباراة', 'learn.c.why': 'مصدر المكافآت', 'learn.c.feed': 'آخر المكافآت',
+    'learn.k.own': 'قراراته الخاصة', 'learn.k.help': 'مساعدة Legend', 'learn.k.lessons': 'الدروس',
+    'learn.k.fromrew': 'من المكافآت', 'learn.k.fromcopy': 'من تقليد Legend',
+    'learn.w.goal': 'هدف مسجل', 'learn.w.conceded': 'هدف مستقبل', 'learn.w.shot': 'تسديدة', 'learn.w.ontarget': 'تسديدة على المرمى',
+    'learn.w.pass': 'تمريرة ناجحة', 'learn.w.won': 'استرجاع الكرة', 'learn.w.lost': 'فقدان الكرة', 'learn.w.carry': 'التقدم بالكرة',
+    'learn.w.foul': 'خطأ', 'learn.w.clap': 'تصفيقك', 'learn.w.punish': 'عقابك',
+    'learn.hint': 'كل مكافأة درس للحركات التي أدت إليها: الأخضر يجعله يكررها أكثر، والأحمر أقل. تقليد Legend يعلمه كيف يتحرك اللاعب الجيد.' });
+
   var lang = 'en';
 
   NS.I18n = {
