@@ -27,8 +27,41 @@
     // controlled-player marker: an arrow above the head, pointing down at the player
     geo.arrow = new THREE.ConeGeometry(0.85, 1.5, 4);
     geo.arrow.rotateX(Math.PI);
-    geo.ball = new THREE.SphereGeometry(NS.BALL_R, 18, 12); // UV-mapped for the ball skins
+    geo.ball = ballGeometry();
+    geo.ballShadow = new THREE.CircleGeometry(NS.BALL_R * 1.15, 12);
+    geo.ballShadow.rotateX(-Math.PI / 2);
     geo.trail = new THREE.SphereGeometry(NS.BALL_R * 0.8, 6, 4);
+  }
+
+  // ---- Polygons (Settings > Polygons): sides of the rounded bodies and of the ball; AUTO follows the quality tier ----
+  var SIDES = { LOW: 6, MEDIUM: 8, HIGH: 12, ULTRA: 20 };
+  var BALL_SEG = { LOW: [16, 12], MEDIUM: [24, 16], HIGH: [32, 24], ULTRA: [48, 32] };
+  function detail() {
+    var s = NS.World && NS.World.settings;
+    var d = s && s.playerDetail;
+    if (SIDES[d]) return d;
+    var t = NS.Quality ? NS.Quality.tier().name : 'MED';
+    return t === 'LOW' ? 'LOW' : (t === 'HIGH' ? 'HIGH' : 'MEDIUM');
+  }
+  function model() {
+    var s = NS.World && NS.World.settings;
+    return s && (s.playerModel === 'CLASSIC' || BUILDS[s.playerModel]) ? s.playerModel : 'ATHLETE';
+  }
+
+  var ballDetail = '';
+  function ballGeometry() {
+    ballDetail = detail();
+    var seg = BALL_SEG[ballDetail];
+    return new THREE.SphereGeometry(NS.BALL_R, seg[0], seg[1]); // UV-mapped for the ball skins
+  }
+
+  // The ball again with the polygons now chosen: returns the old geometry for the caller to swap and dispose, or null
+  // when it has not changed.
+  function rebuildBall() {
+    if (ballDetail === detail()) return null;
+    var old = geo.ball;
+    geo.ball = ballGeometry();
+    return old;
   }
 
   function jerseyTexture(pattern, c1, c2) {
@@ -304,9 +337,8 @@
     return tex;
   }
 
-  // Returns { root, body, leftLeg, rightLeg, leftArm, rightArm, mats } (mats are owned by the player and disposed
-  // with it). root turns with the facing; body pivots at the hips (lean, roll, slide); legs pivot at the hips and
-  // arms at the shoulders, so runs, kicks, tackles and dives can be animated by rotations only.
+  // A player: root turns with the facing; body pivots at the hips (lean, roll, slide); legs pivot at the hips and
+  // arms at the shoulders, so runs, kicks, tackles and dives can be animated by rotations only, whatever the model.
   function limb(parent, g, mat, x, y, len) {
     var pivot = new THREE.Group();
     pivot.position.set(x, y, 0);
@@ -317,22 +349,114 @@
     return pivot;
   }
 
-  function createPlayer(pattern, c1, c2, shortsColor, skinColor, lit) {
-    var Mat = lit ? THREE.MeshLambertMaterial : THREE.MeshBasicMaterial;
-    var root = new THREE.Group();
-    var mats = [];
-    var shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.38 });
-    mats.push(shadowMat);
-    var shadow = new THREE.Mesh(geo.shadow, shadowMat);
-    shadow.position.y = 0.03;
-    root.add(shadow);
+  // ---- rounded bodies (ATHLETE, TOON): lathes, every size a fraction of the player's height h ----
+  // [radius, y] pairs from the bottom up; legs / arms: [radius, t] with t = 0 at the hip / shoulder, 1 at the end.
+  // ATHLETE is a real footballer: legs about half his height, shoulders at 0.81, a head of 1/8.
+  var BUILDS = {
+    ATHLETE: {
+      hip: 0.51, legX: 0.052, legW: 0.03,
+      leg: [[0.046, 0], [0.044, 0.12], [0.036, 0.4], [0.027, 0.52], [0.033, 0.64], [0.021, 0.9], [0.019, 1]],
+      boot: [0.03, 0.024, 0.07, 0.024],
+      pelvis: [[0.086, -0.075], [0.1, -0.045], [0.1, 0.02], [0.092, 0.06]], pelvisZ: 0.68,
+      torso: [[0.092, 0], [0.088, 0.08], [0.105, 0.16], [0.118, 0.23], [0.121, 0.265], [0.1, 0.295], [0.048, 0.312]], torsoZ: 0.58,
+      head: [[0.03, 0.29], [0.03, 0.37], [0.046, 0.378], [0.052, 0.4], [0.054, 0.43], [0.05, 0.462], [0.038, 0.48], [0.02, 0.49]], headZ: 1.12,
+      hair: [[0.057, 0.428], [0.057, 0.448], [0.053, 0.468], [0.041, 0.484], [0.022, 0.494]], headC: 0.43,
+      armX: 0.135, armY: 0.272, armL: 0.42,
+      arm: [[0.031, 0], [0.029, 0.15], [0.024, 0.46], [0.025, 0.55], [0.018, 0.78], [0.022, 0.87], [0.014, 1]]
+    },
+    TOON: {
+      hip: 0.36, legX: 0.07, legW: 0.05,
+      leg: [[0.066, 0], [0.061, 0.4], [0.055, 0.7], [0.05, 1]],
+      boot: [0.052, 0.036, 0.085, 0.036],
+      pelvis: [[0.12, -0.06], [0.135, -0.03], [0.135, 0.02], [0.125, 0.05]], pelvisZ: 0.75,
+      torso: [[0.125, 0], [0.135, 0.08], [0.14, 0.16], [0.12, 0.22], [0.06, 0.25]], torsoZ: 0.7,
+      head: [[0.04, 0.23], [0.04, 0.3], [0.1, 0.32], [0.15, 0.4], [0.16, 0.47], [0.14, 0.55], [0.09, 0.61], [0.03, 0.635]], headZ: 0.95,
+      hair: [[0.163, 0.47], [0.152, 0.54], [0.1, 0.605], [0.034, 0.642]], headC: 0.47,
+      armX: 0.165, armY: 0.2, armL: 0.3,
+      arm: [[0.045, 0], [0.04, 0.5], [0.035, 0.75], [0.046, 0.88], [0.026, 1]]
+    }
+  };
+  var HAIR_STYLES = ['short', 'short', 'buzz', 'afro', 'bald', 'short'];
+  var HAIR_COLORS = [0x1a1816, 0x1a1816, 0x2b1d14, 0x4a3020, 0x8a6a3a, 0xc9a25a, 0x6b2f1a];
+  var BOOT_COLORS = [0x111111, 0x111111, 0xf8fafc, 0xef4444, 0x22c55e, 0xfacc15, 0x3b82f6, 0xf97316];
+  var bodyGeo = {}; // lathes by model, sides, height and part
 
-    var torsoMat = new Mat({ map: jerseyTexture(pattern, c1, c2) });
-    var headMat = new Mat({ color: skinColor });
+  function rnd(seed, k) { var x = Math.sin(seed * 12.9898 + k * 78.233) * 43758.5453; return x - Math.floor(x); }
+
+  // A lathe from [radius, y] pairs (bottom to top, closed at both ends). v of the UVs follows the height, so the bands of
+  // the limb and jersey textures fall where they are painted whatever the spacing of the points.
+  function lathe(pts, seg) {
+    var v = [new THREE.Vector2(0, pts[0][1])];
+    for (var i = 0; i < pts.length; i++) v.push(new THREE.Vector2(pts[i][0], pts[i][1]));
+    v.push(new THREE.Vector2(0, pts[pts.length - 1][1]));
+    var g = new THREE.LatheGeometry(v, seg);
+    var pos = g.attributes.position, uv = g.attributes.uv;
+    var y0 = pts[0][1], y1 = pts[pts.length - 1][1];
+    for (var k = 0; k < pos.count; k++) uv.setY(k, (pos.getY(k) - y0) / (y1 - y0));
+    return g;
+  }
+
+  function scaled(pts, h, dy) {
+    var out = [];
+    for (var i = 0; i < pts.length; i++) out.push([pts[i][0] * h, pts[i][1] * h + (dy || 0)]);
+    return out;
+  }
+
+  // a limb hanging from its pivot: [radius, t] -> lathe from y = -len (the end) up to 0
+  function limbLathe(pts, h, len, seg) {
+    var out = [];
+    for (var i = pts.length - 1; i >= 0; i--) out.push([pts[i][0] * h, -pts[i][1] * len]);
+    return lathe(out, seg);
+  }
+
+  function bodyPart(m, seg, h, part, style) {
+    var key = m + '|' + seg + '|' + Math.round(h * 100) + '|' + part + (style || '');
+    if (bodyGeo[key]) return bodyGeo[key];
+    var b = BUILDS[m], g;
+    if (part === 'leg') g = limbLathe(b.leg, h, (b.hip - b.boot[1]) * h, seg);
+    else if (part === 'arm') g = limbLathe(b.arm, h, b.armL * h, seg);
+    else if (part === 'boot') g = new THREE.SphereGeometry(1, seg, Math.max(4, Math.round(seg * 0.6)));
+    else if (part === 'hair') {
+      var k = style === 'afro' ? 1.32 : (style === 'buzz' ? 0.985 : 1), c = b.headC, pts = [];
+      for (var i = 0; i < b.hair.length; i++) {
+        var y = b.hair[i][1];
+        pts.push([b.hair[i][0] * k, style === 'afro' ? c + (y - c) * 1.45 - 0.004 : y]);
+      }
+      g = lathe(scaled(pts, h), seg);
+    } else g = lathe(scaled(b[part], h), seg);
+    bodyGeo[key] = g;
+    return g;
+  }
+
+  // A leg / arm painted in bands from the top down: colours[i] down to stops[i] (0 = top, 1 = the end).
+  function bandTexture(colors, stops) {
+    var key = 'b' + colors.join('_') + '|' + stops.join('_');
+    if (limbCache[key]) return limbCache[key];
+    var canvas = document.createElement('canvas');
+    canvas.width = 8;
+    canvas.height = 64;
+    var ctx = canvas.getContext('2d');
+    var y = 0;
+    for (var i = 0; i < colors.length; i++) {
+      var y1 = Math.round(64 * stops[i]);
+      ctx.fillStyle = hexToCss(colors[i]);
+      ctx.fillRect(0, y, 8, y1 - y);
+      y = y1;
+    }
+    var tex = new THREE.CanvasTexture(canvas);
+    limbCache[key] = tex;
+    return tex;
+  }
+
+  // The blocks look (the original players)
+  function buildClassic(mesh, Mat, look) {
+    var mats = mesh.mats, root = mesh.root;
+    var torsoMat = new Mat({ map: jerseyTexture(look.pattern, look.c1, look.c2) });
+    var headMat = new Mat({ color: look.skin });
     var hairMat = new Mat({ color: 0x1a1816 });
     // legs: shorts (top 38%), socks in the shirt colour, dark boots; arms: short sleeve then skin
-    var shortsMat = new Mat({ map: limbTexture(shortsColor, c1, 0x111111, 0.38, 0.1) });
-    var sleeveMat = new Mat({ map: limbTexture(c1, skinColor, 0, 0.3, 0) });
+    var shortsMat = new Mat({ map: limbTexture(look.shorts, look.c1, 0x111111, 0.38, 0.1) });
+    var sleeveMat = new Mat({ map: limbTexture(look.c1, look.skin, 0, 0.3, 0) });
     mats.push(torsoMat, headMat, hairMat, shortsMat, sleeveMat);
 
     var body = new THREE.Group();
@@ -347,18 +471,121 @@
     var hair = new THREE.Mesh(geo.hair, hairMat);
     hair.position.y = 1.62;
     body.add(hair);
-    var leftArm = limb(body, geo.arm, sleeveMat, -0.52, 0.94, 0.98);
-    var rightArm = limb(body, geo.arm, sleeveMat, 0.52, 0.94, 0.98);
-    var leftLeg = limb(body, geo.limb, shortsMat, -0.2, 0.03, 1.17);
-    var rightLeg = limb(body, geo.limb, shortsMat, 0.2, 0.03, 1.17);
+    mesh.body = body;
+    mesh.leftArm = limb(body, geo.arm, sleeveMat, -0.52, 0.94, 0.98);
+    mesh.rightArm = limb(body, geo.arm, sleeveMat, 0.52, 0.94, 0.98);
+    mesh.leftLeg = limb(body, geo.limb, shortsMat, -0.2, 0.03, 1.17);
+    mesh.rightLeg = limb(body, geo.limb, shortsMat, 0.2, 0.03, 1.17);
+    mesh.hip = HIP; mesh.legX = 0.2; mesh.legW = 0.14; mesh.legLen = 1.17 + 0.03;
+  }
+
+  // ATHLETE / TOON: rounded bodies; ATHLETE players differ in height (1.72 - 1.92 m, keepers taller), hair and boots.
+  function buildRounded(mesh, Mat, look, m) {
+    var b = BUILDS[m], mats = mesh.mats, root = mesh.root, seg = SIDES[detail()], s = look.seed;
+    var metres = m === 'ATHLETE' ? 1.72 + rnd(s, 1) * 0.2 + (look.gk ? 0.05 : 0) : 1.81;
+    var h = Math.round(metres * NS.M * 50) / 50; // (a few sizes, so the lathes are shared)
+    var hairStyle = HAIR_STYLES[Math.floor(rnd(s, 2) * HAIR_STYLES.length)];
+    var hairColor = look.skin === 0x8d5524 ? 0x111111 : HAIR_COLORS[Math.floor(rnd(s, 3) * HAIR_COLORS.length)];
+    var boots = BOOT_COLORS[Math.floor(rnd(s, 4) * BOOT_COLORS.length)];
+
+    var shirtMat = new Mat({ map: jerseyTexture(look.pattern, look.c1, look.c2) });
+    var shortsMat = new Mat({ color: look.shorts });
+    var skinMat = new Mat({ color: look.skin });
+    var hairMat = new Mat({ color: hairColor });
+    var bootMat = new Mat({ color: boots });
+    // legs: shorts to mid-thigh, the knee, socks in the shirt colour; arms: sleeve, skin (a keeper: long sleeves, gloves)
+    var legMat = new Mat({ map: bandTexture([look.shorts, look.skin, look.c1], [0.3, 0.42, 1]) });
+    var armMat = new Mat({ map: look.gk ? bandTexture([look.c1, 0xf1f5f9], [0.8, 1]) : bandTexture([look.c1, look.skin], [0.3, 1]) });
+    mats.push(shirtMat, shortsMat, skinMat, hairMat, bootMat, legMat, armMat);
+
+    var hip = b.hip * h;
+    var body = new THREE.Group();
+    body.position.y = hip;
+    root.add(body);
+    var pelvis = new THREE.Mesh(bodyPart(m, seg, h, 'pelvis'), shortsMat);
+    pelvis.scale.z = b.pelvisZ;
+    body.add(pelvis);
+    var torso = new THREE.Mesh(bodyPart(m, seg, h, 'torso'), shirtMat);
+    torso.scale.z = b.torsoZ;
+    body.add(torso);
+    var head = new THREE.Mesh(bodyPart(m, seg, h, 'head'), skinMat);
+    head.scale.z = b.headZ;
+    body.add(head);
+    if (hairStyle !== 'bald') {
+      var hair = new THREE.Mesh(bodyPart(m, seg, h, 'hair', hairStyle), hairMat);
+      hair.scale.z = b.headZ;
+      hair.position.z = -0.006 * h; // a little to the back: the face stays clear
+      body.add(hair);
+    }
+    mesh.body = body;
+    var armG = bodyPart(m, seg, h, 'arm');
+    mesh.leftArm = limb(body, armG, armMat, -b.armX * h, b.armY * h, 0);
+    mesh.rightArm = limb(body, armG, armMat, b.armX * h, b.armY * h, 0);
+    var legG = bodyPart(m, seg, h, 'leg');
+    mesh.leftLeg = limb(body, legG, legMat, -b.legX * h, 0, 0);
+    mesh.rightLeg = limb(body, legG, legMat, b.legX * h, 0, 0);
+    // boots: a stretched ball at the end of each leg, toes forward
+    var bootG = bodyPart(m, seg, h, 'boot');
+    for (var i = 0; i < 2; i++) {
+      var boot = new THREE.Mesh(bootG, bootMat);
+      boot.scale.set(b.boot[0] * h, b.boot[1] * h, b.boot[2] * h);
+      boot.position.set(0, -hip + b.boot[3] * h, b.boot[2] * h * 0.35);
+      (i ? mesh.rightLeg : mesh.leftLeg).add(boot);
+    }
+    mesh.hip = hip; mesh.legX = b.legX * h; mesh.legW = b.legW * h; mesh.legLen = hip;
+  }
+
+  // Builds the body into mesh.root (kept: the player's position, facing and visibility stay as they are).
+  function build(mesh, lit) {
+    var Mat = lit ? THREE.MeshLambertMaterial : THREE.MeshBasicMaterial;
+    var root = mesh.root;
+    var shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.38 });
+    mesh.mats.push(shadowMat);
+    var shadow = new THREE.Mesh(geo.shadow, shadowMat);
+    shadow.position.y = 0.03;
+    root.add(shadow);
+    var m = model();
+    if (m === 'CLASSIC') buildClassic(mesh, Mat, mesh.look);
+    else buildRounded(mesh, Mat, mesh.look, m);
+    mesh.style = styleKey(lit);
     // his booking (warning / yellow / red), hidden until he gets one; it sits just under the controlled-player arrow
     var cardMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
-    mats.push(cardMat);
+    mesh.mats.push(cardMat);
     var card = new THREE.Mesh(geo.card, cardMat);
     card.position.y = 3.5;
     card.visible = false;
     root.add(card);
-    return { root: root, body: body, leftLeg: leftLeg, rightLeg: rightLeg, leftArm: leftArm, rightArm: rightArm, card: card, mats: mats };
+    mesh.card = card;
+  }
+
+  // Returns { root, body, leftLeg, rightLeg, leftArm, rightArm, card, mats, hip, legX, legW, legLen } (mats are owned
+  // by the player and disposed with him). look = { pattern, c1, c2, shorts, skin, gk, seed }.
+  function createPlayer(look, lit) {
+    var mesh = { root: new THREE.Group(), look: look, mats: [], style: '' };
+    build(mesh, lit);
+    return mesh;
+  }
+
+  // The model or the polygons changed: the body is built again in place (same root, booking kept). False when the
+  // player already looks that way.
+  function styleKey(lit) { return model() + '|' + detail() + '|' + (lit ? 1 : 0); }
+
+  function restylePlayer(mesh, lit) {
+    if (mesh.style === styleKey(lit)) return false;
+    var cardOn = mesh.card.visible, cardColor = mesh.card.material.color.getHex();
+    for (var i = mesh.root.children.length - 1; i >= 0; i--) mesh.root.remove(mesh.root.children[i]);
+    disposePlayer(mesh);
+    mesh.mats = [];
+    build(mesh, lit);
+    mesh.card.visible = cardOn;
+    mesh.card.material.color.setHex(cardColor);
+    return true;
+  }
+
+  // the rounded bodies' shared lathes (after every player was rebuilt with other polygons)
+  function dropBodyGeometry() {
+    for (var k in bodyGeo) bodyGeo[k].dispose();
+    bodyGeo = {};
   }
 
   function disposePlayer(mesh) {
@@ -376,6 +603,7 @@
     pitchTexture = null;
     for (k in ballTextures) ballTextures[k].dispose();
     ballTextures = {};
+    dropBodyGeometry();
   }
 
   NS.Assets = {
@@ -387,6 +615,10 @@
     pitchTexture: buildPitchTexture,
     ballTexture: ballTexture,
     createPlayer: createPlayer,
+    restylePlayer: restylePlayer,
+    styleKey: styleKey,
+    dropBodyGeometry: dropBodyGeometry,
+    rebuildBall: rebuildBall,
     disposePlayer: disposePlayer,
     disposeAll: disposeAll
   };

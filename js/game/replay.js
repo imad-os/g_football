@@ -14,7 +14,8 @@
   var World = NS.World;
   var HZ = 30, STEP = 1 / HZ;
   var Q = 100;
-  var H = 16, E = 14, MAX_E = 24;           // header numbers, numbers per body, bodies (22 players + the referee)
+  var H = 17, E = 15, MAX_E = 24;           // header numbers, numbers per body, bodies (22 players + the referee)
+  var BALL_Y = 16;                          // (the ball's turn about the vertical)
   var FSM = H + MAX_E * E;                   // ring stride
   var CAP = 20 * HZ + 10;                    // ring frames (the longest replay length)
   var AFTER = Math.round(2.5 * HZ);          // frames of a goal's clip after the ball went in
@@ -43,7 +44,7 @@
     var i, k;
     for (i = 0; i < FSM; i++) { SC[i] = Q; ANG[i] = 0; }
     SC[13] = SC[14] = SC[15] = 1;   // clock (whole seconds), score
-    ANG[9] = ANG[10] = 1;           // ball spin
+    ANG[9] = ANG[10] = ANG[BALL_Y] = 1; // ball spin
     for (k = 0; k < MAX_E; k++) {
       ANG[H + k * E + 3] = 1;       // facing
       SC[H + k * E + 13] = 1;       // flags
@@ -60,7 +61,7 @@
   // what is on screen now -> b (floats)
   function grab(b) {
     var m = World.match;
-    NS.Scene.camState(b, 0);
+    NS.Scene.camState(b, 0, BALL_Y);
     b[13] = Math.floor(m.timeSeconds); b[14] = m.score[0]; b[15] = m.score[1];
     for (var i = 0; i < ents.length; i++) {
       var me = ents[i], o = H + i * E;
@@ -68,14 +69,14 @@
       b[o + 4] = me.body.position.y; b[o + 5] = me.body.rotation.x; b[o + 6] = me.body.rotation.z;
       b[o + 7] = me.leftLeg.rotation.x; b[o + 8] = me.rightLeg.rotation.x;
       b[o + 9] = me.leftArm.rotation.x; b[o + 10] = me.rightArm.rotation.x;
-      b[o + 11] = me.leftArm.rotation.z; b[o + 12] = me.rightArm.rotation.z;
+      b[o + 11] = me.leftArm.rotation.z; b[o + 12] = me.rightArm.rotation.z; b[o + 14] = me.rightLeg.rotation.z;
       b[o + 13] = (me.root.visible ? 1 : 0) + (me.card.visible ? 2 : 0) + (me.card.material.color.getHex() === RED ? 4 : 0);
     }
   }
 
   // b (floats) -> on screen
   function put(b) {
-    NS.Scene.setCamState(b, 0);
+    NS.Scene.setCamState(b, 0, BALL_Y);
     for (var i = 0; i < ents.length; i++) {
       var me = ents[i], o = H + i * E, f = b[o + 13];
       me.root.position.set(b[o], b[o + 1], b[o + 2]); me.root.rotation.y = b[o + 3];

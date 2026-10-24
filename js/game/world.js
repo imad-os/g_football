@@ -169,6 +169,8 @@
     fromX: 0, fromZ: 0, // where it was last played from (kick, header, deflection): the next player's reaction time
     age: 0,          // seconds since then
     headed: false,   // the last touch was a header
+    thru: null, thruT: 0, // the player it just went through the legs of (he cannot touch it for thruT seconds)
+    nutP: null, nutAge: 0, // the last player a through-the-legs check was made for, and when (ball.age)
     offTeam: -1      // team whose last pass left some of its players offside (their p.offside flags), -1 none
   };
 
@@ -235,6 +237,7 @@
       ball.contester = null;
       ball.pickupCooldown = 0.25;
       ball.offTeam = -1;
+      ball.thru = null; ball.thruT = 0; ball.nutP = null;
     },
 
     // Advances the ball. Returns the scoring team (0 = home, +x goal; 1 = away) or -1.

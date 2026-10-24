@@ -92,6 +92,7 @@
       if (NS.Quality.mode() !== s.quality) NS.Quality.apply(s.quality);
       NS.HUD.applySettings(s);
       NS.Scene.setBallSkin(s.ballSkin);
+      NS.Match.restyle(); // player models / polygons (at once, also during a match)
       // 7 or 11 a side: the squads are rebuilt for the next match (a running match keeps its own)
       if (!World.match.running && NS.TEAM_SIZE !== s.teamSize) NS.Match.syncRosters();
     },
@@ -130,7 +131,7 @@
 
         NS.HUD.init();
         NS.Quality.init(info.quality && info.quality.tier, function (tier) {
-          if (sceneReady) NS.Scene.applyTier(tier);
+          if (sceneReady) { NS.Scene.applyTier(tier); NS.Match.restyle(); } // (Polygons AUTO follows the tier)
           NS.HUD.setQuality(NS.Quality.label());
         }, function (fps) { NS.HUD.setFps(fps); });
         NS.Quality.apply(settings.quality);

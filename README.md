@@ -338,6 +338,12 @@ repeats the same loop. **Settings > Crowd chants** turns the songs off.
 
 **Ball**: Settings > Ball has 5 designs (CLASSIC, PRO, NIGHT, RETRO, GOLD).
 
+**Player models** (Settings > Graphics): `ATHLETE` (default: a real footballer's build, legs about half the height, heights
+1.72-1.92 m with taller keepers, hair styles and boot colours that stay the same for a player every match; keepers wear long
+sleeves and gloves), `CLASSIC` (the original blocks) or `TOON` (big heads, short legs). **Polygons**: LOW / MEDIUM / HIGH /
+ULTRA sides for the rounded bodies and the ball (more = rounder, slower on old TVs); `AUTO` follows the graphics quality.
+Both apply at once, also during a match.
+
 **Kits**: every team has a change kit (white with the club colour, or dark navy for teams in a light colour). When the shirts of
 both teams look alike, the away team wears its change kit (or a third colour when that still clashes); the keepers get colours
 that differ from both teams.
@@ -345,11 +351,20 @@ that differ from both teams.
 **HUD**: the player boxes are small and see-through, and a box (or the radar) fades out when the ball is behind it.
 
 **Settings** has three tabs: **Gameplay** (difficulty, match length, pace, power bar speed, player switch), **Graphics**
-(camera, ball, quality, radar, FPS) and **Audio** (sound effects, crowd chants); **Button mapping** is at the bottom.
+(camera, ball, player models, polygons, quality, radar, FPS) and **Audio** (sound effects, crowd chants); **Button mapping** is at the bottom.
 
 ## Physics and animation
 
-* Pitch 105 x 68 (real size), ball radius 0.43. The 7-a-side formations are stretched to it.
+* Pitch 105 x 68 (real size). The 7-a-side formations are stretched to it.
+* Scale: 1.6 world units to the metre (`NS.M`), set by the players (an average footballer, 1.81 m, is 2.9 units tall). The ball
+  is a real size 5 ball at that scale: 22 cm across (68-70 cm round), radius 0.176, about 1/8 of a player's height. On the
+  grass it rolls without slipping about the right axis (a quaternion turn per step), in the air it keeps its spin, and its
+  shadow on the grass shows how high it flies.
+* **Through the legs (nutmegs)**: a low ball whose path crosses the line between a player's feet, with room for it on both
+  sides, goes on past him. The legs are taken in their pose of that step (stride, lunge, wide stance when jockeying, lean),
+  so a player standing with his feet together cannot be nutmegged, while a lunging defender can. An opponent may still close
+  his legs in time (slower ball, more time to see it, better defending); a team-mate lets a pass meant for someone else run
+  through (a dummy).
 * Ball (js/game/world.js): gravity, light air drag, rolling drag plus rolling resistance (the ball stops instead of creeping),
   bounces that lose height and some pace, spin that curls the ball sideways in the air, posts and crossbar that the ball bounces
   off. `World.predict` / `World.intercept` run the same physics ahead so receivers, the CPU and the keeper read the flight.
@@ -379,7 +394,7 @@ js/main.js            My PC lifecycle (init / ready / start / pause / resume / d
 * Matches: controllers through `MyPC.gamepad` (buttons, sticks, pad list; never `navigator.getGamepads()` ourselves). Menus: `MyPC.init({ onInput })` actions (arrows + OK, cancel goes back). No `keydown` listeners.
 * The guide asks for play with the TV remote alone; this game is deliberately controller-only in matches (owner's choice), the menus still work with the remote.
 * Saves: `MyPC.save/load` (`stats`, `settings`, `bindings`). Score: `MyPC.submitScore` at full time of a match with a human player.
-* Owner config (`MyPC.app_config`, defaults in `mypc-app.json` `config`): `difficulty`, `durationMins`, `gameSpeed`, `switchMode`, `cameraMode`, `ballSkin`, `crowdChants`, `gaugeTime`, `quality`, `soundEnabled`, `showRadar`, `showFPS`.
+* Owner config (`MyPC.app_config`, defaults in `mypc-app.json` `config`): `difficulty`, `durationMins`, `gameSpeed`, `switchMode`, `cameraMode`, `ballSkin`, `playerModel`, `playerDetail`, `crowdChants`, `gaugeTime`, `quality`, `soundEnabled`, `showRadar`, `showFPS`.
 * Touch: My PC's own virtual pad on phones and tablets (no `"touch"` entry in the manifest); phones can also be phone controllers.
 * Fixed 60 Hz step, no allocation in the update loop, DOM written only when a value changes, one `AudioContext` closed in `onDestroy`.
 

@@ -3,7 +3,9 @@
   'use strict';
 
   var renderer, scene, camera, dirLight, ambLight;
-  var pitchMesh, crowdMesh, ballMesh;
+  var pitchMesh, crowdMesh, ballMesh, ballShadow, ballShadowMat;
+  var spinQ = null, spinAxis = null;
+  var wx = 0, wy = 0, wz = 0;  // the ball's spin (rad/s, world axes)
   var stadium = null;       // everything sized from the pitch (rebuilt when the stadium changes)
   var trail = [];           // pooled spheres behind a shot
   var TRAIL_N = 9;
@@ -113,6 +115,12 @@
 
       ballMesh = new THREE.Mesh(NS.Assets.geo.ball, new THREE.MeshLambertMaterial({ color: 0xffffff, map: NS.Assets.ballTexture('CLASSIC') }));
       scene.add(ballMesh);
+      // its shadow on the grass: smaller and fainter the higher it flies (a small real-size ball is easy to follow)
+      ballShadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.4, depthWrite: false });
+      ballShadow = new THREE.Mesh(NS.Assets.geo.ballShadow, ballShadowMat);
+      scene.add(ballShadow);
+      spinQ = new THREE.Quaternion();
+      spinAxis = new THREE.Vector3();
       var trailMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.32, depthWrite: false });
       for (var t = 0; t < TRAIL_N; t++) {
         var tm = new THREE.Mesh(NS.Assets.geo.trail, trailMat);
@@ -163,10 +171,37 @@
     },
     add: function (obj) { scene.add(obj); },
     remove: function (obj) { scene.remove(obj); },
-    setBall: function (pos, rotX, rotZ) {
+    // The ball for this step: on the grass (or at a player's feet) it rolls without slipping (spin axis = up x velocity,
+    // rate = speed / radius); in the air it keeps the spin it left the grass or the boot with. sideSpin = curl (World).
+    setBall: function (pos, vel, sideSpin, dt, grounded) {
+      var R = NS.BALL_R;
+      if (grounded) { wx = vel.z / R; wy = 0; wz = -vel.x / R; }
+      else { var k = Math.exp(-0.3 * dt); wx *= k; wz *= k; }
+      wy += (sideSpin * 0.6 - wy) * 0.1;
+      var w = Math.sqrt(wx * wx + wy * wy + wz * wz);
+      if (w > 1e-4) {
+        spinAxis.set(wx / w, wy / w, wz / w);
+        spinQ.setFromAxisAngle(spinAxis, w * dt);
+        ballMesh.quaternion.premultiply(spinQ);
+        ballMesh.quaternion.normalize();
+      }
       ballMesh.position.copy(pos);
-      ballMesh.rotation.x = rotX;
-      ballMesh.rotation.z = rotZ;
+      this.placeBallShadow();
+    },
+    placeBallShadow: function () {
+      var p = ballMesh.position, up = p.y - NS.BALL_R;
+      var s = 1 / (1 + up * 0.12);
+      ballShadow.position.set(p.x, 0.025, p.z);
+      ballShadow.scale.set(s, 1, s);
+      ballShadowMat.opacity = 0.4 * s;
+    },
+    // Settings > Polygons: the ball with its new number of faces
+    rebuildBall: function () {
+      if (!ballMesh) return;
+      var old = NS.Assets.rebuildBall();
+      if (!old) return;
+      ballMesh.geometry = NS.Assets.geo.ball;
+      old.dispose();
     },
     setBallSkin: function (skin) {
       if (!ballMesh) return;
@@ -227,20 +262,22 @@
       camera.lookAt(lookTarget);
     },
     render: function () { renderer.render(scene, camera); },
-    // replays (js/game/replay.js): what the camera, the ball and the nets look like now, 13 numbers from out[o]
-    camState: function (out, o) {
+    // replays (js/game/replay.js): what the camera, the ball and the nets look like now, 13 numbers from out[o], and the
+    // ball's turn about the vertical in out[y]
+    camState: function (out, o, y) {
       out[o] = camera.position.x; out[o + 1] = camera.position.y; out[o + 2] = camera.position.z;
       out[o + 3] = lookTarget.x; out[o + 4] = lookTarget.y; out[o + 5] = lookTarget.z;
       out[o + 6] = ballMesh.position.x; out[o + 7] = ballMesh.position.y; out[o + 8] = ballMesh.position.z;
-      out[o + 9] = ballMesh.rotation.x; out[o + 10] = ballMesh.rotation.z;
+      out[o + 9] = ballMesh.rotation.x; out[o + 10] = ballMesh.rotation.z; out[y] = ballMesh.rotation.y;
       out[o + 11] = nets[0] ? nets[0].scale.x - 1 : 0; out[o + 12] = nets[1] ? nets[1].scale.x - 1 : 0;
     },
-    setCamState: function (a, o) {
+    setCamState: function (a, o, y) {
       camera.position.set(a[o], a[o + 1], a[o + 2]);
       lookTarget.set(a[o + 3], a[o + 4], a[o + 5]);
       camera.lookAt(lookTarget);
       ballMesh.position.set(a[o + 6], a[o + 7], a[o + 8]);
-      ballMesh.rotation.x = a[o + 9]; ballMesh.rotation.z = a[o + 10];
+      ballMesh.rotation.set(a[o + 9], a[y], a[o + 10]);
+      this.placeBallShadow();
       for (var n = 0; n < 2; n++) {
         if (!nets[n]) continue;
         var bulge = a[o + 11 + n];

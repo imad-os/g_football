@@ -6,7 +6,7 @@
   "type": "game",
   "entry": "index.html",
   "icon": "icon.svg",
-  "version": "1.30.0",
+  "version": "1.31.0",
   "scores": true,
   "config": {
     "difficulty": "NORMAL",
@@ -16,6 +16,8 @@
     "randomEnds": false,
     "cameraMode": "WIDE",
     "ballSkin": "CLASSIC",
+    "playerModel": "ATHLETE",
+    "playerDetail": "AUTO",
     "crowdChants": true,
     "gaugeTime": 0.5,
     "teamSize": 11,

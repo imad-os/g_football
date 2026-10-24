@@ -12,8 +12,6 @@
   NS.pitchHooks.push(function () { HALF_W = NS.PITCH_HALF_W; HALF_H = NS.PITCH_HALF_H; });
 
   var SKIN = [0xf1c27d, 0xe0ac69, 0x8d5524, 0xc68642];
-  var ballRotX = 0;
-  var ballRotZ = 0;
   var labels = { p1: 'P1', p2: 'P2', cpu: 'CPU' };
   var lastSecond = -1;
   var lastOwner = null;
@@ -59,9 +57,12 @@
     var armL = -legL * 0.85;
     var armR = -armL;
     var outL = 0.08, outR = 0.08;
+    // feet apart (legs out to the sides): together when running, a wider stance when he jockeys / closes down slowly
+    var spread = sp > 0.5 && sp < 5 ? 0.13 : (run > 0.5 ? 0.03 : 0.05);
     var lean = 0.18 * run;
     var roll = 0;
-    var hipY = HIP + Math.abs(Math.cos(p.animPhase)) * 0.09 * run;
+    var H0 = mesh.hip, hs = H0 / HIP; // this model's hip height (the drops below are for the 1.2 of the blocks)
+    var hipY = H0 + Math.abs(Math.cos(p.animPhase)) * 0.09 * hs * run;
     var u, b;
 
     if (p.diveT > 0) {
@@ -69,21 +70,21 @@
       u = 1 - p.diveT / 0.8;
       b = ease(u / 0.25) * (1 - ease((u - 0.75) / 0.25));
       roll = p.diveRoll * b;
-      hipY = HIP - 0.5 * b + (p.diveHigh ? 0.8 * Math.sin(clamp(u, 0, 1) * PI) : 0);
+      hipY = H0 - 0.5 * hs * b + (p.diveHigh ? 0.8 * Math.sin(clamp(u, 0, 1) * PI) : 0);
       armL = armR = -2.9 * b;
       outL = outR = 0.25 * b;
-      legL = 0.2 * b; legR = -0.2 * b; lean = 0;
+      legL = 0.2 * b; legR = -0.2 * b; lean = 0; spread = 0.2 * b;
     } else if (p.headT > 0) {
       // header: a crouch, a real jump (the whole body leaves the grass), arch back, snap the head through the ball
       u = 1 - p.headT / 0.55;
       var crouch = u < 0.15 ? Math.sin(u / 0.15 * PI) : 0;
       b = u < 0.15 ? 0 : Math.sin((u - 0.15) / 0.85 * PI);
-      hipY = HIP - 0.25 * crouch + 0.85 * b;
+      hipY = H0 - 0.25 * hs * crouch + 0.85 * b;
       lean = u < 0.5 ? -0.4 * clamp((u - 0.1) / 0.4, 0, 1) : -0.4 + 0.95 * ((u - 0.5) / 0.5);
       lean *= u < 0.15 ? 0 : 1;
       legL = 0.45 * b - 0.3 * crouch; legR = -0.35 * b - 0.3 * crouch;
       armL = armR = -1.1 * b;
-      outL = outR = 0.08 + 0.6 * b;
+      outL = outR = 0.08 + 0.6 * b; spread = 0.1 * b;
     } else if (p.catchT > 0) {
       // keeper catch: both hands up to the ball
       u = 1 - p.catchT / 0.4;
@@ -103,20 +104,20 @@
       u = 1 - p.slideT / 0.85;
       b = ease(u / 0.15) * (1 - ease((u - 0.75) / 0.25));
       lean = -1.15 * b;
-      hipY = HIP - 0.72 * b;
+      hipY = H0 - 0.72 * hs * b;
       legR = legR * (1 - b) - 0.35 * b;
       legL = legL * (1 - b) + 0.75 * b;
       armL = armL * (1 - b) - 0.5 * b; armR = armR * (1 - b) - 0.2 * b;
-      outL = 0.08 + 0.9 * b; outR = 0.08 + 0.6 * b;
+      outL = 0.08 + 0.9 * b; outR = 0.08 + 0.6 * b; spread = 0.25 * b;
     } else if (p.fallT > 0) {
       // lost the ball in a tackle: knocked off balance
       u = 1 - p.fallT / 0.55;
       b = Math.sin(clamp(u, 0, 1) * PI);
       lean = -0.45 * b;
       roll = 0.35 * b;
-      hipY = HIP - 0.2 * b;
+      hipY = H0 - 0.2 * hs * b;
       outL = outR = 0.08 + 0.9 * b;
-      legL = 0.3 * b; legR = -0.4 * b;
+      legL = 0.3 * b; legR = -0.4 * b; spread = 0.2 * b;
     } else if (p.shoulderT > 0) {
       // shoulder to shoulder: leans sideways into the other player, arm tucked in
       u = 1 - p.shoulderT / 0.32;
@@ -130,8 +131,8 @@
       lean = 0.2 + 0.25 * b;
       legR = legR * (1 - b) - 1.15 * b;
       legL = legL * (1 - b) + 0.45 * b;
-      hipY = HIP - 0.16 * b;
-      outL = outR = 0.08 + 0.55 * b;
+      hipY = H0 - 0.16 * hs * b;
+      outL = outR = 0.08 + 0.55 * b; spread = 0.05 + 0.32 * b; // legs wide open: the ball can go through
     } else if (p.kickT > 0) {
       // kick: back-swing then strike through the ball (bigger swing and lean-back for shots and long balls)
       var dur = p.kickHard ? 0.36 : 0.28;
@@ -143,28 +144,28 @@
       legL = 0.15;
       lean = p.kickHard ? (u < 0.25 ? 0.15 : -0.22) : 0.08;
       armL = 0.4; armR = -0.3;
-      outL = 0.95; outR = 0.45;
-      hipY = HIP;
+      outL = 0.95; outR = 0.45; spread = 0.08;
+      hipY = H0;
     } else if (p.mood === 1 || (p.mood === 4 && sp < 2.5)) {
       // celebrating: jumping, both arms up, waving
       b = Math.abs(Math.sin(breakClock * 7 + p.index));
-      hipY = HIP + 0.45 * b;
+      hipY = H0 + 0.45 * b;
       armL = -2.75 + Math.sin(breakClock * 9 + p.index) * 0.3;
       armR = -2.75 - Math.sin(breakClock * 9 + p.index) * 0.3;
       outL = outR = 0.35;
       lean = -0.1;
-      legL = 0.25 * b; legR = -0.25 * b;
+      legL = 0.25 * b; legR = -0.25 * b; spread = 0.12 * b;
     } else if (p.mood === 4) {
       // the scorer's run to the corner: arms spread like wings
       outL = outR = 1.45; armL = armR = 0; lean = 0.25;
     } else if (p.mood === 2) {
       // dejected: head down, arms hanging, slow walk
-      lean = 0.38; outL = outR = 0.02; armL *= 0.3; armR *= 0.3; hipY -= 0.05;
+      lean = 0.38; outL = outR = 0.02; armL *= 0.3; armR *= 0.3; hipY -= 0.05 * hs;
     } else if (p.mood === 3) {
       // on the knees
-      hipY = HIP * 0.56; lean = 0.25; legL = -1.45; legR = -1.45; armL = armR = 0.15; outL = outR = 0.12;
+      hipY = H0 * 0.56; lean = 0.25; legL = -1.45; legR = -1.45; armL = armR = 0.15; outL = outR = 0.12;
     } else if (p.stun > 0) {
-      lean = 0.3; outL = outR = 0.4;
+      lean = 0.3; outL = outR = 0.4; spread = 0.15;
     } else if (p.gkHands && World.ball.owner === p) {
       armL = armR = -1.3; outL = outR = 0.1; // ball held in front
     }
@@ -174,6 +175,8 @@
     mesh.body.rotation.z = roll;
     mesh.leftLeg.rotation.x = legL;
     mesh.rightLeg.rotation.x = legR;
+    mesh.leftLeg.rotation.z = -spread;
+    mesh.rightLeg.rotation.z = spread;
     mesh.leftArm.rotation.x = armL;
     mesh.rightArm.rotation.x = armR;
     mesh.leftArm.rotation.z = -outL;
@@ -181,6 +184,70 @@
   }
 
   function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+  // Where a leg meets the ball's height (drop = hips - ball centre), across (x) and along his facing (z): legPX / legPZ.
+  // A leg lifted over the ball (a stride, a kick) gives its foot instead, and legLow = false: the ball rolls under it.
+  var legPX = 0, legPZ = 0, legLow = false;
+  function legAt(side, legX, a, spread, drop, len) {
+    var ca = Math.cos(a), cs = Math.cos(spread);
+    if (ca < 0.2) ca = 0.2;
+    var l = Math.min(len, drop / (cs * ca));
+    legLow = len * cs * ca > drop - R; // its foot is below the top of the ball
+    legPX = side * (legX + l * Math.sin(spread));
+    legPZ = -l * cs * Math.sin(a);
+  }
+
+  // Through his legs (a nutmeg): a low ball whose path crosses the line between his feet, with room for it on both sides,
+  // goes on past him unless he sees it in time to close his legs. The legs are taken in this step's pose (stride, lunge,
+  // stance, lean) and the ball at its real size, so a player standing with his feet together cannot be nutmegged.
+  // A team-mate lets a pass meant for someone else run through (a dummy).
+  function throughLegs(p, ball) {
+    var me = p.mesh;
+    if (p.diveT > 0 || p.headT > 0 || me.body.rotation.z > 0.25 || me.body.rotation.z < -0.25) return false;
+    if (ball.receiver === p) return false;
+    var hipY = me.body.position.y;
+    if (ball.pos.y + R > hipY - me.legW * 2 || ball.vel.y > 2.5) return false; // it has to pass under his shorts
+    // the ball and its speed relative to him, in his frame (z = the way he faces)
+    var c = Math.cos(p.facing), s = Math.sin(p.facing);
+    var dx = ball.pos.x - p.pos.x, dz = ball.pos.z - p.pos.z;
+    var lx = dx * c - dz * s, lz = dx * s + dz * c;
+    var wx = ball.vel.x - p.vel.x, wz = ball.vel.z - p.vel.z;
+    var ux = wx * c - wz * s, uz = wx * s + wz * c;
+    var sp = Math.sqrt(ux * ux + uz * uz);
+    if (sp < 5) return false; // a slow ball: he just puts his foot on it
+    ux /= sp; uz /= sp;
+    var lean = me.body.rotation.x, drop = hipY - ball.pos.y;
+    legAt(-1, me.legX, me.leftLeg.rotation.x + lean, me.rightLeg.rotation.z, drop, me.legLen);
+    var ax = legPX, az = legPZ, lowA = legLow;
+    legAt(1, me.legX, me.rightLeg.rotation.x + lean, me.rightLeg.rotation.z, drop, me.legLen);
+    var bx = legPX, bz = legPZ, lowB = legLow;
+    // where its path crosses the line from foot to foot (t ahead of it, f between the feet)
+    var ex = bx - ax, ez = bz - az;
+    var den = ux * ez - uz * ex;
+    if (den < 1e-6 && den > -1e-6) return false;
+    var qx = ax - lx, qz = az - lz;
+    var t = (qx * ez - qz * ex) / den, f = (qx * uz - qz * ux) / den;
+    if (t <= 0 || f <= 0 || f >= 1) return false;
+    // room on both sides: neither leg that is down touches the ball as it goes by
+    var room = R + me.legW;
+    var gapA = qx * uz - qz * ux, gapB = (bx - lx) * uz - (bz - lz) * ux;
+    if ((lowA && (gapA < 0 ? -gapA : gapA) < room) || (lowB && (gapB < 0 ? -gapB : gapB) < room)) return false;
+    if (p.team === ball.lastTouchTeam) return !!ball.receiver;
+    if (NS.dbg) NS.dbg('nutmeg_open', ball.lastTouchTeam); // the ball would go through: does he close his legs in time?
+    // too late to close his legs: a quick ball, played from close by, against a poor defender
+    var tc = t / sp;
+    var chance = clamp((sp - 5) / 12, 0.15, 1) * (1 - p.st.def / 99 * 0.45) * (tc < 0.2 ? 1 : 0.6) * (p.role === 'GK' ? 0.5 : 1);
+    if (Math.random() >= chance) return false;
+    ball.thruT = clamp((t + 1.2) / sp, 0.2, 0.6);
+    return true;
+  }
+
+  // a number from the player's name: his height, hair and boots are the same every match
+  function seedOf(name, k) {
+    var s = k + 1;
+    for (var i = 0; i < name.length; i++) s = (s * 31 + name.charCodeAt(i)) % 100003;
+    return s;
+  }
 
   function layoutOf(teamIdx) { return NS.FORMATIONS[World.session.formations[teamIdx]]; }
 
@@ -387,9 +454,7 @@
     var players = World.players;
     breakClock += dt;
     if (World.stepBall(dt) <= -3) ball.vel.set(0, 0, 0); // out of play: it stops there
-    ballRotX += ball.vel.z * dt / R;
-    ballRotZ -= ball.vel.x * dt / R;
-    NS.Scene.setBall(ball.pos, ballRotX, ballRotZ);
+    NS.Scene.setBall(ball.pos, ball.vel, ball.spinY, dt, ball.pos.y < R + 0.03);
     NS.Scene.trail(false, ball.pos);
     if (World.netHit) { NS.Scene.netHit(World.netHit); World.netHit = 0; }
     for (var i = 0; i < players.length; i++) {
@@ -908,8 +973,8 @@
         for (i = 0; i < layout.length; i++) {
           var slot = layout[i];
           var gk = slot.role === 'GK';
-          var mesh = NS.Assets.createPlayer(gk ? 'SOLID' : td.pattern, gk ? kits.gk[t] : td.c1, td.c2,
-            td.shorts, SKIN[(i + t) % SKIN.length], lit);
+          var mesh = NS.Assets.createPlayer({ pattern: gk ? 'SOLID' : td.pattern, c1: gk ? kits.gk[t] : td.c1, c2: td.c2,
+            shorts: td.shorts, skin: SKIN[(i + t) % SKIN.length], gk: gk, seed: seedOf(names[i] || '', t * 31 + i) }, lit);
           NS.Scene.add(mesh.root);
           var pos = mesh.root.position;
           pos.set(slot.x * dir * SX(), 0, slot.z * dir * SZ());
@@ -940,7 +1005,7 @@
       NS.HUD.setTeams(homeT, awayT, kits.home.c1, kits.away.c1);
       World.kitColors = [kits.home.c1, kits.away.c1]; // (the full-time screen)
       if (ref) { NS.Scene.remove(ref.mesh.root); NS.Assets.disposePlayer(ref.mesh); }
-      var rm = NS.Assets.createPlayer('SOLID', kits.ref, kits.ref, 0x111111, SKIN[1], lit);
+      var rm = NS.Assets.createPlayer({ pattern: 'SOLID', c1: kits.ref, c2: kits.ref, shorts: 0x111111, skin: SKIN[1], gk: false, seed: 7 }, lit);
       NS.Scene.add(rm.root);
       ref = {
         mesh: rm, pos: rm.root.position, vel: new THREE.Vector3(), facing: 0, index: 0, animPhase: 0, mood: 0, stun: 0,
@@ -1321,14 +1386,26 @@
         var taker = null;
         var takerD = 1.35;
         var gkActed = false;
+        if (ball.thruT > 0) ball.thruT -= dt;
         for (i = 0; i < n; i++) {
           p = players[i];
           if (p.stun > 0 || p.tackleT > 0) continue;
           if (p.ftT > 0) continue; // a first-time pass / shot is queued: he plays it without taking the ball (controls.js)
           if (p === ball.kicker && ball.kickerT > 0) continue;
+          if (p === ball.thru && ball.thruT > 0) continue; // it went through his legs: it is behind him now
           var ddx = ball.pos.x - p.pos.x;
           var ddz = ball.pos.z - p.pos.z;
           var d2 = ddx * ddx + ddz * ddz;
+          // coming into his reach: through his legs? (decided once per player and touch of the ball)
+          if (d2 < (p.role === 'GK' ? 3.8 : 1.35) && !(ball.nutP === p && ball.age >= ball.nutAge)) {
+            ball.nutP = p; ball.nutAge = ball.age;
+            if (throughLegs(p, ball)) {
+              ball.thru = p;
+              if (NS.dbg) NS.dbg(p.team === ball.lastTouchTeam ? 'dummy' : 'nutmeg', ball.lastTouchTeam);
+              if (p.team !== ball.lastTouchTeam) { NS.Audio.ooh(); NS.HUD.hint(NS.I18n.t('hud.nutmeg'), 1.2); }
+              continue;
+            }
+          }
           if (p.role === 'GK' && ball.lastTouchTeam !== p.team && inOwnBox(p.team)) {
             // a diving keeper reaches much further (full stretch, hands up to the top corner)
             var gkReach = p.diveT > 0 ? 7.3 : 3.8; // squared: ~1.95 standing, ~2.7 at full stretch
@@ -1463,10 +1540,8 @@
       // ----- ball, goal, camera -----
       if (NS.Stats) NS.Stats.tick(dt);
       var scored = World.stepBall(dt);
-      // rolling without slipping: angle = distance / radius
-      ballRotX += ball.vel.z * dt / R;
-      ballRotZ -= ball.vel.x * dt / R;
-      NS.Scene.setBall(ball.pos, ballRotX, ballRotZ);
+      // rolling without slipping on the grass (angle = distance / radius), its own spin in the air
+      NS.Scene.setBall(ball.pos, ball.vel, ball.spinY, dt, ball.owner ? !ball.owner.gkHands && !ball.owner.throwIn : ball.pos.y < R + 0.03);
       NS.Scene.trail(ball.hard && !ball.owner, ball.pos); // streak behind a shot
       if (World.netHit) { NS.Scene.netHit(World.netHit); World.netHit = 0; }
       if (scored >= 0) triggerGoal(scored);
@@ -1519,7 +1594,23 @@
 
     // Static meshes need to match the ball after a rebuild-less reset (menu background).
     syncBall: function () {
-      NS.Scene.setBall(World.ball.pos, ballRotX, ballRotZ);
+      NS.Scene.setBall(World.ball.pos, World.ball.vel, 0, 0, true);
+    },
+
+    // Settings > Player models / Polygons (or the quality tier under AUTO): the bodies and the ball are built again in
+    // place, also in the middle of a match (positions, poses, bookings and replays carry on).
+    restyle: function () {
+      var lit = NS.Scene.lit(), want = NS.Assets.styleKey(lit), all = [], i;
+      for (i = 0; i < World.players.length; i++) all.push(World.players[i]);
+      for (i = 0; i < World.sentOff.length; i++) all.push(World.sentOff[i]);
+      if (ref) all.push(ref);
+      var stale = false;
+      for (i = 0; i < all.length; i++) if (all[i].mesh.style !== want) stale = true;
+      if (stale) {
+        NS.Assets.dropBodyGeometry(); // (every body is rebuilt below, before the next frame is drawn)
+        for (i = 0; i < all.length; i++) { NS.Assets.restylePlayer(all[i].mesh, lit); animate(all[i], 0); }
+      }
+      NS.Scene.rebuildBall();
     }
   };
 

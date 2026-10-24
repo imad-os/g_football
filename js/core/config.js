@@ -2,11 +2,13 @@
 (function (NS) {
   'use strict';
 
-  NS.VERSION = '1.30.0';
+  NS.VERSION = '1.31.0';
 
   // Pitch geometry (world units; x = length, z = width, y = up). The players and the goal are drawn ~1.5x real size,
   // so the markings around the goal are the real ones scaled to the goal (BOX_K), not to the pitch: the boxes look
   // like a real penalty area next to the players. The pitch size comes from the stadium (NS.usePitch).
+  // NS.M: world units per metre, from the players: an average footballer (1.81 m) is 2.9 units tall.
+  NS.M = 1.6;
   NS.GOAL_HALF_W = 5.6;
   var BOX_K = 1.25;
   NS.BOX_D = 16.5 * BOX_K;                  // penalty area: depth and half width
@@ -45,7 +47,8 @@
   };
   NS.GOAL_DEPTH = 2.6;
   NS.GOAL_HEIGHT = 3.6;
-  NS.BALL_R = 0.432; // 10% smaller than the original 0.48
+  // A real size 5 ball: 68-70 cm round, 22 cm across, about 1/8 of a player's height (it fits between his legs)
+  NS.BALL_R = 0.11 * NS.M;
 
   // Debug matches (js/game/debug.js): the event counter, null outside a debug run
   NS.dbg = null;
@@ -67,6 +70,8 @@
     gaugeTime: 0.5,
     cameraMode: 'WIDE',
     ballSkin: 'CLASSIC',
+    playerModel: 'ATHLETE',
+    playerDetail: 'AUTO',
     switchMode: 'AUTO',
     randomEnds: false,
     soundEnabled: true,
@@ -106,6 +111,12 @@
       options: [['CLOSE', 'opt.dynamic'], ['WIDE', 'opt.wide'], ['BLIMP', 'opt.blimp']] },
     { key: 'ballSkin', group: 'video', label: 'set.ball', hint: 'set.ball.h',
       options: [['CLASSIC', 'opt.ball.classic'], ['PRO', 'opt.ball.pro'], ['NIGHT', 'opt.ball.night'], ['RETRO', 'opt.ball.retro'], ['GOLD', 'opt.ball.gold']] },
+    // the players' bodies: blocks, a real footballer's build (heights, hair, boots vary), or a big-headed toon
+    { key: 'playerModel', group: 'video', label: 'set.model', hint: 'set.model.h',
+      options: [['ATHLETE', 'opt.model.athlete'], ['CLASSIC', 'opt.model.classic'], ['TOON', 'opt.model.toon']] },
+    // polygons of the rounded bodies and of the ball: more sides = rounder (AUTO follows the graphics quality)
+    { key: 'playerDetail', group: 'video', label: 'set.detail', hint: 'set.detail.h',
+      options: [['AUTO', 'opt.auto'], ['LOW', 'opt.low'], ['MEDIUM', 'opt.med'], ['HIGH', 'opt.high'], ['ULTRA', 'opt.ultra']] },
     { key: 'quality', group: 'video', label: 'set.quality', hint: 'set.quality.h',
       options: [['AUTO', 'opt.auto'], ['LOW', 'opt.low'], ['MEDIUM', 'opt.med'], ['HIGH', 'opt.high']] },
     { key: 'soundEnabled', group: 'audio', label: 'set.sound', hint: 'set.sound.h',
