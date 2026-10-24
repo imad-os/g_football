@@ -2022,7 +2022,7 @@
     TR_OPTS: [
       ['matches', [5, 10, 20, 30, 50, 100, 200, 500, 1000, 0]], // 0 = continuous
       ['size', [11, 7]],
-      ['stadium', ['COMPACT', 'CLASSIC', 'GRAND', 'MEGA', 'ULTRA']],
+      ['stadium', ['COMPACT', 'SMALL', 'STANDARD', 'GRAND', 'ULTRA']],
       ['length', [3, 5, 10]],
       ['hours', [0, 1, 2, 5, 8, 12]] // a time limit: the session stops by itself (0 = none)
     ],

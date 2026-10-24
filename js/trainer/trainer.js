@@ -317,7 +317,7 @@
     fill($('tHours'), hours, 0);
     fill($('tMatches'), opt('matches').map(function (v) { return [v, v ? String(v) : '∞ (until stopped)']; }), 10);
     fill($('tSize'), opt('size').map(function (v) { return [v, String(v)]; }), 11);
-    fill($('tStadium'), opt('stadium').map(function (v) { return [v, v]; }), 'CLASSIC');
+    fill($('tStadium'), opt('stadium').map(function (v) { return [v, v]; }), 'SMALL');
     fill($('tLength'), opt('length').map(function (v) { return [v, String(v)]; }), 3);
     $('rSet').onchange = function () { $('rName').style.display = $('rSet').value ? 'none' : ''; };
 

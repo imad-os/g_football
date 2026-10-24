@@ -17,7 +17,7 @@
   var BOUNCE = 0.55;     // vertical restitution on the grass
   var BOUNCE_GRIP = 0.84; // horizontal speed kept on a bounce
   var MAGNUS = 0.035;    // curl from spin, perpendicular to the flight
-  var POST_R = 0.14;     // goal posts and bar radius
+  var POST_R = NS.POST_R; // goal posts and bar radius (12 cm wide, like a real goal)
   NS.PHYS = { G: G, AIR_K: AIR_K, ROLL_K: ROLL_K, ROLL_F: ROLL_F };
 
   // Scratch states (no allocation in the step): S = the live ball, P = the predictor.

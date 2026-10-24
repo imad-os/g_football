@@ -1263,7 +1263,7 @@
     ['away', ['EASY', 'NORMAL', 'HARD', 'LEGEND', 'AIMA']],
     ['teams', ['SELECTED', 'RANDOM']],
     ['size', [11, 7]],
-    ['stadium', ['COMPACT', 'CLASSIC', 'GRAND', 'MEGA', 'ULTRA']],
+    ['stadium', ['COMPACT', 'SMALL', 'STANDARD', 'GRAND', 'ULTRA']],
     ['length', [3, 5, 10]]
   ];
   var dbgSel = { matches: 1, home: 1, away: 1, teams: 0, size: 0, stadium: 1, length: 0 };

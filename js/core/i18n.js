@@ -664,19 +664,19 @@
 
   // v1.15: stadiums, tactics, referee warning
   Object.assign(D.en, { 'set.stadium': 'Stadium', 'set.stadium.h': 'Pitch size (from the next match)',
-    'opt.st.compact': 'Compact 100x64', 'opt.st.classic': 'Classic 110x72', 'opt.st.grand': 'Grand 120x78', 'opt.st.mega': 'Mega 130x86',
+    'opt.st.compact': 'Compact 100x64', 'opt.st.grand': 'Grand 120x78',
     'tac.title': 'Tactics', 'tac.b0': 'Defence', 'tac.b1': 'Midfield', 'tac.b2': 'Attack',
     'tac.m0': 'Defensive', 'tac.m1': 'Balanced', 'tac.m2': 'Attacking' });
   Object.assign(D.fr, { 'set.stadium': 'Stade', 'set.stadium.h': 'Taille du terrain (des le prochain match)',
-    'opt.st.compact': 'Compact 100x64', 'opt.st.classic': 'Classique 110x72', 'opt.st.grand': 'Grand 120x78', 'opt.st.mega': 'Mega 130x86',
+    'opt.st.compact': 'Compact 100x64', 'opt.st.grand': 'Grand 120x78',
     'tac.title': 'Tactique', 'tac.b0': 'Defense', 'tac.b1': 'Milieu', 'tac.b2': 'Attaque',
     'tac.m0': 'Defensif', 'tac.m1': 'Equilibre', 'tac.m2': 'Offensif' });
   Object.assign(D.es, { 'set.stadium': 'Estadio', 'set.stadium.h': 'Tamaño del campo (desde el próximo partido)',
-    'opt.st.compact': 'Compacto 100x64', 'opt.st.classic': 'Clásico 110x72', 'opt.st.grand': 'Grande 120x78', 'opt.st.mega': 'Mega 130x86',
+    'opt.st.compact': 'Compacto 100x64', 'opt.st.grand': 'Grande 120x78',
     'tac.title': 'Táctica', 'tac.b0': 'Defensa', 'tac.b1': 'Medio', 'tac.b2': 'Ataque',
     'tac.m0': 'Defensivo', 'tac.m1': 'Equilibrado', 'tac.m2': 'Ofensivo' });
   Object.assign(D.ar, { 'set.stadium': 'الملعب', 'set.stadium.h': 'حجم أرضية الملعب (من المباراة القادمة)',
-    'opt.st.compact': 'صغير 100x64', 'opt.st.classic': 'كلاسيكي 110x72', 'opt.st.grand': 'كبير 120x78', 'opt.st.mega': 'ضخم 130x86',
+    'opt.st.compact': 'صغير 100x64', 'opt.st.grand': 'كبير 120x78',
     'tac.title': 'الخطة', 'tac.b0': 'الدفاع', 'tac.b1': 'الوسط', 'tac.b2': 'الهجوم',
     'tac.m0': 'دفاعي', 'tac.m1': 'متوازن', 'tac.m2': 'هجومي' });
 
@@ -1052,7 +1052,7 @@
   Object.assign(D.en, { 'set.g.comm': 'COMMENTATOR',
     'set.comm': 'Commentator', 'set.comm.h': 'A voice comments the match (off: nothing is loaded)',
     'set.commlang': 'Language', 'set.commlang.h': 'AUTO: the language of the game',
-    'set.commvoice': 'Voice', 'set.commvoice.h': 'English has a male and a female voice; the other languages have one',
+    'set.commvoice': 'Voice', 'set.commvoice.h': 'Male or female, in the languages that have both voices (the others use their one voice)',
     'set.commvol': 'Volume', 'set.commvol.h': 'The commentator\'s level (the sound volume of My PC applies too)',
     'set.commtalk': 'How talkative', 'set.commtalk.h': 'CALM: the big moments only. CHATTY: tackles, passes, attacks too',
     'set.commsubs': 'Subtitles', 'set.commsubs.h': 'What the commentator says, at the bottom of the screen',
@@ -1063,7 +1063,7 @@
   Object.assign(D.fr, { 'set.g.comm': 'COMMENTATEUR',
     'set.comm': 'Commentateur', 'set.comm.h': 'Une voix commente le match (desactive : rien n\'est charge)',
     'set.commlang': 'Langue', 'set.commlang.h': 'AUTO : la langue du jeu',
-    'set.commvoice': 'Voix', 'set.commvoice.h': 'L\'anglais a une voix d\'homme et de femme ; les autres langues une seule',
+    'set.commvoice': 'Voix', 'set.commvoice.h': 'Homme ou femme, dans les langues qui ont les deux voix (les autres gardent leur voix)',
     'set.commvol': 'Volume', 'set.commvol.h': 'Le niveau du commentateur (le volume de My PC s\'applique aussi)',
     'set.commtalk': 'Bavardage', 'set.commtalk.h': 'CALME : les grands moments seulement. BAVARD : tacles, passes, attaques aussi',
     'set.commsubs': 'Sous-titres', 'set.commsubs.h': 'Ce que dit le commentateur, en bas de l\'ecran',
@@ -1074,7 +1074,7 @@
   Object.assign(D.es, { 'set.g.comm': 'COMENTARISTA',
     'set.comm': 'Comentarista', 'set.comm.h': 'Una voz comenta el partido (apagado: no se carga nada)',
     'set.commlang': 'Idioma', 'set.commlang.h': 'AUTO: el idioma del juego',
-    'set.commvoice': 'Voz', 'set.commvoice.h': 'El ingles tiene voz de hombre y de mujer; los demas idiomas una',
+    'set.commvoice': 'Voz', 'set.commvoice.h': 'Hombre o mujer, en los idiomas que tienen las dos voces (los demas usan su voz)',
     'set.commvol': 'Volumen', 'set.commvol.h': 'El nivel del comentarista (el volumen de My PC tambien se aplica)',
     'set.commtalk': 'Cuanto habla', 'set.commtalk.h': 'TRANQUILO: solo los grandes momentos. HABLADOR: entradas, pases, ataques tambien',
     'set.commsubs': 'Subtitulos', 'set.commsubs.h': 'Lo que dice el comentarista, abajo en la pantalla',
@@ -1085,7 +1085,7 @@
   Object.assign(D.ar, { 'set.g.comm': 'المعلق',
     'set.comm': 'المعلق', 'set.comm.h': 'صوت يعلق على المباراة (عند الإيقاف لا يُحمَّل شيء)',
     'set.commlang': 'اللغة', 'set.commlang.h': 'تلقائي: لغة اللعبة',
-    'set.commvoice': 'الصوت', 'set.commvoice.h': 'للإنجليزية صوت رجل وصوت امرأة، ولباقي اللغات صوت واحد',
+    'set.commvoice': 'الصوت', 'set.commvoice.h': 'رجل أو امرأة، في اللغات التي لها الصوتان (والباقي بصوته الوحيد)',
     'set.commvol': 'مستوى الصوت', 'set.commvol.h': 'مستوى صوت المعلق (يُطبَّق أيضاً مستوى صوت My PC)',
     'set.commtalk': 'كثرة الكلام', 'set.commtalk.h': 'هادئ: اللحظات الكبيرة فقط. ثرثار: التدخلات والتمريرات والهجمات أيضاً',
     'set.commsubs': 'الترجمة النصية', 'set.commsubs.h': 'ما يقوله المعلق، أسفل الشاشة',
@@ -1093,6 +1093,16 @@
     'set.commduck': 'خفض صوت الجمهور', 'set.commduck.h': 'ينخفض صوت الجمهور أثناء كلام المعلق',
     'opt.comm.male': 'رجل', 'opt.comm.female': 'امرأة', 'opt.comm.calm': 'هادئ', 'opt.comm.chatty': 'ثرثار',
     'opt.comm.english': 'صوت إنجليزي', 'opt.comm.text': 'نص فقط', 'opt.comm.silent': 'تخطيها' });
+
+  // stadiums (sizes in metres; the goal and every marking are always the real ones)
+  Object.assign(D.en, { 'opt.st.compact': 'Compact 65x45 m (7 v 7)', 'opt.st.small': 'Small 75x49 m', 'opt.st.standard': 'Standard 85x55 m',
+    'opt.st.grand': 'Grand 105x68 m (real)', 'opt.st.ultra': 'Ultra 110x72 m' });
+  Object.assign(D.fr, { 'opt.st.compact': 'Compact 65x45 m (7 c. 7)', 'opt.st.small': 'Petit 75x49 m', 'opt.st.standard': 'Standard 85x55 m',
+    'opt.st.grand': 'Grand 105x68 m (reel)', 'opt.st.ultra': 'Ultra 110x72 m' });
+  Object.assign(D.es, { 'opt.st.compact': 'Compacto 65x45 m (7 c. 7)', 'opt.st.small': 'Pequeno 75x49 m', 'opt.st.standard': 'Estandar 85x55 m',
+    'opt.st.grand': 'Grande 105x68 m (real)', 'opt.st.ultra': 'Ultra 110x72 m' });
+  Object.assign(D.ar, { 'opt.st.compact': 'صغير 65x45 م (7 ضد 7)', 'opt.st.small': 'متوسط 75x49 م', 'opt.st.standard': 'قياسي 85x55 م',
+    'opt.st.grand': 'كبير 105x68 م (حقيقي)', 'opt.st.ultra': 'ضخم 110x72 م' });
 
   var lang = 'en';
 

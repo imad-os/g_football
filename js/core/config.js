@@ -2,51 +2,52 @@
 (function (NS) {
   'use strict';
 
-  NS.VERSION = '1.34.0';
+  NS.VERSION = '1.35.0';
 
-  // Pitch geometry (world units; x = length, z = width, y = up). The players and the goal are drawn ~1.5x real size,
-  // so the markings around the goal are the real ones scaled to the goal (BOX_K), not to the pitch: the boxes look
-  // like a real penalty area next to the players. The pitch size comes from the stadium (NS.usePitch).
-  // NS.M: world units per metre, from the players: an average footballer (1.81 m) is 2.9 units tall.
+  // Pitch geometry (world units; x = length, z = width, y = up). NS.M: world units per metre, from the players: an
+  // average footballer (1.81 m) is 2.9 units tall. Everything is at real size at that scale: the ball, the players,
+  // the goal and every marking (the laws of the game); only the pitch's length and width come from the stadium.
   NS.M = 1.6;
-  NS.GOAL_HALF_W = 5.6;
-  var BOX_K = 1.25;
-  NS.BOX_D = 16.5 * BOX_K;                  // penalty area: depth and half width
-  NS.BOX_HW = NS.GOAL_HALF_W + 16.5 * BOX_K;
-  NS.SIX_D = 5.5 * BOX_K;                   // goal area
-  NS.SIX_HW = NS.GOAL_HALF_W + 5.5 * BOX_K;
-  NS.PEN_D = 11 * BOX_K;                    // penalty spot
-  NS.CIRCLE_R = 9.15 * BOX_K;               // centre circle and penalty arc
+  NS.GOAL_HALF_W = 7.32 / 2 * NS.M;          // goal: 7.32 x 2.44 m (between the posts, under the bar)
+  NS.GOAL_HEIGHT = 2.44 * NS.M;
+  NS.GOAL_DEPTH = 2 * NS.M;                  // the net, 2 m deep
+  NS.POST_R = 0.06 * NS.M;                   // posts and bar 12 cm wide
+  NS.BOX_D = 16.5 * NS.M;                    // penalty area: 16.5 m deep, 16.5 m either side of the posts
+  NS.BOX_HW = NS.GOAL_HALF_W + 16.5 * NS.M;
+  NS.SIX_D = 5.5 * NS.M;                     // goal area: 5.5 m
+  NS.SIX_HW = NS.GOAL_HALF_W + 5.5 * NS.M;
+  NS.PEN_D = 11 * NS.M;                      // penalty spot: 11 m
+  NS.CIRCLE_R = 9.15 * NS.M;                 // centre circle and penalty arc: 9.15 m
+  NS.CORNER_R = 1 * NS.M;                    // corner arcs: 1 m
 
-  // Stadiums: each one its own pitch size and grass (Settings > Stadium)
+  // Stadiums: each one its own pitch size (length x width in metres x NS.M) and grass (Settings > Stadium)
+  function pitch(l, w, grass) { return { w: l * NS.M, h: w * NS.M, l: l, wm: w, grass: grass }; }
   NS.STADIUMS = {
-    COMPACT: { w: 100, h: 64, grass: ['#1f7234', '#26843d'] },
-    CLASSIC: { w: 110, h: 72, grass: ['#1d6e32', '#25803b'] },
-    GRAND: { w: 120, h: 78, grass: ['#22763a', '#2a8a45'] },
-    MEGA: { w: 130, h: 86, grass: ['#1b6a30', '#237c3a'] },
-    ULTRA: { w: 200, h: 130, grass: ['#1e6f33', '#27833e'] } // a real pitch's shape (105 x 68) at the players' size and more
+    COMPACT: pitch(65, 45, ['#1f7234', '#26843d']),     // 7-a-side (the real penalty area still fits across it)
+    SMALL: pitch(75, 48.75, ['#22763a', '#2a8a45']),
+    STANDARD: pitch(85, 55, ['#1d6e32', '#25803b']),
+    GRAND: pitch(105, 68, ['#1b6a30', '#237c3a']),      // a real pitch (FIFA's 105 x 68)
+    ULTRA: pitch(110, 72, ['#1e6f33', '#27833e'])
   };
   // Mowing patterns of the grass: one is drawn at random for every match (js/render/assets.js)
   NS.PITCH_DESIGNS = ['STRIPES', 'CHECKS', 'RINGS', 'DIAGONAL', 'PLAID'];
   NS.pitchDesign = 0;
-  NS.PITCH_HALF_W = 55;
-  NS.PITCH_HALF_H = 36;
+  NS.stadium = NS.STADIUMS.SMALL;
+  NS.stadiumId = 'SMALL';
+  NS.PITCH_HALF_W = NS.stadium.w / 2;
+  NS.PITCH_HALF_H = NS.stadium.h / 2;
   NS.PITCH_SCALE = NS.PITCH_HALF_W / 46; // crowd spacing
-  NS.stadium = NS.STADIUMS.CLASSIC;
-  NS.stadiumId = 'CLASSIC';
   // Modules keep their own copies of the pitch size: they register here and are told when it changes.
   NS.pitchHooks = [];
   NS.usePitch = function (id) {
-    var s = NS.STADIUMS[id] || NS.STADIUMS.CLASSIC;
+    var s = NS.STADIUMS[id] || NS.STADIUMS.SMALL;
     NS.stadium = s;
-    NS.stadiumId = NS.STADIUMS[id] ? id : 'CLASSIC';
+    NS.stadiumId = NS.STADIUMS[id] ? id : 'SMALL';
     NS.PITCH_HALF_W = s.w / 2;
     NS.PITCH_HALF_H = s.h / 2;
     NS.PITCH_SCALE = NS.PITCH_HALF_W / 46;
     for (var i = 0; i < NS.pitchHooks.length; i++) NS.pitchHooks[i]();
   };
-  NS.GOAL_DEPTH = 2.6;
-  NS.GOAL_HEIGHT = 3.6;
   // A real size 5 ball: 68-70 cm round, 22 cm across, about 1/8 of a player's height (it fits between his legs)
   NS.BALL_R = 0.11 * NS.M;
   // Debug matches (js/game/debug.js): the event counter, null outside a debug run
@@ -63,7 +64,7 @@
     quality: 'AUTO',
     difficulty: 'NORMAL',
     teamSize: 11,
-    stadium: 'CLASSIC',
+    stadium: 'SMALL',
     durationMins: 3,
     gameSpeed: 1.0,
     gaugeTime: 0.5,
@@ -101,7 +102,7 @@
       options: [[11, 'opt.t11'], [7, 'opt.t7']] },
     // the stadium: pitch size (applies from the next match)
     { key: 'stadium', group: 'game', label: 'set.stadium', hint: 'set.stadium.h',
-      options: [['COMPACT', 'opt.st.compact'], ['CLASSIC', 'opt.st.classic'], ['GRAND', 'opt.st.grand'], ['MEGA', 'opt.st.mega'], ['ULTRA', 'opt.st.ultra']] },
+      options: [['COMPACT', 'opt.st.compact'], ['SMALL', 'opt.st.small'], ['STANDARD', 'opt.st.standard'], ['GRAND', 'opt.st.grand'], ['ULTRA', 'opt.st.ultra']] },
     { key: 'durationMins', group: 'game', label: 'set.duration', hint: 'set.duration.h',
       options: [[3, 'opt.min3'], [5, 'opt.min5'], [10, 'opt.min10']] },
     { key: 'gameSpeed', group: 'game', label: 'set.pace', hint: 'set.pace.h',

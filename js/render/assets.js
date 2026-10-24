@@ -228,8 +228,8 @@
       if (e < 0) arc(gx + P, 0, R, -open, open);
       else arc(gx - P, 0, R, Math.PI - open, Math.PI + open);
       // corner arcs
-      arc(gx, -HH, 1, e < 0 ? 0 : Math.PI / 2, e < 0 ? Math.PI / 2 : Math.PI);
-      arc(gx, HH, 1, e < 0 ? -Math.PI / 2 : Math.PI, e < 0 ? 0 : Math.PI * 1.5);
+      arc(gx, -HH, NS.CORNER_R, e < 0 ? 0 : Math.PI / 2, e < 0 ? Math.PI / 2 : Math.PI);
+      arc(gx, HH, NS.CORNER_R, e < 0 ? -Math.PI / 2 : Math.PI, e < 0 ? 0 : Math.PI * 1.5);
     }
     if (pitchTexture) pitchTexture.dispose();
     pitchTexture = new THREE.CanvasTexture(canvas);

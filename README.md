@@ -226,9 +226,10 @@ service cloud.firestore {
 ## 11-a-side, the rules of the game
 
 * **Settings > Gameplay > Players per team**: 11 v 11 (default) or 7 v 7, from the next match.
-* **Settings > Gameplay > Stadium**: Compact 100 x 64, Classic 110 x 72 (default), Grand 120 x 78, Mega 130 x 86, each with
-  its own grass. The players and goals are drawn about 1.5x real size, so the penalty area, goal area, spot, arc and centre
-  circle are the real markings scaled to the goal (x1.25), the same in every stadium; the goal posts stand on the goal line.
+* **Settings > Gameplay > Stadium** (length x width): Compact 65 x 45 m (7 a side), Small 75 x 49 m (default), Standard
+  85 x 55 m, Grand 105 x 68 m (a real pitch), Ultra 110 x 72 m, each with its own grass. The goal (7.32 x 2.44 m, posts
+  12 cm), penalty area (16.5 m), goal area (5.5 m), penalty spot (11 m), centre circle and arc (9.15 m) and corner arcs
+  (1 m) are always the real ones, in every stadium; the goal posts stand on the goal line.
   The formations are stretched to the stadium. Four formations for each size (4-4-2, 4-3-3, 4-2-3-1, 3-5-2); the squad is picked for the formation (the best keeper in
   goal, defenders at the back...), and it is picked again when the formation is changed before kick-off.
 * **Out of play**: no invisible walls. Over a touchline = **throw-in** (thrown from over the head, up to about 24 m; no shots);
@@ -362,13 +363,24 @@ phrase that came too late is dropped), keeps cool-downs per event (no "what a ta
 events only sometimes (How talkative: CALM = the big moments only, NORMAL, CHATTY), pauses between phrases and never
 repeats the last phrase of an event. The crowd steps back while it speaks (Lower the crowd). Settings: on / off,
 language, voice, volume, how talkative, subtitles, what to do with a phrase not recorded in that language yet (English
-voice, subtitle only, or skip it), lower the crowd. **Off: nothing is loaded and nothing runs.** On: at the first match it
-reads `audio/commentary/library.json` (~30 KB), then fetches the MP3s of the chosen voice one at a time in the background,
-the big moments first (~3 MB for English, kept compressed); a phrase is decoded only when needed (8 kept), and the next
-goal / penalty / save phrase is decoded ahead so the big moments are never late. It speaks through the game's
-AudioContext (the My PC volume and pause apply) and stays silent in debug / training matches and in trainer.html.
-The audio comes from the assets repo `imad-os/f_assets`: `node tools/commentary-sync.mjs` copies the MP3s that exist and
-writes the library (run it again after new audio was generated there, then release a new version).
+voice, subtitle only, or skip it), lower the crowd. **Off: nothing is loaded and nothing runs.** It speaks through the
+game's AudioContext (the My PC volume and pause apply) and stays silent in debug / training matches and in trainer.html.
+
+*Where the voice comes from*: nothing is in this repo. The phrases and audio live in the assets repo `imad-os/f_assets`:
+at the first match the game reads its `library.json` (from raw.githubusercontent.com, always the latest; the owner can
+set another address in mypc-app.json `config.commLibrary`) through **MyPC.net** (needs My PC api level 10+), then the
+MP3s of the chosen voice from each phrase's `audio_full_url` (`audio_full_url_male` / `_female` for a language with
+both voices, else its one voice for either choice; a relative `audio_url` also works). New audio added there is picked
+up without a game release.
+*How it downloads*: the whole chosen voice, one file at a time in the background, one phrase of every event first and
+the big moments first (~3 MB for English, kept compressed), plus the English voice when the fallback is ENGLISH VOICE.
+Every file also goes into the browser's cache (`rs6-commentary-1`): later launches take the audio from there (only the
+library is asked again), also with no internet. A phrase is decoded only when needed (8 kept); the next goal / penalty /
+save phrase is decoded ahead so the big moments are never late.
+*Fail-safe*: a file that does not exist (404) is skipped for the session and another phrase is said (else the fallback
+setting); no network: no downloads for a minute, phrases already cached still play; no library: no commentary, tried
+again 2 minutes later; a bad file, an old My PC without MyPC.net or any error in the commentator: silence, never an
+error, the match goes on.
 
 **Player models** (Settings > Graphics): `ATHLETE` (default: a real footballer's build, legs about half the height, heights
 1.72-1.92 m with taller keepers, hair styles and boot colours that stay the same for a player every match; keepers wear long
@@ -387,7 +399,7 @@ that differ from both teams.
 
 ## Physics and animation
 
-* Pitch 105 x 68 (real size). The 7-a-side formations are stretched to it.
+* Pitch: the stadium's size (above); formations are given for 105 x 68 and stretched to it.
 * Scale: 1.6 world units to the metre (`NS.M`), set by the players (an average footballer, 1.81 m, is 2.9 units tall). The ball
   is a real size 5 ball at that scale: 22 cm across (68-70 cm round), radius 0.176, about 1/8 of a player's height. On the
   grass it rolls without slipping about the right axis (a quaternion turn per step), in the air it keeps its spin, and its

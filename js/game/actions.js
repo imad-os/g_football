@@ -17,7 +17,7 @@
   var BUMP_T = 1.2, BUMP_ACC = 2.2, BUMP_POW = 0.88;
   // shot: speed from SHOT_MIN (a tap) to SHOT_MAX (from half the bar); GH = [gauge, height at the goal line]
   var SHOT_MIN = 26, SHOT_MAX = 58; // a struck shot: much faster than a long ball, so its flight stays flat
-  var GH = [[0.10, NS.BALL_R], [0.11, 0.6], [0.30, 1.1], [0.40, 1.7], [0.50, 3.6], [1.0, 9.0]];
+  var GH = [[0.10, NS.BALL_R], [0.11, 0.6], [0.30, 1.1], [0.40, 1.7], [0.50, NS.GOAL_HEIGHT], [1.0, 9.0]]; // (50%: the bar)
 
   // Horizontal launch speed so a ball in the air for T seconds covers d (air drag included).
   function airSpeed(d, T) { return d * AIR_K / (1 - Math.exp(-AIR_K * T)); }

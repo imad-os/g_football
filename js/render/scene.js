@@ -37,12 +37,12 @@
     var sign = xPos < 0 ? -1 : 1;
     var postMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
     var netMat = new THREE.MeshBasicMaterial({ color: 0xcbd5e1, wireframe: true, transparent: true, opacity: 0.45 });
-    var postGeo = new THREE.CylinderGeometry(0.14, 0.14, NS.GOAL_HEIGHT, 6);
+    var postGeo = new THREE.CylinderGeometry(NS.POST_R, NS.POST_R, NS.GOAL_HEIGHT, 8);
     var p1 = new THREE.Mesh(postGeo, postMat);
     p1.position.set(xPos, NS.GOAL_HEIGHT / 2, -NS.GOAL_HALF_W);
     var p2 = new THREE.Mesh(postGeo, postMat);
     p2.position.set(xPos, NS.GOAL_HEIGHT / 2, NS.GOAL_HALF_W);
-    var barGeo = new THREE.CylinderGeometry(0.14, 0.14, NS.GOAL_HALF_W * 2, 6);
+    var barGeo = new THREE.CylinderGeometry(NS.POST_R, NS.POST_R, NS.GOAL_HALF_W * 2, 8);
     barGeo.rotateX(Math.PI / 2);
     var bar = new THREE.Mesh(barGeo, postMat);
     bar.position.set(xPos, NS.GOAL_HEIGHT, 0);

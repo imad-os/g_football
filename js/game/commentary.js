@@ -1,11 +1,14 @@
 /* The voice commentator (Settings > Commentator). The match tells it what happens (NS.Commentary.event('GOAL', team)...,
- * the event codes of audio/commentary/library.json); it decides what is worth saying and says one phrase at a time.
+ * the event codes of the assets repo's library.json); it decides what is worth saying and says one phrase at a time.
  *
  * - Off in the settings: nothing is loaded and nothing runs (event / tick return at once). It also stays idle in debug
  *   and training matches (NS.Debug) and in trainer.html, which does not load this file.
- * - On: at the first match its library (~30 KB) is read, then the MP3s of the chosen voice are fetched one at a time in
- *   the background, the important events first (bytes kept compressed, ~3 MB). A phrase is decoded when it is needed
- *   (a few kept, LRU); the next goal / penalty / save phrase is decoded ahead, so the big moments are never late.
+ * - On: at the first match its library is read from the assets repo (imad-os/f_assets) through MyPC.net, then the MP3s
+ *   of the chosen voice are fetched one at a time in the background, the important events first (bytes kept compressed,
+ *   ~3 MB a voice). Every file is also kept in the browser's cache: the next launches load from there, also offline.
+ *   A phrase is decoded when it is needed (a few kept, LRU); the next goal / penalty / save phrase is decoded ahead.
+ * - Fail-safe: a phrase whose file is missing is skipped (another phrase, else the fallback setting); no network, no
+ *   MyPC.net, a bad file or a broken library = no voice for it, never an error: the match goes on as without it.
  * - Smart: every event has a priority, a time it stays worth saying, and a cool-down (no "what a tackle!" every 10 s).
  *   One voice at a time; a much bigger moment (a goal) cuts a small one short; minor events are said only sometimes,
  *   depending on how talkative it is; a pause between phrases; the same phrase not twice in a row. While it speaks the
@@ -16,7 +19,10 @@
   'use strict';
 
   var World = NS.World;
-  var BASE = 'audio/commentary/';
+  // the phrase library of the assets repo (the owner can point to another one: mypc-app.json config "commLibrary");
+  // its audio addresses are full ones (audio_full_url...) or relative to the library's folder
+  var LIB_URL = 'https://raw.githubusercontent.com/imad-os/f_assets/main/library.json';
+  var CACHE = 'rs6-commentary-1';   // downloaded files are kept in the browser's cache: the next launch needs no network
   var LANGS = { en: 1, fr: 1, es: 1, ar: 1 };
   // p: priority, ttl: seconds it stays worth saying, cd: seconds before the same event again, minor: said only sometimes
   var EV = {
@@ -71,8 +77,8 @@
   function readCfg(s) {
     var lang = s.commLang === 'AUTO' || !s.commLang ? NS.I18n.lang() : String(s.commLang).toLowerCase();
     if (!LANGS[lang]) lang = 'en';
-    var enKey = s.commVoice === 'FEMALE' ? 'en_f' : 'en_m';
-    var key = lang === 'en' ? enKey : lang;
+    var g = s.commVoice === 'FEMALE' ? '_f' : '_m';
+    var enKey = 'en' + g, key = lang + g;   // (a language with one voice: the same file for both)
     if (key !== cfg.key || enKey !== cfg.enKey) dropAudio();
     cfg.on = !!s.commentary; cfg.lang = lang; cfg.key = key; cfg.enKey = enKey;
     cfg.fallback = s.commFallback || 'EN';
@@ -94,12 +100,78 @@
   }
   function clearPending() { for (var i = 0; i < NPEND; i++) pend[i].ev = ''; prep = null; }
 
-  // ---- loading: the library, then the voice's MP3s one at a time (the moments that matter most first)
-  function url(path) { return BASE + path + '?v=' + NS.VERSION; }
+  // ---- the network (another site: only through My PC's MyPC.net) and the browser's cache. Nothing here can throw or
+  // reject unhandled: a file that is missing or an app without network just means no voice for that phrase.
+  var missing = {};          // addresses that answered 404 (never asked again this session)
+  var offUntil = 0;          // the network failed: no more downloads until then (ms)
+  function net(url, type) {
+    try {
+      if (!window.MyPC || !MyPC.net || !MyPC.net.fetch || (typeof MyPC.apiLevel === 'number' && MyPC.apiLevel < 10)) {
+        return Promise.reject({ code: 'unsupported' });
+      }
+      return MyPC.net.fetch(url, { responseType: type, timeout: 20000 }).then(function (r) {
+        if (!r || !r.ok) throw { code: 'http', status: r ? r.status : 0 };
+        return r.body;
+      });
+    } catch (e) { return Promise.reject(e); }
+  }
+  function failed(url, e) {
+    if (e && (e.status === 404 || e.status === 403)) missing[url] = 1;   // not generated (yet): skipped
+    else offUntil = Date.now() + 60000;                                // no network / busy: try again in a minute
+  }
+  function cacheGet(url) {
+    try {
+      if (!window.caches) return Promise.resolve(null);
+      return caches.open(CACHE).then(function (c) { return c.match(url); })
+        .then(function (r) { return r ? r.arrayBuffer() : null; }).catch(function () { return null; });
+    } catch (e) { return Promise.resolve(null); }
+  }
+  function cachePut(url, ab) {
+    try {
+      if (window.caches) caches.open(CACHE).then(function (c) { return c.put(url, new Response(ab.slice(0))); }).catch(function () {});
+    } catch (e) {}
+  }
+
+  // ---- the library: the assets repo's library.json (fresh from the network, else the copy cached last time), turned
+  // into { events: { GOAL: [{ id, t: { en, fr, es, ar }, src: { en_m: url, en_f, fr_m, fr_f, ... } }] }, urls }
+  var libRetry = 0;
+  function libUrl() { return (MyPC.app_config && MyPC.app_config.commLibrary) || LIB_URL; }
   function loadLib() {
-    if (lib || libP) return;
-    libP = fetch(url('library.json')).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .then(function (j) { if (!cfg.on) return; lib = j; libP = null; plan(); }, function () { libP = null; });
+    if (lib || libP || Date.now() < libRetry) return;
+    var u = libUrl();
+    libP = net(u, 'arraybuffer').then(function (ab) { cachePut(u, ab); return ab; }, function () { return cacheGet(u); })
+      .then(function (ab) {
+        libP = null;
+        if (!ab) throw 0;
+        var j = JSON.parse(new TextDecoder().decode(ab));
+        if (!cfg.on) return;
+        lib = shape(j, u);
+        plan();
+      }).catch(function () { libP = null; libRetry = Date.now() + 120000; }); // (no commentary for now; tried at a later match)
+  }
+  function clean(s) { return String(s || '').replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim(); }
+  function shape(j, u) {
+    var base = u.slice(0, u.lastIndexOf('/') + 1), out = { events: {}, urls: {} };
+    var list = Array.isArray(j) ? j : (j && j.phrases) || [];
+    function abs(p) { return !p ? '' : (/^https?:\/\//.test(p) ? p : base + String(p).replace(/^\.?\//, '')); }
+    for (var i = 0; i < list.length; i++) {
+      var e = list[i];
+      if (!e || !e.id || !EV[e.event]) continue;
+      var tr = e.translations || {}, t = {}, src = {};
+      for (var l in LANGS) t[l] = clean((tr[l] && tr[l].phrase) || e['phrase_' + l]);
+      // every language has a male (_m) and a female (_f) voice: audio_full_url_male / _female when it has both, else
+      // its one voice (audio_full_url) is used for either choice; a full address first, else the relative one
+      for (var l2 in LANGS) {
+        var x = tr[l2] || {};
+        var one = x.audio_full_url || e['audio_full_url_' + l2] || abs(x.audio_url || e['audio_' + l2]);
+        var male = x.audio_full_url_male || abs(x.audio_url_male || e['audio_' + l2 + '_male']) || one;
+        var female = x.audio_full_url_female || abs(x.audio_url_female || e['audio_' + l2 + '_female']) || male;
+        if (male) { src[l2 + '_m'] = male; out.urls[l2 + '_m/' + e.id] = male; }
+        if (female) { src[l2 + '_f'] = female; out.urls[l2 + '_f/' + e.id] = female; }
+      }
+      (out.events[e.event] = out.events[e.event] || []).push({ id: e.id, t: t, src: src });
+    }
+    return out;
   }
   // the files of the voice in use (and of the English voice when phrases fall back to it)
   function plan() {
@@ -114,7 +186,7 @@
         keys.forEach(function (k) {
           var n = 0;
           list.forEach(function (ph) {
-            if (ph.a.indexOf(k) < 0) return;
+            if (!ph.src[k]) return;
             if ((r === 0) === (n++ === 0)) fetchList.push(k + '/' + ph.id);
           });
         });
@@ -122,29 +194,41 @@
     }
     pumpFetch();
   }
+  // one file at a time in the background; after a network failure it waits a minute (the match goes on meanwhile)
+  var resumeT = 0;
   function pumpFetch() {
     if (fetching || !cfg.on || !lib) return;
-    while (fetchAt < fetchList.length && bytes[fetchList[fetchAt]]) fetchAt++;
+    while (fetchAt < fetchList.length && (bytes[fetchList[fetchAt]] || missing[srcOf(fetchList[fetchAt])])) fetchAt++;
     readyAhead();
     if (fetchAt >= fetchList.length) return;
+    if (Date.now() < offUntil) {
+      if (!resumeT) resumeT = setTimeout(function () { resumeT = 0; pumpFetch(); }, offUntil - Date.now() + 50);
+      return;
+    }
     fetching = true;
     var gen = fetchGen;
     function next() { if (gen === fetchGen) { fetching = false; pumpFetch(); } }
     getBytes(fetchList[fetchAt++]).then(next, next);
   }
+  function srcOf(k) { return (lib && lib.urls[k]) || ''; }
+  // a phrase's MP3: in memory, else in the browser's cache, else from the network (then cached); rejects when it is not
+  // there (missing, no network): the caller just goes without it
   var inflight = {};
   function getBytes(k) {
     if (bytes[k]) return Promise.resolve(bytes[k]);
     if (inflight[k]) return inflight[k];
-    var gen = fetchGen, sl = k.indexOf('/');
-    var p = inflight[k] = fetch(url(lib.voices[k.slice(0, sl)] + '/' + k.slice(sl + 1) + '.mp3')).then(function (r) {
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.arrayBuffer();
+    var u = srcOf(k);
+    if (!u || missing[u]) return Promise.reject(0);
+    var gen = fetchGen;
+    var p = inflight[k] = cacheGet(u).then(function (ab) {
+      if (ab) return ab;
+      if (Date.now() < offUntil) throw 0;
+      return net(u, 'arraybuffer').then(function (b) { cachePut(u, b); return b; }, function (e) { failed(u, e); throw 0; });
     }).then(function (ab) {
       delete inflight[k];
       if (gen === fetchGen) bytes[k] = ab;
       return ab;
-    }, function (e) { delete inflight[k]; throw e; });
+    }, function () { delete inflight[k]; throw 0; });
     return p;
   }
   // a phrase decoded (kept in the LRU); calls back with the AudioBuffer or null
@@ -163,7 +247,10 @@
     }
     getBytes(k).then(function (ab) {
       // (decodeAudioData takes the buffer over: a copy, the compressed bytes stay for later)
-      A.ctx.decodeAudioData(ab.slice(0), done, function () { done(null); });
+      try {
+        var pr = A.ctx.decodeAudioData(ab.slice(0), done, function () { done(null); });
+        if (pr && pr.catch) pr.catch(function () {}); // (a bad file: no voice, no error)
+      } catch (e) { done(null); }
     }, function () { done(null); });
   }
   // most recently used last; the oldest one that is not a phrase readied ahead leaves memory
@@ -193,6 +280,8 @@
       if (!c.length) return null;
     }
     var bk = ev + '|' + key, bag = bags[bk];
+    // (phrases found missing since the bag was filled are left out)
+    if (bag && key) for (var m = bag.length - 1; m >= 0; m--) if (missing[bag[m].src[key]]) bag.splice(m, 1);
     if (!bag || !bag.length) {
       var last = bag && bag.lastId;
       bag = bags[bk] = shuffle(c.slice());
@@ -203,11 +292,11 @@
     if (key) for (var j = bag.length - 1; j >= 0; j--) if (bytes[key + '/' + bag[j].id]) { at = j; break; }
     var ph = bag.splice(at, 1)[0];
     bag.lastId = ph.id;
-    return { k: key ? key + '/' + ph.id : '', text: ph.t[key.indexOf('en') === 0 ? 'en' : cfg.lang] || ph.t.en };
+    return { ev: ev, k: key ? key + '/' + ph.id : '', text: ph.t[key ? key.slice(0, 2) : cfg.lang] || ph.t.en };
   }
   function has(list, key) {
     var out = [];
-    for (var i = 0; i < list.length; i++) if (list[i].a.indexOf(key) >= 0) out.push(list[i]);
+    for (var i = 0; i < list.length; i++) { var u = list[i].src[key]; if (u && !missing[u]) out.push(list[i]); }
     return out;
   }
   // the next phrase of each big moment, decoded as soon as its file is here, so it is said without delay (run when a
@@ -240,7 +329,12 @@
     decode(pk.k, function (buf) {
       if (!prep || prep.pk !== pk) return;
       prep = null;
-      if (buf && live && !busy && clock <= pk.until) play(buf, pk, p);
+      if (!live || busy || clock > pk.until) return;
+      if (buf) { play(buf, pk, p); return; }
+      // its file is not there (not generated, no network): another phrase of the event, else the fallback setting
+      // (3 tries at most: without a network every file fails the same way)
+      var alt = (pk.tries || 0) < 3 ? pick(pk.ev) : null;
+      if (alt && alt.k !== pk.k) { alt.until = pk.until; alt.tries = (pk.tries || 0) + 1; say(alt, p); }
     });
   }
   function play(buf, pk, p) {
@@ -279,6 +373,13 @@
     subtitle('');
     if (!now) gapUntil = clock + cfg.talk.gap;
   }
+  // a bug here never stops the match: the commentator goes quiet for this match and it is reported once
+  var faulted = false;
+  function fault(e) {
+    live = false;
+    try { hush(true); } catch (x) {}
+    if (!faulted && window.MyPC && MyPC.report) { faulted = true; try { MyPC.report(e, { where: 'commentary' }); } catch (x) {} }
+  }
   function subtitle(text) { if (NS.HUD.subtitle) NS.HUD.subtitle(cfg.subs ? text : ''); }
 
   NS.Commentary = {
@@ -304,8 +405,8 @@
       live = false;
     },
     // Something happened (an event code of the library): kept for a moment if it is worth saying.
-    event: function (ev, team) {
-      if (!live) return;
+    event: function (ev, team) { if (live) { try { this._event(ev, team); } catch (e) { fault(e); } } },
+    _event: function (ev, team) {
       var d = EV[ev], T = cfg.talk;
       if (!d || d.p < T.minP) return;
       if (d.minor && Math.random() >= T.chance) return;
@@ -324,8 +425,8 @@
       slot.ev = ev; slot.team = team || 0; slot.at = clock;
     },
     // Every simulation step of a match (also its breaks): the next thing to say, when the commentator is free.
-    tick: function (dt) {
-      if (!live) return;
+    tick: function (dt) { if (live) { try { this._tick(dt); } catch (e) { fault(e); } } },
+    _tick: function (dt) {
       clock += dt;
       if (!lib) return;
       if (busy) { if (busy.end && clock >= busy.end) finish(); return; }

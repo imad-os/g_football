@@ -708,8 +708,9 @@
 
   // shot targets: 4 points across the goal x 3 heights (low, chest high, top corner). With the gauge a low shot is a
   // soft one, so low is only for close range; the pace comes from striking it higher.
-  var SHOT_Z = [-4.6, -2.6, 2.6, 4.6];
-  var SHOT_H = [0.9, 1.8, 2.8];
+  var GW = NS.GOAL_HALF_W, GHT = NS.GOAL_HEIGHT;
+  var SHOT_Z = [-0.82 * GW, -0.46 * GW, 0.46 * GW, 0.82 * GW];
+  var SHOT_H = [0.25 * GHT, 0.5 * GHT, 0.78 * GHT];
 
   // opponents (not the keeper) standing in the line of a shot from (x, z) to (gx, gz)
   function blockers(x, z, gx, gz, team) {
