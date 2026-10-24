@@ -450,6 +450,8 @@ that differ from both teams.
   The other team's restart: a checkoAI taker plays it with the CPU's set play (it used to wait up to 10 s for its
   network to press a button), and pressing your pass or shot button (A / B, or the keyboard's) has the CPU take it at
   once (also pressed during the walk-up: he plays it as soon as he reaches the ball).
+* **Settings > Graphics > Ball size**: Small (the real size, as before), Normal (+10%, the default) or Big (+20%).
+  Only the picture changes (the ball, its shadow and its shot streak); its physics keep the real size.
 * **Camera near the goals**: as the ball nears a goal the view swings on towards it, so the goal and the box stay on
   screen on every pitch size and camera (the goal sits at 73-85% of the screen width with the ball on the goal line;
   it used to be cut off at the edge on the big pitches).

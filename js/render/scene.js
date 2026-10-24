@@ -9,6 +9,7 @@
   var stadium = null;       // everything sized from the pitch (rebuilt when the stadium changes)
   var trail = [];           // pooled spheres behind a shot
   var TRAIL_N = 9;
+  var ballK = 1; // Settings > Ball size
   var trailCount = 0;
   var projV = null;
   var nets = [null, null];  // goal nets (-x, +x)
@@ -211,11 +212,19 @@
         ballMesh.quaternion.normalize();
       }
       ballMesh.position.copy(pos);
+      ballMesh.position.y += NS.BALL_R * (ballK - 1); // (a bigger picture still sits on the grass)
       this.placeBallShadow();
     },
+    // Settings > Ball size: the ball drawn k times its real size (1, 1.1, 1.2); its play does not change
+    setBallSize: function (k) {
+      ballK = k > 0 ? k : 1;
+      if (!ballMesh) return;
+      ballMesh.scale.set(ballK, ballK, ballK);
+      for (var t = 0; t < TRAIL_N; t++) { var sc = (1 - t / TRAIL_N) * ballK; trail[t].scale.set(sc, sc, sc); }
+    },
     placeBallShadow: function () {
-      var p = ballMesh.position, up = p.y - NS.BALL_R;
-      var s = 1 / (1 + up * 0.12);
+      var p = ballMesh.position, up = p.y - NS.BALL_R * ballK;
+      var s = 1 / (1 + up * 0.12) * ballK;
       ballShadow.position.set(p.x, 0.025, p.z);
       ballShadow.scale.set(s, 1, s);
       ballShadowMat.opacity = 0.4 * s;

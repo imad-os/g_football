@@ -2,7 +2,7 @@
 (function (NS) {
   'use strict';
 
-  NS.VERSION = '1.45.0';
+  NS.VERSION = '1.46.0';
 
   // Pitch geometry (world units; x = length, z = width, y = up). NS.M: world units per metre, from the players: an
   // average footballer (1.81 m) is 2.9 units tall. Everything is at real size at that scale: the ball, the players,
@@ -70,6 +70,7 @@
     gaugeTime: 0.5,
     cameraMode: 'WIDE',
     ballSkin: 'CLASSIC',
+    ballSize: 1.1,
     playerModel: 'ATHLETE',
     playerDetail: 'AUTO',
     switchMode: 'AUTO',
@@ -119,6 +120,9 @@
       options: [['CLOSE', 'opt.dynamic'], ['WIDE', 'opt.wide'], ['BLIMP', 'opt.blimp']] },
     { key: 'ballSkin', group: 'video', label: 'set.ball', hint: 'set.ball.h',
       options: [['CLASSIC', 'opt.ball.classic'], ['PRO', 'opt.ball.pro'], ['NIGHT', 'opt.ball.night'], ['RETRO', 'opt.ball.retro'], ['GOLD', 'opt.ball.gold']] },
+    // how big the ball is drawn (only the picture: its physics keep the real size)
+    { key: 'ballSize', group: 'video', label: 'set.ballsize', hint: 'set.ballsize.h',
+      options: [[1.0, 'opt.bs.small'], [1.1, 'opt.bs.normal'], [1.2, 'opt.bs.big']] },
     // the players' bodies: blocks, a real footballer's build (heights, hair, boots vary), or a big-headed toon
     { key: 'playerModel', group: 'video', label: 'set.model', hint: 'set.model.h',
       options: [['ATHLETE', 'opt.model.athlete'], ['CLASSIC', 'opt.model.classic'], ['TOON', 'opt.model.toon']] },
