@@ -805,6 +805,39 @@
     return best;
   }
 
+  // Throw-in: two team-mates come short to take it (one up the line, one inside and a little back), within an easy
+  // throw, and their markers keep a step off them until it is taken; without them the nearest man was often 20 m away,
+  // too far for a throw, or marked so tight that the throw was a gift. The places are where they walk to.
+  var THROW_SPOTS = [[7, 5.5], [-5, 9]]; // metres: along the line towards the goal he attacks, into the pitch
+  var THROW_GAP = 3 * NS.M;
+  function throwOptions(t, taker, bx, sz, a) {
+    var players = World.players, used = null;
+    for (var k = 0; k < THROW_SPOTS.length; k++) {
+      var ox = clamp(bx + a * THROW_SPOTS[k][0] * NS.M, -HALF_W + 3, HALF_W - 3);
+      var oz = sz * (HALF_H - THROW_SPOTS[k][1] * NS.M);
+      var q = nearestOf(t, ox, oz, taker);
+      if (q === used) q = null;
+      for (var i = 0; !q && i < players.length; i++) { // (the nearest was already taken: the next one)
+        var c = players[i];
+        if (c.team === t && c.role !== 'GK' && c !== taker && c !== used) q = c;
+      }
+      if (!q) continue;
+      used = q;
+      q.pos.set(ox, 0, oz);
+      q.facing = Math.atan2(taker.pos.x - ox, taker.pos.z - oz);
+      for (i = 0; i < players.length; i++) {
+        var o = players[i];
+        if (o.team === t || o.role === 'GK') continue;
+        var dx = o.pos.x - ox, dz = o.pos.z - oz, dd = Math.sqrt(dx * dx + dz * dz);
+        if (dd >= THROW_GAP) continue;
+        // goal-side of him, a step off
+        if (dd < 0.1) { dx = a; dz = 0; dd = 1; }
+        o.pos.x = clamp(ox + dx / dd * THROW_GAP, -HALF_W + 1, HALF_W - 1);
+        o.pos.z = clamp(oz + dz / dd * THROW_GAP, -HALF_H + 1, HALF_H - 1);
+      }
+    }
+  }
+
   // Corner kick: the taker at the flag, the best headers in the box with a marker each, the keeper on his line.
   var CORNER_SPOTS = [[6, -1.5], [8.5, 3], [11, -0.5], [5, 5.5], [13, -6], [14.5, 5]];
   function setupCorner(t, taker) {
@@ -919,6 +952,7 @@
       taker = nearestOf(t, bx, bz, null);
       taker.pos.set(bx, 0, sz * (HALF_H + 0.45));
       taker.facing = sz > 0 ? Math.PI : 0;
+      throwOptions(t, taker, bx, sz, a);
       m.restart = 3;
     } else if (kind === 4) {
       taker = nearestOf(t, bx, bz, null);
@@ -1329,7 +1363,8 @@
       }
 
       // ----- clock -----
-      m.timeSeconds += dt * (90 / settings.durationMins);
+      // a restart nobody has played yet (throw-in, corner, free kick, goal kick, penalty, kick-off): the clock waits
+      if (!m.restart && !(m.penalty && ball.owner === m.setTaker)) m.timeSeconds += dt * (90 / settings.durationMins);
       var mins = Math.floor(m.timeSeconds / 60);
       var whole = Math.floor(m.timeSeconds);
       if (whole !== lastSecond) { lastSecond = whole; NS.HUD.setClock(mins, whole % 60); }

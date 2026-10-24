@@ -229,7 +229,7 @@
 
   function back() {
     if (current === 'BUTTONS') { show('SETTINGS'); return; }
-    if (current === 'AIMALEARN') { show(matchRunning() ? 'PAUSE' : 'MAIN'); return; }
+    if (current === 'AIMALEARN') { show(learnFrom === 'RESULT' ? 'RESULT' : (matchRunning() ? 'PAUSE' : 'MAIN')); return; }
     if (current === 'DEBUG') { if (!NS.Debug.running()) show('SETTINGS'); return; }
     if (current === 'RESULT') { if (resView !== 'sum') { resView = 'sum'; renderResult(); } else resultExit(); return; }
     if (current === 'SETTINGS' && NS.Aima && NS.Aima.training()) return; // a checkoAI training is running
@@ -1059,7 +1059,7 @@
         hide();
         if (!NS.Replay.playLast(function () { show('PAUSE'); })) show('PAUSE');
       }],
-      ['aima', 'purple', '🧠', function () { show('AIMALEARN'); }],
+      ['aima', 'purple', '🧠', function () { learnFrom = 'PAUSE'; show('AIMALEARN'); }],
       ['restart', 'orange', '🔄', function () { startMatch(); }],
       ['quit', 'rose', '🏠', function () { NS.Match.exitToMenu(); }]
     ];
@@ -1079,6 +1079,7 @@
 
   /* ------------------------------ checkoAI: what he is learning in this match (from the pause menu) ------------------------------ */
 
+  var learnFrom = 'PAUSE';   // the screen Back returns to (the pause menu, or the full-time page)
   function buildLearn() {
     var wrap = screens.AIMALEARN;
     refs.learnBody = el('div', 'learn-body');
@@ -1177,7 +1178,10 @@
       resView = resView === 'goals' ? 'sum' : 'goals';
       renderResult(resView === 'goals' && NS.Stats.goals().length ? 'rg:0' : 'rs:goals'); // (the remote lands on the first goal)
     });
+    // checkoAI played: what he learnt in this match (the same page as the pause menu's)
+    refs.resAima = btn('', T('pause.aima'), 'rs:aima', function () { learnFrom = 'RESULT'; resFocus = 'rs:aima'; show('AIMALEARN'); });
     left.appendChild(refs.resStats);
+    left.appendChild(refs.resAima);
     left.appendChild(refs.resGoals);
     foot.appendChild(left);
     var right = el('div', 'row');
@@ -1329,6 +1333,7 @@
     goals.forEach(function (g) { if (g.clip) kept++; });
     refs.resGoals.textContent = resView === 'goals' ? T('res.summary') : T('res.goals') + (goals.length ? ' (' + goals.length + ')' : '');
     refs.resGoals.disabled = !kept && resView !== 'goals';
+    refs.resAima.classList.toggle('hidden', !(NS.Aima && NS.Aima.learnView().length));
     refs.resTeams.classList.toggle('hidden', comp);
     refs.resAgain.classList.toggle('hidden', comp);
     refs.resExit.textContent = comp ? T('res.cont') : T('res.exit');

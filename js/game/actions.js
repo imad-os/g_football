@@ -125,7 +125,7 @@
       ball.gkTried = 0; ball.hard = false; ball.chip = false; ball.pen = false; ball.shotD = 0;
       ball.receiver = p; // he chases it by himself, like a pass to him (the arrow flashes)
       ball.contester = null;
-      ball.fromX = ball.pos.x; ball.fromZ = ball.pos.z; ball.age = 0; ball.headed = false;
+      ball.fromX = ball.pos.x; ball.fromZ = ball.pos.z; ball.age = 0; ball.headed = false; ball.thrown = false;
       var sp = Math.min(22, Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z) + 10); // 2 to 3 m ahead of him
       ball.pos.y = NS.BALL_R;
       ball.vel.set(dx * sp, 0, dz * sp);
@@ -141,6 +141,7 @@
     release: function (p, type) {
       var ball = World.ball;
       this.markOffside(p);
+      ball.thrown = !!p.throwIn; // (a throw-in: a soft ball, easy to bring down for the man it is thrown to)
       if (p.throwIn) { p.throwIn = false; p.throwT = 0.4; }
       ball.owner = null;
       ball.pickupCooldown = 0.28;
@@ -729,6 +730,8 @@
       var quick = react < REACT_TOUCH ? Math.min(1, (REACT_TOUCH - react) / (REACT_TOUCH - 0.15)) : 0;
       var skill = (p.role === 'GK' ? p.st.drb * 0.5 + 30 : p.st.drb) / 99;
       var fail = (pace * 0.35 + quick * 0.5) * (1.35 - skill * 0.7);
+      // a throw-in to him: thrown softly at his body (he meets it on the thigh or chest even when running to it)
+      if (ball.thrown && ball.receiver === p) return Math.random() >= clamp(fail * 0.2, 0, 0.1);
       if (ball.receiver === p) fail *= 0.45;
       if (ball.pos.y > 1.9) fail += 0.18; else if (ball.pos.y > 0.9) fail += 0.07;
       return Math.random() >= clamp(fail, 0, 0.85);
@@ -753,6 +756,7 @@
         NS.Audio.kick(false);
       }
       ball.hard = false;
+      ball.thrown = false;
       ball.receiver = null;
       ball.contester = null;
       ball.pickupCooldown = 0.15;

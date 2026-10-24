@@ -2,7 +2,7 @@
 (function (NS) {
   'use strict';
 
-  NS.VERSION = '1.37.0';
+  NS.VERSION = '1.38.0';
 
   // Pitch geometry (world units; x = length, z = width, y = up). NS.M: world units per metre, from the players: an
   // average footballer (1.81 m) is 2.9 units tall. Everything is at real size at that scale: the ball, the players,

@@ -240,6 +240,7 @@
       ball.pickupCooldown = 0.25;
       ball.offTeam = -1;
       ball.nutThru = null; ball.nutT = 0; ball.nutP = null;
+      ball.thrown = false;
     },
 
     // Advances the ball. Returns the scoring team (0 = home, +x goal; 1 = away) or -1.

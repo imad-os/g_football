@@ -146,7 +146,8 @@ everything he sees is real football, every reward is his own and every clap reac
 every outfield player as before. Trainings and recordings always use all of them.
 **Pause > checkoAI** shows what he is learning in the match in progress: how many decisions were his own (and Legend's
 help), lessons from rewards and from copying Legend, his passes / shots / balls won and lost, where the match's rewards
-came from (bars: green = do more of it, red = less) and the latest rewards with their minute.
+came from (bars: green = do more of it, red = less) and the latest rewards with their minute. The full-time page has
+the same page behind its **checkoAI** button (next to Full stats).
 
 - **Brains**: several networks, each with its own settings, stats and history (Settings > checkoAI > Brains: use, clone,
   rename, new, delete). The active brain (★) plays the matches and is the one every other profile gets. Sizes SMALL
@@ -422,7 +423,11 @@ that differ from both teams.
 * **Restarts**: at a kick-off everyone stays in his own half until it is taken, and the team not kicking off outside the
   centre circle; at a free kick the opponents are put and kept 10 m from the ball until it is taken. A throw-in always
   goes to a team-mate (the one the stick points at, else the nearest within 24 units) and comes down to his waist where
-  he will be; the player it was thrown to brings it down off his chest up to 2.3 units high.
+  he will be; the player it was thrown to brings it down off his chest up to 2.3 units high. Two team-mates come short
+  for it (7 m up the line and 5.5 m in, 5 m back and 9 m in) and their markers keep 3 m off them until it is taken; a
+  throw to a man is a soft ball, so his first touch almost never fails (even running onto it, which your players do).
+  Kept in a test: the CPU 97%, by hand 80-93% (was ~50%). **The clock stops** while a restart waits to be played
+  (throw-in, corner, free kick, goal kick, penalty, kick-off), as it already did while the players got into place.
 * **Knees and elbows** (ATHLETE, TOON): thigh / shin and upper arm / forearm on their own pivots: a running leg folds
   as it swings through, the back-swing of a kick folds the knee, the slide folds the back leg, players kneel on their
   shins; the forearms come up with the pace; keepers crouch set for a shot (bent knees, arms out low, elbows bent),
