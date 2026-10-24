@@ -1871,7 +1871,8 @@
     var size = Math.max(1, Math.round(meta.samples * 19 / 20)), add = J.steps - J.noted;
     J.noted = J.steps;
     d.name = meta.name;
-    d.passes = Math.round((d.passes + add / size) * 100) / 100;  // (new data caught up to the old, so one average)
+    // (new data caught up to the old, so one average; kept exact: a minute adds ~0.002 of a pass over a big set)
+    d.passes += add / size;
     d.chunks = Math.max(d.chunks, J.chunksDone);
     d.steps += add; d.when = Date.now();
     d.next = next;
@@ -2014,7 +2015,7 @@
       ['tick', 'aima.o.tick', [[0, 'aima.fast'], [1, 'opt.normal'], [2, 'aima.slow']]],
       ['look', 'aima.o.look', [[0, 'aima.short'], [1, 'opt.normal'], [2, 'aima.long']]],
       ['mineW', 'aima.o.mineW', [[0, 'opt.low'], [1, 'opt.normal'], [2, 'opt.high']]],
-      ['mem', 'aima.o.mem', [[0, '3 000'], [1, '6 000'], [2, '12 000']]],
+      ['mem', 'aima.o.mem', [[0, '20 000 (~10 MB)'], [1, '50 000 (~24 MB)'], [2, '100 000 (~47 MB)']]], // MEMS: copied moves kept in RAM
       ['past', 'aima.o.past', [[1, 'opt.on'], [0, 'opt.off']]],
       ['size', 'aima.o.size', [['TINY', 'aima.sz.TINY'], ['MEDIUM', 'aima.sz.MEDIUM'], ['LARGE', 'aima.sz.LARGE'], ['HUGE', 'aima.sz.HUGE']]]
     ],

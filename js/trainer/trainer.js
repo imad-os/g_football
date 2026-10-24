@@ -167,7 +167,7 @@
     var cur = null;
     sets.forEach(function (x) { if (x.id === setSel) cur = x; });
     var lr = cur && b ? A.learnt(b, cur.id) : null;
-    $('learnt').textContent = cur && b ? b.name + ': ' + (lr ? lr.passes + ' passes · ' + lr.chunks + ' / ' + cur.chunks + ' chunks learnt' +
+    $('learnt').textContent = cur && b ? b.name + ': ' + (lr ? lr.passes.toFixed(3) + ' passes · ' + lr.chunks + ' / ' + cur.chunks + ' chunks learnt' +
       (lr.next ? ' · goes on from chunk ' + (lr.next + 1) : '') : 'nothing learnt from this set yet') : '';
     var miss = cur ? A.dataMissing(cur.id) : 0;
     var rs = $('bResend');
@@ -265,7 +265,7 @@
     var data = b.data || {};
     Object.keys(data).forEach(function (k) {
       var d = data[k];
-      rows.push(['data "' + d.name + '"', d.passes + ' passes · ' + d.chunks + ' chunks · ' + d.steps + ' steps' + (d.next ? ' · next chunk ' + (d.next + 1) : '')]);
+      rows.push(['data "' + d.name + '"', d.passes.toFixed(3) + ' passes · ' + d.chunks + ' chunks · ' + d.steps + ' steps' + (d.next ? ' · next chunk ' + (d.next + 1) : '')]);
     });
     rows.forEach(function (r) { box.appendChild(el('span', 'k', r[0])); box.appendChild(el('span', 'v', r[1])); });
     b.hist.slice(-30).reverse().forEach(function (h) {

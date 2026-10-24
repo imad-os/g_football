@@ -1836,7 +1836,7 @@
     c.appendChild(g);
     // what this brain has already learnt from the chosen set (the next run goes on from there)
     var lr = cur && me ? A.learnt(me, cur.id) : null;
-    if (cur && me) c.appendChild(el('div', 'set-hint', me.name + ': ' + (lr ? lr.passes + ' ' + T('aima.d.passes') + ' · ' + lr.chunks + ' / ' + cur.chunks + ' ' + T('aima.d.chunks') +
+    if (cur && me) c.appendChild(el('div', 'set-hint', me.name + ': ' + (lr ? lr.passes.toFixed(3) + ' ' + T('aima.d.passes') + ' · ' + lr.chunks + ' / ' + cur.chunks + ' ' + T('aima.d.chunks') +
       (cur.chunks > lr.chunks ? ' · +' + (cur.chunks - lr.chunks) + ' ' + T('aima.d.newchunks') : '') : T('aima.d.never'))));
     c.appendChild(el('div', 'set-hint', T('aima.k.cloud') + ': ' + A.dataState()));
     var opts = el('div', 'dbg-opts');
