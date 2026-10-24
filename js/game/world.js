@@ -195,6 +195,7 @@
     aiSlots: [makeSlot(2), makeSlot(3)], // AI.MA: the learning player of team 0 / 1 (js/game/aima.js)
     allSlots: null,                      // the 2 human slots, then the 2 AI.MA slots
     pressT: [0, 0],
+    gkRush: [0, 0], // > 0: a human holds the keeper button, that team's keeper rushes out (js/game/ai.js)
     kickoffTeam: 0,
     settings: null,
     session: {

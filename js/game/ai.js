@@ -1407,6 +1407,23 @@
       p.gkRT = 0;
     }
 
+    // the keeper button held (a human's team): off his line flat out, to claim a loose ball or go in on the man who
+    // has it (a block at his feet when he is close)
+    var mt = World.match;
+    if (World.gkRush[p.team] > 0 && !mt.restart && !mt.penalty && !(ball.owner && ball.owner.team === p.team)) {
+      var c = ball.owner;
+      if (c) {
+        var cx = c.pos.x + c.vel.x * 0.25, cz = c.pos.z + c.vel.z * 0.25;
+        var cdx = c.pos.x - p.pos.x, cdz = c.pos.z - p.pos.z;
+        if (cdx * cdx + cdz * cdz < 5.3 && p.tackleCd <= 0 && !c.gkHands) { Actions.startTackle(p, c, true, false); return; }
+        moveToward(p, cx, cz, 12.4 * prof.speedMul, dt);
+      } else {
+        interceptTime(p, 12.4, 3.2);
+        moveToward(p, ICX, ICZ, 12.4 * prof.speedMul, dt);
+      }
+      return;
+    }
+
     // loose ball in or near the box that we reach first: come and claim it
     if (!ball.owner && Math.abs(ball.pos.x - ownGoalX) < 16 && Math.abs(ball.pos.z) < 13) {
       var gt = interceptTime(p, 10.5, 3.2);

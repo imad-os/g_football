@@ -278,15 +278,18 @@
         nets[n].position.x = sgn * (NS.PITCH_HALF_W + NS.GOAL_DEPTH * (1 + bulge) / 2);
       }
       var cfg = CAM[mode] || CAM.WIDE;
-      var tx = bx * cfg.trackX;
-      var lim = NS.PITCH_HALF_W * 0.6;
+      // near a goal the view swings on towards it, so the goal and the box stay on screen on every pitch size
+      var HW = NS.PITCH_HALF_W, ax = Math.abs(bx), sg = bx < 0 ? -1 : 1;
+      var near = ax > HW * 0.35 ? (ax - HW * 0.35) / (HW * 0.65) : 0; // 0 up to 35% of the half, 1 on the goal line
+      var tx = bx * cfg.trackX + sg * near * HW * 0.1;
+      var lim = HW * 0.72;
       if (tx > lim) tx = lim; else if (tx < -lim) tx = -lim;
       var tz = cfg.dist + bz * 0.5; // far enough to show throw-ins and corners on the near touchline
       var k = Math.min(1, 5 * dt);
       camera.position.x += (tx - camera.position.x) * k;
       camera.position.y += (cfg.height - camera.position.y) * k;
       camera.position.z += (tz - camera.position.z) * k;
-      lookTarget.set(bx * 0.5, 0, bz * 0.58);
+      lookTarget.set(bx * 0.5 + sg * near * HW * 0.22, 0, bz * 0.58);
       camera.lookAt(lookTarget);
     },
     render: function () { renderer.render(scene, camera); },

@@ -1174,6 +1174,7 @@
       }
       World.pressT[0] = 0;
       World.pressT[1] = 0;
+      World.gkRush[0] = World.gkRush[1] = 0;
       walking = false;
       if (ref) { ref.pos.set(-3, 0, -12); ref.vel.set(0, 0, 0); ref.facing = 0; }
       m.setPieceTimer = 0; m.setPiece = 0; m.penalty = false; m.protectT = 0; m.restart = 0; m.setTaker = null;
@@ -1430,6 +1431,8 @@
       }
       if (World.pressT[0] > 0) World.pressT[0] -= dt;
       if (World.pressT[1] > 0) World.pressT[1] -= dt;
+      if (World.gkRush[0] > 0) World.gkRush[0] -= dt;
+      if (World.gkRush[1] > 0) World.gkRush[1] -= dt;
 
       // ----- humans (and AI.MA, who plays like one) -----
       syncAiSlots();

@@ -43,7 +43,9 @@
     { id: 'teampress', ctx: 2, kind: 2, cls: 3, mask: PY },
     { id: 'switch', ctx: 2, kind: 0, cls: 1, mask: PL },
     // (last on purpose: checkoAI's button head has one slot per move above; this one is for humans only)
-    { id: 'lobthrough', ctx: 1, kind: 0, cls: 2, mask: PL | PY }
+    { id: 'lobthrough', ctx: 1, kind: 0, cls: 2, mask: PL | PY },
+    // held: the keeper comes off his line for the ball (claims it, or goes in on the man who has it); humans only
+    { id: 'keeper', ctx: 2, kind: 2, cls: 3, mask: PZL }
   ];
   var DEF = [];
   for (var i = 0; i < MOVES.length; i++) DEF.push(MOVES[i].mask);
@@ -53,7 +55,7 @@
   // are met) so the move engine reads the keyboard like a controller: m2 / sprint[1] are those bits.
   // (keys My PC lets through to a game in its frame: W A S D F G, Enter (Space, Z), Shift (X); js/core/keyboard.js)
   var DEFK = { lowpass: ['KeyS'], through: ['KeyW'], long: ['KeyA'], shoot: ['KeyD'], curve: ['KeyF'], chip: ['KeyG'],
-    tackle: ['KeyA'], slide: ['KeyD'], press: ['KeyS'], teampress: ['KeyW'], switch: ['KeyG'] };
+    tackle: ['KeyA'], slide: ['KeyD'], press: ['KeyS'], teampress: ['KeyW'], switch: ['KeyG'], keeper: ['KeyF'] };
   var DEFK_SPRINT = ['ShiftLeft'];
   var KEY_BITS = [PA, PB, PX, PY, PL, PR, PZL, PZR, PL3, PR3, PDU, PDD, PDL, PDR];
   var NOT_MAPPABLE = { ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1, Escape: 1, Backspace: 1, Tab: 1 };

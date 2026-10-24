@@ -71,6 +71,7 @@ button never changes the move**, only how it is played:
 | **Press** | A (hold) |
 | **Team press** | Y (hold) |
 | **Switch player** | LB |
+| **Keeper rush** (he comes off his line for the ball: claims it, or goes in at the feet of the man who has it) | LT / ZL (hold); keyboard F (hold) |
 | Sprint burst | double-tap a direction |
 | Knock-on (push the ball ahead and run onto it) | tap sprint again and again while dribbling: every second tap (he chases it by himself) |
 | Game menu | Start (+ on a phone controller) |
@@ -449,6 +450,9 @@ that differ from both teams.
   The other team's restart: a checkoAI taker plays it with the CPU's set play (it used to wait up to 10 s for its
   network to press a button), and pressing your pass or shot button (A / B, or the keyboard's) has the CPU take it at
   once (also pressed during the walk-up: he plays it as soon as he reaches the ball).
+* **Camera near the goals**: as the ball nears a goal the view swings on towards it, so the goal and the box stay on
+  screen on every pitch size and camera (the goal sits at 73-85% of the screen width with the ball on the goal line;
+  it used to be cut off at the edge on the big pitches).
 * **Knees and elbows** (ATHLETE, TOON): thigh / shin and upper arm / forearm on their own pivots: a running leg folds
   as it swings through, the back-swing of a kick folds the knee, the slide folds the back leg, players kneel on their
   shins; the forearms come up with the pace; keepers crouch set for a shot (bent knees, arms out low, elbows bent),

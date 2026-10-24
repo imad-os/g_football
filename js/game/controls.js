@@ -28,6 +28,7 @@
   var I_TEAM = B.index('teampress');
   var I_SWITCH = B.index('switch');
   var I_LOB = B.index('lobthrough'); // long through pass: lands over the defenders (humans only, checkoAI never sees it)
+  var I_KEEP = B.index('keeper');    // held: the keeper rushes out (js/game/ai.js aiGoalkeeper; humans only)
 
   // seconds to fill the power bar (shot gauge, pass power): Settings > Gameplay > Power bar speed
   function fullCharge() { var t = World.settings && World.settings.gaugeTime; return t > 0 ? t : 0.5; }
@@ -130,6 +131,7 @@
     slot.chargeFrac = -1;
     slot.pressing = false;
     slot.teamPress = false;
+    slot.keeper = false;
   }
 
   // power 0..1 from the hold time for curve / chip shots (a tap is a soft one; full power with a full bar)
@@ -467,12 +469,15 @@
                 if (p.tackleT > 0) return;
               }
             }
-            slot.pressing = mv >= 0 && B.MOVES[mv].kind === 2;
+            slot.keeper = mv === I_KEEP && !slot.ai;
+            slot.pressing = mv >= 0 && B.MOVES[mv].kind === 2 && mv !== I_KEEP;
             slot.teamPress = mv === I_TEAM;
           }
           if (ended) endEvent(slot);
         }
       }
+      // the keeper's button held: he keeps coming out while it is (and his own team has not got the ball)
+      if (slot.keeper && !has) World.gkRush[p.team] = 0.15;
 
       // a penalty: nobody runs; the taker aims with the stick and shoots (the gauge sets height and pace)
       // a throw-in / corner / goal kick: the taker stands still, the stick aims the ball
