@@ -836,6 +836,10 @@
       if (gdist > 28) sc -= 0.12;
       // in and around the box a sight of goal is the thing to take (a forward does not dribble on past it)
       if (gdist < 22) sc += (22 - gdist) / 22 * 0.45 + (p.role === 'FWD' ? 0.06 : 0);
+      // side on or turned away from goal the strike is weak and wild (Actions.shotForm): he turns towards it first
+      // (unless a man is on him and it is now or never)
+      var face = (1 + (Math.sin(p.facing) * gdx - Math.cos(p.facing) * pz) / (gdist || 1)) / 2;
+      sc -= (1 - face) * (pressure < 1.6 ? 0.3 : 0.7);
       sc += (Math.random() - 0.5) * noise;
       if (sc > best) { best = sc; bType = ACT.SHOOT; }
     }

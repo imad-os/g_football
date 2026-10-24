@@ -186,8 +186,9 @@
           var side = aimed ? (az > 0 ? 1 : -1) : (p.pos.z > 0 ? -1 : 1);
           var curveZ = -side * (GOAL_HALF_W + 2);
           angle = Math.atan2(goalX - p.pos.x, curveZ - p.pos.z);
-          angle += (Math.random() - 0.5) * (1.05 - power) * 0.1 * (accuracy || 1) * (p.bumpT > 0 ? BUMP_ACC : 1);
-          speed = (30 + power * 12) * (p.bumpT > 0 ? BUMP_POW : 1);
+          this.shotForm(p, goalX, 0); // (his body to the goal, a defender on him, his run: as a driven shot)
+          angle += (Math.random() - 0.5) * (1.05 - power) * 0.1 * (accuracy || 1) * (p.bumpT > 0 ? BUMP_ACC : 1) * this.shotErr;
+          speed = (30 + power * 12) * (0.88 + p.st.sht / 99 * 0.16) * this.shotPow * (p.bumpT > 0 ? BUMP_POW : 1);
           var cvx = goalX - p.pos.x, cvz = curveZ - p.pos.z;
           var cT = Math.sqrt(cvx * cvx + cvz * cvz) / speed;
           vy = Math.min(9, (1.3 + power * 0.9 - ball.pos.y) / cT + 0.5 * G * cT);
@@ -312,6 +313,33 @@
       }
       return 1;
     },
+    // How well he can strike it now (Actions.shotPow / shotErr, x the pace and the miss): his body to the goal (facing
+    // it: full power, his best aim; side on or turned away: much less of both), a defender on him (shoulder to shoulder
+    // or close: rushed, less clean) and his run (standing: a little less pace; a sprint or running onto his knock-on:
+    // more pace, a little less control).
+    shotForm: function (p, goalX, goalZ) {
+      var gx = goalX - p.pos.x, gz = goalZ - p.pos.z, gl = Math.sqrt(gx * gx + gz * gz) || 1;
+      var f = (1 + (Math.sin(p.facing) * gx + Math.cos(p.facing) * gz) / gl) / 2; // 1 facing the goal, 0.5 side on, 0 back to it
+      var m = World.match, dead = (m.penalty || m.restart) && m.setTaker === p; // a dead ball: he lines it up, with a run-up
+      if (dead) f = 1;
+      // (a great finisher copes better with an awkward body: Shoot 90 ~ 0.65 of the loss, 60 ~ 0.95)
+      var fin = p.st ? clamp(1.55 - p.st.sht / 99, 0.55, 1.1) : 1;
+      var pow = 1 - 0.5 * (1 - Math.pow(f, 0.7)) * fin;
+      var err = 1 + 4 * Math.pow(1 - f, 1.3) * fin;
+      var near = 99, pl = World.players;
+      for (var i = 0; i < pl.length; i++) {
+        var q = pl[i];
+        if (q.team === p.team || q.role === 'GK') continue;
+        var dx = q.pos.x - p.pos.x, dz = q.pos.z - p.pos.z, d = Math.sqrt(dx * dx + dz * dz);
+        if (d < near) near = d;
+      }
+      if (near < 1.6) { pow *= 0.9; err *= 1.7; } else if (near < 3.2) err *= 1 + 0.35 * (3.2 - near) / 1.6;
+      var v = dead ? 9 : Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z);
+      pow *= 0.92 + clamp((v - 4) / 11, 0, 1) * 0.16;
+      err *= 1 + clamp((v - 11) / 5, 0, 1) * 0.25;
+      this.shotPow = pow; this.shotErr = err;
+    },
+    shotPow: 1, shotErr: 1,
     shotSpeed: function (g) { return SHOT_MIN + (SHOT_MAX - SHOT_MIN) * Math.pow(Math.min(1, g / 0.5), 0.7); },
     driveShot: function (p, goalZ, g, accuracy, bend) {
       var ball = World.ball;
@@ -325,8 +353,10 @@
       var err = (0.016 + sd * 0.0015) * (accuracy || 1) * (0.6 + g * 0.7) * (2.1 - p.st.sht / 99 * 1.65);
       if (p.bumpT > 0) err *= BUMP_ACC; // pressed shoulder to shoulder: off balance
       if (NS.teamClass) err *= clamp(1 - 0.3 * NS.teamClass(p.team), 0.6, 1.5); // (a better team finishes better)
+      this.shotForm(p, goalX, goalZ);
+      err *= this.shotErr;
       var angle = Math.atan2(sdx, sdz) + gaussR() * err;
-      var speed = this.shotSpeed(g) * (0.9 + p.st.sht / 99 * 0.14) * (p.bumpT > 0 ? BUMP_POW : 1);
+      var speed = this.shotSpeed(g) * (0.84 + p.st.sht / 99 * 0.24) * this.shotPow * (p.bumpT > 0 ? BUMP_POW : 1);
       var ty = this.gaugeHeight(g);
       var vy;
       if (ty < 0) {

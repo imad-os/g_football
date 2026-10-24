@@ -450,6 +450,16 @@ that differ from both teams.
   The other team's restart: a checkoAI taker plays it with the CPU's set play (it used to wait up to 10 s for its
   network to press a button), and pressing your pass or shot button (A / B, or the keyboard's) has the CPU take it at
   once (also pressed during the walk-up: he plays it as soon as he reaches the ball).
+* **How a shot comes off** (driven and curled shots; Actions.shotForm): its pace and aim depend on
+  - his **body to the goal**: facing it, full power and his best aim; side on, less of both; back to it, about 60% of
+    the pace and wild (a great finisher copes better: Shoot 90 loses ~0.65 of what Shoot 60 loses);
+  - a **defender on him**: shoulder to shoulder, 10% less pace and much less accurate; close by, a little less accurate;
+  - his **run**: standing, a little less pace; running, more; a sprint or running onto his knock-on, the most (a
+    little less control);
+  - his **Shoot** rating (pace and aim) and his team's class.
+  A dead ball (penalty, free kick) is lined up with a run-up. The CPU turns towards goal before it shoots (unless a
+  man is on it). Test, Vinicius Jr from 20 m: facing pace 56 / on target 100%, side on 48 / 84%, back to goal 36 / 66%,
+  sprinting 64 / 99%, shoulder to shoulder 50 / 94%.
 * **Ratings decide matches**: each team's **class** is the average overall of its players on the pitch (75 = 0, every
   10 points = 1; Real Madrid +0.8, Raja -0.4). On top of the level (Easy..Legend) it sharpens the better side and blunts
   the weaker one: its decisions (less noise, quicker), its passing and shooting accuracy, its tackles and shoulder duels,
