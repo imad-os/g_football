@@ -13,6 +13,7 @@
   var cbLive = null;
   var cbTick = null;
   var cbAccept = null;
+  var keysHeld = {}, keysN = 0, keysPeak = [], keysIgnore = {}; // the keyboard's keys (js/core/keyboard.js)
   var held = 0;
   var peak = 0;
   var firstAt = 0;
@@ -40,7 +41,7 @@
   function tick() {
     timer = 0;
     if (!on) return;
-    if (held) { timer = setTimeout(tick, 1000); return; } // a button is down: wait for its release
+    if (held || keysN) { timer = setTimeout(tick, 1000); return; } // a button is down: wait for its release
     left--;
     if (left <= 0) { finish(0, 0); return; }
     if (cbTick) cbTick(left);
@@ -56,6 +57,7 @@
     start: function (onDone, onLive, onTick, accept) {
       on = true;
       cbAccept = accept || null;
+      keysHeld = {}; keysN = 0; keysPeak = []; keysIgnore = {};
       held = 0;
       peak = 0;
       ignore = 0;
@@ -79,7 +81,27 @@
       cbTick = null;
     },
 
-    // Fed for every button press / release while capturing (a controller's: js/core/gamepad.js; the keyboard's: the menu)
+    // A keyboard key (KeyboardEvent.code) pressed / released while capturing: onDone gets the keys (one or two) instead
+    // of a mask, onLive the keys held so far.
+    key: function (code, pressed, dev) {
+      if (!on || (cbAccept && !cbAccept(dev))) return;
+      if (pressed) {
+        if (performance.now() - startAt < 300) { keysIgnore[code] = 1; return; } // (the key that opened it)
+        if (keysHeld[code]) return;
+        if (!keysN) keysPeak = [];
+        keysHeld[code] = 1; keysN++;
+        if (keysPeak.length < 2) keysPeak.push(code);
+        left = TIMEOUT;
+        if (cbLive) cbLive(keysPeak.slice());
+      } else {
+        if (keysIgnore[code]) { delete keysIgnore[code]; return; }
+        if (!keysHeld[code]) return;
+        delete keysHeld[code]; keysN--;
+        if (!keysN && keysPeak.length) finish(keysPeak.slice(), 0);
+      }
+    },
+
+    // Fed for every button press / release while capturing (a controller's: js/core/gamepad.js)
     button: function (bit, pressed, dev) {
       if (!on || (cbAccept && dev && !cbAccept(dev))) return;
       if (pressed) {

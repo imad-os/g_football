@@ -1,6 +1,7 @@
 /* Per-player match input (P1, P2), fed by the device each player picked on the sides screen: a game controller or a phone
- * controller (js/core/gamepad.js), or the keyboard / TV remote (My PC's actions: arrows, Enter / Space = A, Shift = X;
- * 'keys2', the second keyboard player, is W A S D with F and G). Menus get My PC's actions from every device.
+ * controller (js/core/gamepad.js), or the keyboard / TV remote: the arrows through My PC's actions, its other keys read
+ * directly (js/core/keyboard.js, the keyboard map). 'keys2', My PC's second keyboard player, is W A S D with F and G (its
+ * pass / shot keys). Menus get My PC's actions from every device.
  * pads[n]: x / y = direction (analog stick or D-pad), cur = buttons held (bit mask of NS.Bindings bits),
  * latch = buttons pressed since the last simulation step (a very short press is never lost), burst = a direction was
  * double-tapped (sprint burst). */
@@ -89,15 +90,19 @@
       else if (action === 'right') k.r = pressed;
       else if (action === 'up') k.u = pressed;
       else if (action === 'down') k.d = pressed;
-      else if (action === 'jump') { NS.Input.button(n, KEY_A, pressed); return true; }
-      else if (action === 'run') { NS.Input.button(n, KEY_X, pressed); return true; }
-      else return false;
+      else if (action === 'jump' || action === 'run') {
+        // the keyboard is read directly (js/core/keyboard.js): its own keys play. If no key event ever reached the game
+        // (My PC kept them), Enter / Space and Shift are the keyboard map's pass and shot keys.
+        if (dev === 'keys' && NS.Keyboard && NS.Keyboard.live()) return true;
+        var B = NS.Bindings, m = B.maskOf(B.index(action === 'jump' ? 'lowpass' : 'shoot'), 1);
+        if (m) NS.Input.button(n, m, pressed);
+        return true;
+      } else return false;
       NS.Input.direction(n, (k.r ? 1 : 0) - (k.l ? 1 : 0), (k.d ? 1 : 0) - (k.u ? 1 : 0));
       return true;
     }
   };
 
-  var KEY_A = 8, KEY_X = 32; // (NS.Bindings bits)
   var keys = {};             // keyboard device -> its arrows held
 
   /* The devices and the two players. A device is the keyboard / TV remote ('keys'), a second keyboard player ('keys2',

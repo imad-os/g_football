@@ -1,7 +1,6 @@
 /* Button maps: one for the game controllers (every controller and phone controller: the standard button positions A B X Y,
- * L R, ZL ZR, L3 R3, shown with the controller's own names) and one for the keyboard / TV remote, which My PC gives only
- * two keys to play with: Enter / Space (bit KA) and Shift (bit KX); a second keyboard player has F and G for them. A
- * binding is a button or a two-button combination. There are no tap / hold gestures: the buttons alone decide the move,
+ * L R, ZL ZR, L3 R3, shown with the controller's own names) and one for the keyboard, any key (read directly by
+ * js/core/keyboard.js, not through My PC's few actions). A binding is a button / key or a combination of two. There are no tap / hold gestures: the buttons alone decide the move,
  * holding only changes how it is played.
  * MOVES[k].mask is the controller map (checkoAI plays with it too), the keyboard's is kept apart; use(n) picks the map
  * the move engine reads (js/game/match.js sets it before each player's controls: his device's kind, and back after).
@@ -24,7 +23,7 @@
   var PAD_FALLBACK = ['A', 'B', 'X', 'Y', 'L', 'R', 'ZL', 'ZR', '', '', 'L3', 'R3', 'D-pad \u2191', 'D-pad \u2193', 'D-pad \u2190', 'D-pad \u2192'];
   function padName(i) { return NS.Gamepad ? NS.Gamepad.label(i) : PAD_FALLBACK[i]; }
 
-  var SAVE_VERSION = 5; // v5: controllers + keyboard; v4 (a map per player) / v3 (one map): the controllers' map; v2: its pad side
+  var SAVE_VERSION = 6; // v6: controllers + keyboard keys; v5 / v4 / v3: the controllers' map (keyboard: defaults); v2: its pad side
   var ALL = 131071;
 
   function pop(m) { var c = 0; while (m) { c += m & 1; m >>>= 1; } return c; }
@@ -49,14 +48,48 @@
   var DEF = [];
   for (var i = 0; i < MOVES.length; i++) DEF.push(MOVES[i].mask);
   var DEF_SPRINT = PR;
-  // the keyboard: its two keys and both together (no sprint key by default: a double tap of an arrow is the burst)
-  var KA = PA, KX = PX;
-  var DEFK = { lowpass: KA, long: KA | KX, shoot: KX, tackle: KX, slide: KA | KX, press: KA };
-  var DEF2 = [];
-  for (i = 0; i < MOVES.length; i++) DEF2.push(DEFK[MOVES[i].id] || 0);
+  // The keyboard (read directly, js/core/keyboard.js): each move is one key or two together, by KeyboardEvent.code; the
+  // arrows move the player, Esc / Backspace open the menu. The keys in use get a bit each (KEY_BITS, in the order they
+  // are met) so the move engine reads the keyboard like a controller: m2 / sprint[1] are those bits.
+  var DEFK = { lowpass: ['KeyS'], through: ['KeyW'], long: ['KeyA'], shoot: ['KeyD'], curve: ['KeyE'], chip: ['KeyQ'],
+    onetwo: ['KeyZ'], lobthrough: ['KeyX'], tackle: ['KeyA'], slide: ['KeyD'], press: ['KeyS'], teampress: ['KeyW'], switch: ['KeyQ'] };
+  var DEFK_SPRINT = ['ShiftLeft'];
+  var KEY_BITS = [PA, PB, PX, PY, PL, PR, PZL, PZR, PL3, PR3, PDU, PDD, PDL, PDR];
+  var NOT_MAPPABLE = { ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1, Escape: 1, Backspace: 1, Tab: 1 };
+  var kc = [], kSprint = DEFK_SPRINT.slice(); // each move's keys, the sprint's
+  for (i = 0; i < MOVES.length; i++) kc.push((DEFK[MOVES[i].id] || []).slice());
+  var keyBit = {}, bitKey = {};
 
   var sprint = [DEF_SPRINT, 0];            // controllers, keyboard
-  var m2 = DEF2.slice();                   // the keyboard's moves (the controllers' are MOVES[k].mask)
+  var m2 = [];                             // the keyboard's moves as bits (the controllers' are MOVES[k].mask)
+  function keysMask(codes) { var m = 0; for (var j = 0; j < codes.length; j++) m |= keyBit[codes[j]] || 0; return m; }
+  // the keys in use -> bits, and the keyboard's moves / sprint as bits
+  function rebuildKeys() {
+    keyBit = {}; bitKey = {};
+    var n = 0;
+    function take(codes) {
+      for (var j = 0; j < codes.length; j++) {
+        if (keyBit[codes[j]] || n >= KEY_BITS.length) continue;
+        keyBit[codes[j]] = KEY_BITS[n]; bitKey[KEY_BITS[n]] = codes[j]; n++;
+      }
+    }
+    take(kSprint);
+    for (var k = 0; k < MOVES.length; k++) take(kc[k]);
+    sprint[1] = keysMask(kSprint);
+    for (k = 0; k < MOVES.length; k++) m2[k] = keysMask(kc[k]);
+  }
+  rebuildKeys();
+  // a key's name on screen ('KeyS' -> 'S', 'ShiftLeft' -> 'Shift'...)
+  function keyName(code) {
+    if (!code) return '';
+    var m = /^Key([A-Z])$/.exec(code) || /^Digit(\d)$/.exec(code);
+    if (m) return m[1];
+    if (/^Numpad/.test(code)) return 'Num ' + code.slice(6);
+    var names = { ShiftLeft: 'Shift', ShiftRight: 'Shift R', ControlLeft: 'Ctrl', ControlRight: 'Ctrl R', AltLeft: 'Alt',
+      AltRight: 'Alt R', Space: 'Space', Enter: 'Enter', CapsLock: 'Caps', Semicolon: ';', Quote: '\'', Comma: ',', Period: '.',
+      Slash: '/', Backslash: '\\', BracketLeft: '[', BracketRight: ']', Minus: '-', Equal: '=', Backquote: '`' };
+    return names[code] || code;
+  }
   var cur = 0;                             // the map the move engine reads now
   var DEF_CLAP = PDU;           // checkoAI's clap (the trainer's profile only): D-pad up
   var DEF_PUNISH = PDD;         // checkoAI's punishment ("that was bad"): D-pad down
@@ -137,31 +170,59 @@
       recompute();
       return cleared;
     },
-    clear: function (idx, p) { setMask(idx, p === 1 ? 1 : 0, 0); recompute(); },
+    clear: function (idx, p) {
+      if (p === 1) { kc[idx] = []; rebuildKeys(); } else setMask(idx, 0, 0);
+      recompute();
+    },
     setSprint: function (mask, p) { if (mask) sprint[p === 1 ? 1 : 0] = mask; },
+
+    // the keyboard: a move on these keys (one or two KeyboardEvent.code); any other move of the same context on the
+    // same keys is unbound (returns it, or -1). false: a key that cannot be mapped (arrows, Esc, Backspace, Tab).
+    setKeys: function (idx, codes) {
+      for (var j = 0; j < codes.length; j++) if (NOT_MAPPABLE[codes[j]]) return false;
+      var key = codes.slice().sort().join('+'), cleared = -1;
+      for (var k = 0; k < MOVES.length; k++) {
+        if (k !== idx && MOVES[k].ctx === MOVES[idx].ctx && kc[k].slice().sort().join('+') === key) { kc[k] = []; cleared = k; }
+      }
+      kc[idx] = codes.slice(0, 2);
+      rebuildKeys();
+      recompute();
+      return cleared;
+    },
+    setSprintKeys: function (codes) {
+      for (var j = 0; j < codes.length; j++) if (NOT_MAPPABLE[codes[j]]) return false;
+      kSprint = codes.slice(0, 2);
+      rebuildKeys();
+      return true;
+    },
+    // the bit a key presses in the keyboard map (0: no move uses it)
+    keyBit: function (code) { return keyBit[code] || 0; },
+    mappable: function (code) { return !!code && !NOT_MAPPABLE[code]; },
+    keyName: keyName,
+
     // p: one map back to the defaults (0 controllers, 1 keyboard); none: both (and the clap / punishment)
     reset: function (p) {
       for (var k = 0; k < MOVES.length; k++) {
         if (p !== 1) MOVES[k].mask = DEF[k];
-        if (p !== 0) m2[k] = DEF2[k];
+        if (p !== 0) kc[k] = (DEFK[MOVES[k].id] || []).slice();
       }
       if (p !== 1) sprint[0] = DEF_SPRINT;
-      if (p !== 0) sprint[1] = 0;
+      if (p !== 0) { kSprint = DEFK_SPRINT.slice(); rebuildKeys(); }
       if (p === undefined) { clapMask = DEF_CLAP; punishMask = DEF_PUNISH; }
       recompute();
     },
 
-    // Saved form: { v: 5, s / s2: sprint, c, p, m / m2: { id: mask } } (controllers / keyboard)
+    // Saved form: { v: 6, s: sprint, c, p, m: { id: mask } (controllers), ks: sprint keys, k: { id: [codes] } (keyboard) }
     serialize: function () {
-      var out = { v: SAVE_VERSION, s: sprint[0], s2: sprint[1], c: clapMask, p: punishMask, m: {}, m2: {} };
-      for (var k = 0; k < MOVES.length; k++) { out.m[MOVES[k].id] = MOVES[k].mask; out.m2[MOVES[k].id] = m2[k]; }
+      var out = { v: SAVE_VERSION, s: sprint[0], c: clapMask, p: punishMask, m: {}, ks: kSprint.slice(), k: {} };
+      for (var j = 0; j < MOVES.length; j++) { out.m[MOVES[j].id] = MOVES[j].mask; out.k[MOVES[j].id] = kc[j].slice(); }
       return out;
     },
     load: function (saved) {
       this.reset();
       if (!saved || typeof saved !== 'object' || !saved.m || typeof saved.m !== 'object') return;
       var k, v;
-      if (saved.v === SAVE_VERSION || saved.v === 4 || saved.v === 3) {
+      if (saved.v === SAVE_VERSION || saved.v === 5 || saved.v === 4 || saved.v === 3) {
         if (okMask(saved.s)) sprint[0] = saved.s;
         // (ZL was the clap before the D-pad could be mapped: it moves to D-pad up)
         if (okMask(saved.c) && saved.c !== PZL) clapMask = saved.c;
@@ -170,11 +231,18 @@
           v = saved.m[MOVES[k].id];
           if (v === 0 || okMask(v)) MOVES[k].mask = v;
         }
-        // the keyboard's own map (v5 only; before it there was none: its defaults)
-        var o2 = saved.v === SAVE_VERSION && saved.m2 && typeof saved.m2 === 'object' ? saved.m2 : null;
-        if (o2) {
-          sprint[1] = saved.s2 === 0 || okMask(saved.s2) ? saved.s2 : 0;
-          for (k = 0; k < MOVES.length; k++) { v = o2[MOVES[k].id]; m2[k] = v === 0 || okMask(v) ? v : DEF2[k]; }
+        // the keyboard's keys (v6; before it only Enter / Shift were known: its defaults)
+        function codes(a) {
+          if (!Array.isArray(a)) return null;
+          var o = [];
+          for (var j = 0; j < a.length && o.length < 2; j++) if (typeof a[j] === 'string' && !NOT_MAPPABLE[a[j]]) o.push(a[j]);
+          return o;
+        }
+        if (saved.v === SAVE_VERSION && saved.k && typeof saved.k === 'object') {
+          var ks = codes(saved.ks);
+          if (ks) kSprint = ks;
+          for (k = 0; k < MOVES.length; k++) { v = codes(saved.k[MOVES[k].id]); if (v) kc[k] = v; }
+          rebuildKeys();
         }
       } else if (saved.v === 2) {
         // the gamepad side of the previous version is the map now
@@ -187,13 +255,12 @@
       recompute();
     },
 
-    // Readable name of a button combination ("A", "L + X", "LB + ✕"...; the keyboard's: "Enter", "Enter + Shift")
+    // Readable name of a button combination ("A", "L + X", "LB + ✕"...; the keyboard's: "S", "Shift + D")
     maskLabel: function (mask, p) {
       if (!mask) return NS.I18n.t('map.unbound');
       var out = '';
       if (p === 1) {
-        if (mask & KA) out = NS.I18n.t('key.a');
-        if (mask & KX) out += (out ? ' + ' : '') + NS.I18n.t('key.x');
+        for (var b in bitKey) if (mask & +b) out += (out ? ' + ' : '') + keyName(bitKey[b]);
         return out || NS.I18n.t('map.unbound');
       }
       for (var k = 0; k < BIT_INDEX.length; k++) {
@@ -201,7 +268,8 @@
       }
       return out;
     },
-    KEYS: KA | KX,
+    // a list of keys on screen ("Shift + D")
+    keysLabel: function (codes) { return codes && codes.length ? codes.map(keyName).join(' + ') : NS.I18n.t('map.unbound'); },
     bindingLabel: function (idx, p) { return this.maskLabel(maskOf(idx, p === 1 ? 1 : 0), p === 1 ? 1 : 0); },
     maskOf: function (idx, p) { return maskOf(idx, p === 1 ? 1 : 0); }
   };

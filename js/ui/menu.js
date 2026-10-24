@@ -2368,14 +2368,23 @@
     var B = NS.Bindings;
     var sprint = idx === -1, clap = idx === -2, pun = idx === -3;
     refs.capTitle.textContent = T(pun ? 'mv.punish' : (clap ? 'mv.clap' : (sprint ? 'mv.sprint' : 'mv.' + B.MOVES[idx].id)));
-    refs.capText.textContent = T(sprint || clap || pun ? 'map.prompt.sprint' : 'map.prompt');
+    refs.capText.textContent = T(mapP === 1 ? 'map.prompt.kb' : (sprint || clap || pun ? 'map.prompt.sprint' : 'map.prompt'));
     refs.capLive.textContent = T('map.waiting');
     refs.capture.classList.remove('hidden');
     refs.mapMsg.textContent = '';
+    var kb = mapP === 1;
     NS.Mapper.start(function (mask) {
       var msg;
       if (!mask) {
         msg = T('map.timeout');
+      } else if (kb) {
+        // the keyboard: the key(s) pressed (KeyboardEvent.code, one or two)
+        var res = sprint ? B.setSprintKeys(mask) : B.setKeys(idx, mask);
+        if (res === false) { msg = T('map.keybad'); mask = 0; }
+        else {
+          msg = T('map.kb') + ':  ' + T(sprint ? 'mv.sprint' : 'mv.' + B.MOVES[idx].id) + ' = ' + B.keysLabel(mask) +
+            (!sprint && res >= 0 ? '   (' + T('mv.' + B.MOVES[res].id) + ': ' + T('map.conflict') + ')' : '');
+        }
       } else if (!clap && !pun && (mask & B.DPAD)) {
         msg = T('map.dpad'); mask = 0; // the D-pad moves the player: only the clap / punishment may use it
       } else if (pun) {
@@ -2396,7 +2405,7 @@
       NS.Input.clearEdges();
       NS.Input.block(350); // the button just mapped must not also press the focused row again
     }, function (mask) {
-      refs.capLive.textContent = T('map.detected') + ' ' + B.maskLabel(mask, mapP);
+      refs.capLive.textContent = T('map.detected') + ' ' + (kb ? B.keysLabel(mask) : B.maskLabel(mask, 0));
     }, function (secs) {
       refs.capCount.textContent = T('map.countdown').replace('%s', secs);
     }, function (dev) { return NS.Devices.isKeys(dev) === (mapP === 1); }); // (only the map's own kind of device)
@@ -2475,12 +2484,8 @@
       refs.statGoals.textContent = st.goals;
     },
     onInput: function (action, pressed, repeat, dev) {
-      if (NS.Mapper.active()) {
-        // the mapper is listening to the real buttons: a controller's come from js/core/gamepad.js, the keyboard's two
-        // keys from here (Enter / Space = 'jump', Shift = 'run'; a second keyboard: F / G)
-        if (NS.Devices.isKeys(dev || 'keys') && (action === 'jump' || action === 'run')) NS.Mapper.button(action === 'jump' ? 8 : 32, pressed, dev || 'keys');
-        return;
-      }
+      // the mapper is listening to the real buttons / keys (js/core/gamepad.js, js/core/keyboard.js)
+      if (NS.Mapper.active()) return;
       if (!pressed) return;
       // the sides screen: left / right move this keyboard's icon (a controller moves its own, through padSide)
       if (current === 'SIDES' && (action === 'left' || action === 'right')) {

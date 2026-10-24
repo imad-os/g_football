@@ -1111,7 +1111,7 @@
     'dev.keys': 'Keyboard / remote', 'dev.keys2': 'Keyboard 2 (W A S D)', 'dev.pad': 'Controller', 'dev.phone': 'Phone',
     'teams.pickcat': 'Pick a league or a continent', 'teams.count': 'teams', 'teams.leagues': 'Leagues and continents',
     'gp.hint': 'Pick a starter, then a substitute to swap them. Two players: each sets up his own side at the same time.',
-    'map.keys': 'My PC gives games two keys: Enter / Space and Shift (a second keyboard: F and G). Map moves to them or to both together. Esc opens the menu.', 'map.pads': '🎮 Controllers', 'map.kb': '⌨ Keyboard', 'key.a': 'Enter', 'key.x': 'Shift',
+    'map.keys': 'Any key, or two together. The arrows move the player, Esc opens the menu.', 'map.pads': '🎮 Controllers', 'map.kb': '⌨ Keyboard', 'map.prompt.kb': 'Press a key, or two together, on the keyboard.', 'map.keybad': 'The arrows, Esc, Backspace and Tab cannot be mapped.',
     'map.sub': 'Pick the controllers\' map or the keyboard\'s, then an action, then press the button (or two together). Each player plays with the map of his device. Holding does not matter here: in the game it gives power to passes and shots.' });
   Object.assign(D.fr, {
     'sides.how': 'Chaque appareil a sa ligne : poussez son stick, sa croix ou ses fleches a gauche pour domicile, a droite pour exterieur, au milieu pour regarder. Les deux premiers sur un cote sont J1 et J2 (les deux du meme cote : ensemble contre le CPU). Une equipe sans joueur est jouee par le CPU.',
@@ -1119,7 +1119,7 @@
     'dev.keys': 'Clavier / telecommande', 'dev.keys2': 'Clavier 2 (Z Q S D)', 'dev.pad': 'Manette', 'dev.phone': 'Telephone',
     'teams.pickcat': 'Choisissez un championnat ou un continent', 'teams.count': 'equipes', 'teams.leagues': 'Championnats et continents',
     'gp.hint': 'Choisissez un titulaire, puis un remplacant pour les echanger. A deux : chacun regle son equipe en meme temps.',
-    'map.keys': 'My PC donne deux touches aux jeux : Entree / Espace et Maj (un second clavier : F et G). Associez-leur des actions, ou aux deux ensemble. Echap ouvre le menu.', 'map.pads': '🎮 Manettes', 'map.kb': '⌨ Clavier', 'key.a': 'Entree', 'key.x': 'Maj',
+    'map.keys': 'N\'importe quelle touche, ou deux ensemble. Les fleches deplacent le joueur, Echap ouvre le menu.', 'map.pads': '🎮 Manettes', 'map.kb': '⌨ Clavier', 'map.prompt.kb': 'Appuyez sur une touche, ou deux ensemble, du clavier.', 'map.keybad': 'Les fleches, Echap, Retour arriere et Tab ne peuvent pas etre associees.',
     'map.sub': 'Choisissez la configuration des manettes ou du clavier, puis une action, puis appuyez sur le bouton (ou deux ensemble). Chaque joueur joue avec celle de son appareil. La duree ne compte pas ici : en jeu elle donne la puissance.' });
   Object.assign(D.es, {
     'sides.how': 'Cada dispositivo tiene su fila: mueve su stick, cruceta o flechas a la izquierda para local, a la derecha para visitante, al centro para mirar. Los dos primeros en un lado son J1 y J2 (los dos en el mismo: juntos contra la CPU). Un equipo sin jugador lo juega la CPU.',
@@ -1127,7 +1127,7 @@
     'dev.keys': 'Teclado / mando TV', 'dev.keys2': 'Teclado 2 (W A S D)', 'dev.pad': 'Mando', 'dev.phone': 'Telefono',
     'teams.pickcat': 'Elige una liga o un continente', 'teams.count': 'equipos', 'teams.leagues': 'Ligas y continentes',
     'gp.hint': 'Elige un titular y luego un suplente para cambiarlos. Dos jugadores: cada uno prepara su equipo a la vez.',
-    'map.keys': 'My PC da dos teclas a los juegos: Enter / Espacio y Mayus (un segundo teclado: F y G). Asigna acciones a ellas o a las dos juntas. Esc abre el menu.', 'map.pads': '🎮 Mandos', 'map.kb': '⌨ Teclado', 'key.a': 'Enter', 'key.x': 'Mayus',
+    'map.keys': 'Cualquier tecla, o dos juntas. Las flechas mueven al jugador, Esc abre el menu.', 'map.pads': '🎮 Mandos', 'map.kb': '⌨ Teclado', 'map.prompt.kb': 'Pulsa una tecla, o dos juntas, del teclado.', 'map.keybad': 'Las flechas, Esc, Retroceso y Tab no se pueden asignar.',
     'map.sub': 'Elige la asignacion de los mandos o del teclado, luego una accion, y pulsa el boton (o dos juntos). Cada jugador juega con la de su dispositivo. Mantener no importa aqui: en el juego da potencia.' });
   Object.assign(D.ar, {
     'sides.how': 'لكل جهاز صفه: حرك العصا أو الأسهم يسارا لفريق الأرض، يمينا للفريق الضيف، وفي الوسط للمشاهدة. أول جهازين على جانب هما اللاعب 1 واللاعب 2 (معا في نفس الجانب ضد الكمبيوتر). الفريق بدون لاعب يلعبه الكمبيوتر.',
@@ -1135,7 +1135,7 @@
     'dev.keys': 'لوحة المفاتيح / جهاز التحكم', 'dev.keys2': 'لوحة المفاتيح 2 (W A S D)', 'dev.pad': 'يد تحكم', 'dev.phone': 'هاتف',
     'teams.pickcat': 'اختر دوريا أو قارة', 'teams.count': 'فرق', 'teams.leagues': 'الدوريات والقارات',
     'gp.hint': 'اختر أساسيا ثم بديلا لتبديلهما. لاعبان: كل واحد يجهز فريقه في نفس الوقت.',
-    'map.keys': 'يعطي My PC للألعاب مفتاحين: Enter / Space و Shift (لوحة ثانية: F و G). اربط بهما حركات أو بهما معا. Esc يفتح القائمة.', 'map.pads': '🎮 أذرع التحكم', 'map.kb': '⌨ لوحة المفاتيح', 'key.a': 'Enter', 'key.x': 'Shift',
+    'map.keys': 'أي مفتاح، أو مفتاحان معا. الأسهم تحرك اللاعب، و Esc يفتح القائمة.', 'map.pads': '🎮 أذرع التحكم', 'map.kb': '⌨ لوحة المفاتيح', 'map.prompt.kb': 'اضغط مفتاحا، أو مفتاحين معا، في لوحة المفاتيح.', 'map.keybad': 'لا يمكن ربط الأسهم و Esc و Backspace و Tab.',
     'map.sub': 'اختر تخصيص الأذرع أو لوحة المفاتيح، ثم حركة، ثم اضغط الزر (أو زرين معا). كل لاعب يلعب بتخصيص جهازه. مدة الضغط لا تهم هنا: في اللعب تعطي القوة.' });
 
   // checkoAI: how many players a brain plays in a real-time match
