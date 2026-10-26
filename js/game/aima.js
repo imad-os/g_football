@@ -1,23 +1,23 @@
 /* checkoAI: a learning team (named after the owner's white rooster). On a team whose CPU level is checkoAI ("AIMA") one
- * network plays every outfield player, each through his own virtual controller: the same stick, sprint, buttons and
- * hold times as a human (the violet arrow shows the one with the ball, or nearest to it). The keeper is the game's.
+- network plays every outfield player, each through his own virtual controller: the same stick, sprint, buttons and
+- hold times as a human (the violet arrow shows the one with the ball, or nearest to it). The keeper is the game's.
  *
- * Brains: several networks, each with its own settings, stats and history (clone, rename, delete). One is active: it
- * plays in matches and is the one every other profile gets. Each team of a match may use a different brain (training:
- * brain v brain, or a brain v the CPU at any level).
+- Brains: several networks, each with its own settings, stats and history (clone, rename, delete). One is active: it
+- plays in matches and is the one every other profile gets. Each team of a match may use a different brain (training:
+- brain v brain, or a brain v the CPU at any level).
  *
- * A brain is a small neural network (96 inputs: the play around him, his ratings, position and formation spot, the last seconds and the
- * whole match situation; 2 hidden layers;
- * heads for stick, sprint, button, power and a value). It learns (the trainer's profile only):
- *  - by copying: the Legend CPU in spells it plays for each player (fewer as he learns), every Legend player of the
- *    other team in a training against Legend, and the trainer's own play. Legend's passes and shots are rare moments,
- *    so they are kept in a memory of their own (with the decisions just before them, when the button would go down)
- *    and drawn more often than they happen
- *  - from rewards (actor-critic, n-step returns): goals, shots, passes, ball won / lost, fouls, and the trainer's claps
- * Store: the owner's Firebase project (REST): "aima/index" (the list, the active brain) and "aima/b_<id>" per brain;
- * recorded Legend play (named data sets to learn from without playing): "aimaData/index" and "aimaData/c_<set>_<n>".
- * The trainer signs in with Google once (the token is kept in his My PC save); everyone else anonymously, read only.
- * No allocation in the play loop: every buffer is made when a brain is built. */
+- A brain is a small neural network (96 inputs: the play around him, his ratings, position and formation spot, the last seconds and the
+- whole match situation; 2 hidden layers;
+- heads for stick, sprint, button, power and a value). It learns (the trainer's profile only):
+-  - by copying: the Legend CPU in spells it plays for each player (fewer as he learns), every Legend player of the
+-    other team in a training against Legend, and the trainer's own play. Legend's passes and shots are rare moments,
+-    so they are kept in a memory of their own (with the decisions just before them, when the button would go down)
+-    and drawn more often than they happen
+-  - from rewards (actor-critic, n-step returns): goals, shots, passes, ball won / lost, fouls, and the trainer's claps
+- Store: the owner's Firebase project (REST): "aima/index" (the list, the active brain) and "aima/b_<id>" per brain;
+- recorded Legend play (named data sets to learn from without playing): "aimaData/index" and "aimaData/c_<set>_<n>".
+- The trainer signs in with Google once (the token is kept in his My PC save); everyone else anonymously, read only.
+- No allocation in the play loop: every buffer is made when a brain is built. */
 (function (NS) {
   'use strict';
 
@@ -26,7 +26,7 @@
   var B = NS.Bindings;
   var Actions = NS.Actions;
 
-  var ALG = 'AIMA-AC 1.1 (actor-critic + imitation)';
+  var ALG = 'AIMA-AC 1.2 (actor-critic + imitation)';
   var SAVE_KEY = 'aima';
   var TRAINER = 'imad';
   var F = 96;      // inputs (v1.20: 64 -> 90, v1.21: 91, v1.23: 96; an older brain gets the new ones with weights of 0, so it plays as before)
@@ -40,7 +40,7 @@
   var TICKS = [0.08, 0.1, 0.15];
   var GAMMAS = [0.94, 0.97, 0.99];
   var MEMS = [20000, 50000, 100000];  // copied moves kept (20 players x 10 a second); passes / shots: a quarter more, apart
-  var PRESS_SHARE = 0.08;   // of the copying steps, this share is a pass / shot / tackle of Legend (they are ~1% of his decisions)
+  var PRESS_SHARE = 0.25;   // of the copying steps, this share is a pass / cross / shot / tackle of Legend
   var PRE_PRESS = 0.25;     // Legend's decisions up to this long before his kick count as that press (a button goes down, then is held)
   var BATCH = 8;            // learning steps averaged into one change of the weights
   var IM_RATE = 150;        // copying steps per second of play (per team)
@@ -130,7 +130,7 @@
       var s = fan ? Math.sqrt(1.5 / fan) : 0;
       for (var i = 0; i < n; i++) this.P[o + i] = fan ? (Math.random() * 2 - 1) * s : 0;
     }
-    this.P[this.OB3 + O_BT] = 3;    // a new brain mostly presses nothing
+    this.P[this.OB3 + O_BT] = 1.2;  // moderate no-button prior so passes, crosses and shots can emerge quickly
     this.P[this.OB3 + O_PW + 1] = 0.5;
     this.AM.fill(0); this.AV.fill(0); this.G.fill(0); this.adamT = 0; this.gN = 0;
   };
@@ -151,7 +151,7 @@
   var out = new Float32Array(NOUT), dout = new Float32Array(NOUT);
   var prob = new Float32Array(16);
   var bmask = new Uint8Array(NBT);
-  var xs = new Float32Array(F), rx = new Float32Array(F), ux = new Float32Array(F);
+  var xs = new Float32Array(F), rx = new Float32Array(F), ux = new Float32Array(F), kickXs = new Float32Array(F);
 
   function forward(b, x) {
     var P = b.P, h1 = b.h1, h2 = b.h2, H1 = b.H1, H2 = b.H2;
@@ -232,7 +232,7 @@
       var e = (!mask || mask[i]) ? Math.exp((out[off + i] - mx) / temp) : 0;
       prob[i] = e; s += e;
     }
-    for (i = 0; i < n; i++) prob[i] /= s;
+    if (s > 0) for (i = 0; i < n; i++) prob[i] /= s;
   }
   // the best choice of prob[], or (with chance eps) one drawn from it
   function pick(n, eps) {
@@ -241,15 +241,34 @@
     for (var i = 1; i < n; i++) if (prob[i] > prob[bi]) bi = i;
     return bi;
   }
-  var STAND = 0.3;   // he stands when his odds' average direction is shorter than this
+  var STAND = 0.26;  // he stands when total movement probability is below this
   var DIRX = [0], DIRZ = [0];
   for (var di = 0; di < 8; di++) { DIRX.push(Math.cos(di * Math.PI / 4)); DIRZ.push(Math.sin(di * Math.PI / 4)); }
-  var PRESS = 0.3;   // a button is pressed when its odds are above this (drawn from his odds when he tries something new)
+  var PRESS = 0.16;  // a button is pressed when its odds are above this or combined action probability is high
   function pressPick(eps) {
-    if (Math.random() < eps * 0.3) return sample(NBT);
-    var bi = 1;
-    for (var i = 2; i < NBT; i++) if (prob[i] > prob[bi]) bi = i;
-    return prob[bi] > PRESS ? bi : 0;
+    if (Math.random() < eps * 0.25) return sample(NBT);
+    var bi = 1, actSum = 0;
+    for (var i = 1; i < NBT; i++) { actSum += prob[i]; if (prob[i] > prob[bi]) bi = i; }
+    return (prob[bi] > PRESS || (actSum > 0.32 && prob[bi] > 0.09)) ? bi : 0;
+  }
+  // Decodes stick direction using the dominant mode + its two immediate +/-45 deg neighbors so bimodal choices
+  // (e.g. dodge left vs right, or wing run vs cutback) never cancel each other out into a sideline vector.
+  var decAng = 0;
+  function decodeStick(eps) {
+    if ( eps > 0 && Math.random() < eps ) {
+      var s = sample(NST);
+      decAng = s ? (s - 1) * Math.PI / 4 : 0;
+      return s;
+    }
+    var best = 1, moveSum = 0, k;
+    for (k = 1; k < NST; k++) { moveSum += prob[k]; if (prob[k] > prob[best]) best = k; }
+    if (moveSum <= STAND && prob[0] >= prob[best]) { decAng = 0; return 0; }
+    var left = ((best + 6) % 8) + 1;
+    var right = (best % 8) + 1;
+    var lx = prob[best] * DIRX[best] + prob[left] * DIRX[left] + prob[right] * DIRX[right];
+    var lz = prob[best] * DIRZ[best] + prob[left] * DIRZ[left] + prob[right] * DIRZ[right];
+    decAng = Math.atan2(lz, lx);
+    return 1 + ((Math.round(decAng / (Math.PI / 4)) + 8) % 8);
   }
   function sample(n) {
     var r = Math.random(), i;
@@ -271,6 +290,11 @@
     bmask[0] = 1;
     for (var k = 0; k < B.MOVES.length; k++) bmask[k + 1] = (B.MOVES[k].ctx === ctx && B.MOVES[k].mask) ? 1 : 0;
   }
+  // True when an off-ball state (ctx = 2, btn = 0) is far from the ball and not the active receiver/contester:
+  // prevents 9 off-ball players from flooding the shared "press nothing" (O_BT + 0) logit.
+  function isDistantIdle(x, ctx, btn) {
+    return ctx === 2 && btn === 0 && x[14] > 0.28 && x[19] < 0.5 && x[20] < 0.5;
+  }
 
   /* ------------------------------------------------------------------ inputs */
 
@@ -281,18 +305,18 @@
   // team's selected player and how it went, shots, which way the play is going
   var OWN_N = 60;                         // 1 s of steps
   var ownRing = new Int16Array(OWN_N), ownI = 0, ownIdx = 0, ownPrev = null;
-  var possT = 0, possTeam = -1, holdT = 0, evx = 0, evz = 0;
+  var possT = 0, possTeam = -1, holdT = 0, evx = 0, evz = 0, cornerT = 0;
   var actK = [0, 0], actT = [0, 0], actRes = [0, 0], shotAgo = [99, 99];
   var ACT_PASS = 1, ACT_SHOT = 2, ACT_DEF = 3;
   function pastReset() {
     ownRing.fill(0); ownI = 0; ownIdx = 0; ownPrev = null;
-    possT = 0; possTeam = -1; holdT = 0; evx = 0; evz = 0;
+    possT = 0; possTeam = -1; holdT = 0; evx = 0; evz = 0; cornerT = 0;
     actK[0] = actK[1] = 0; actT[0] = actT[1] = 0; actRes[0] = actRes[1] = 0; shotAgo[0] = shotAgo[1] = 99;
   }
   function setAct(t, k) { actK[t] = k; actT[t] = 0; actRes[t] = 0; }
   function pastStep(dt) {
     var ball = World.ball, o = ball.owner, t;
-    if (o !== ownPrev) { ownPrev = o; ownIdx = o ? World.players.indexOf(o) + 1 : 0; holdT = 0; }
+    if (o !== ownPrev) { ownPrev = o; ownIdx = o ? World.players.indexOf(o) + 1 : 0; holdT = 0; cornerT = 0; }
     ownRing[ownI] = ownIdx; ownI = (ownI + 1) % OWN_N;
     if (o) {
       holdT += dt;
@@ -335,6 +359,31 @@
       while (k > 0 && NRD[k - 1] > d) { NRD[k] = NRD[k - 1]; NR[k] = NR[k - 1]; k--; }
       NRD[k] = d; NR[k] = i;
     }
+  }
+
+  // Finds a target coordinate (in team-attacking frame) in the penalty box for crosses / cutbacks
+  var boxTarget = { x: 0, z: 0 };
+  function findBoxTarget(p, a) {
+    var HW = NS.PITCH_HALF_W, players = World.players;
+    var bestQ = null, bestScore = -1e9;
+    var px = p.pos.x * a, pz = p.pos.z;
+    for (var i = 0; i < players.length; i++) {
+      var q = players[i];
+      if (q === p || q.team !== p.team || q.role === 'GK') continue;
+      var qx = q.pos.x * a, qz = q.pos.z;
+      if (qx < HW * 0.45) continue;
+      var score = qx * 1.2 - Math.abs(qz) * 0.8 - Math.abs(qx - (HW - 11)) * 0.5;
+      if (Math.abs(qz - pz) > 4) score += 4;
+      if (score > bestScore) { bestScore = score; bestQ = q; }
+    }
+    if (bestQ) {
+      boxTarget.x = bestQ.pos.x * a + (bestQ.vel ? bestQ.vel.x * a * 0.35 : 0);
+      boxTarget.z = bestQ.pos.z + (bestQ.vel ? bestQ.vel.z * 0.35 : 0);
+    } else {
+      boxTarget.x = HW - 11;
+      boxTarget.z = clamp(-pz * 0.2, -6, 6);
+    }
+    return boxTarget;
   }
 
   // 96 inputs, in the team's frame (x towards the goal it attacks). b: the brain (its "memory of the last seconds" option)
@@ -500,8 +549,14 @@
     headGrad(O_ST, NST, null, stk, w, 0);
     headGrad(O_SP, NSP, null, spr, w * 0.5, 0);
     setMask(ctx);
-    if (bmask[btn]) headGrad(O_BT, NBT, bmask, btn, w, 0);
+    // Do not let distant off-ball players (ctx === 2, btn === 0) inflate the shared "no button" logit (O_BT + 0)
+    if (bmask[btn] && !isDistantIdle(rx, ctx, btn)) {
+      var bw = (ctx === 2 && btn === 0) ? w * 0.25 : w;
+      headGrad(O_BT, NBT, bmask, btn, bw, 0);
+    }
     if (btn && pw >= 0) headGrad(O_PW, NPW, null, pw, w, 0);
+    // Softly anchor the critic head during high-frequency imitation so shared hidden layer updates don't cause value drift
+    dout[O_V] = out[O_V] * 0.015;
     backward(b, rx);
     b.st.im++;
     b.st.opsL += b.stepOps;
@@ -517,14 +572,16 @@
     return 1 + (k % 8);
   }
 
-  // a move made right now by Legend (a copying spell, or a Legend player watched): the situation at that very moment
-  function copyMove(slot, p, mi, pw, w) {
+  // a move made right now by Legend (a copying spell, or a Legend player watched): the situation at that very moment.
+  // When called from Actions.release, preX holds the pre-kick features and (dirX, dirZ) holds the true executed kick vector.
+  function copyMove(slot, p, mi, pw, w, preX, dirX, dirZ, preSp) {
     var b = slot.brain, c = slot.c;
     if (mi < 0) return;
-    if (slot.rec) { recMove(slot, p, mi, pw); return; } // (a recording: kept in the data set, nobody learns now)
+    if (slot.rec) { recMove(slot, p, mi, pw, preX, dirX, dirZ, preSp); return; } // (a recording: kept in the data set, nobody learns now)
     var a = NS.attack(p.team);
     var ctx = B.MOVES[mi].ctx;
-    features(p, xs, b);
+    if (preX) { for (var j0 = 0; j0 < F; j0++) xs[j0] = preX[j0]; }
+    else features(p, xs, b);
     // would he press the same button here? (his odds of it, and his choice)
     forward(b, xs);
     setMask(ctx);
@@ -534,20 +591,26 @@
     b.st.pressN++; b.st.pressOdds += prob[mi + 1];
     if (bi === mi + 1 && prob[bi] > PRESS) b.st.pressSame++;
     if (!b.learns()) return;
-    var sp = Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z);
-    var stk = sp < 1.5 ? 0 : stickClass(p.vel.x, p.vel.z, a), spr = sp > 10.2 ? 1 : 0;
+    var sp = preSp !== undefined ? preSp : Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z);
+    var stk, spr = sp > 10.2 ? 1 : 0;
+    if (dirX !== undefined) {
+      stk = stickClass(dirX, dirZ, a);
+      if (!stk && ctx === 1) stk = stickClass(NS.PITCH_HALF_W * a - p.pos.x, -p.pos.z, a);
+    } else {
+      stk = sp < 1.5 ? 0 : stickClass(p.vel.x, p.vel.z, a);
+    }
     // (kept with its time: a clap soon after makes this copied move count more)
     c.cp[c.cpi] = remember(b, xs, stk, spr, mi + 1, pw, ctx, w);
     c.cpt[c.cpi] = c.clock;
     c.cpi = (c.cpi + 1) % c.cp.length;
-    // a pass / shot: his last decisions before it (when the button would go down) are that press too
+    // a pass / cross / shot: his last decisions before it (when the button would go down) get the true kick aim and button
     if (ctx !== 1 || !b.memX) return;
     for (k = 0; k < c.lm.length; k++) {
       var at = c.lm[k];
       if (at < 0 || c.clock - c.lmt[k] > PRE_PRESS || b.memA[at * 5 + 4] !== 1) continue;
       var o = at * F;
       for (var j = 0; j < F; j++) ux[j] = b.memX[o + j];
-      remember(b, ux, b.memA[at * 5], b.memA[at * 5 + 1], mi + 1, pw, 1, w);
+      remember(b, ux, stk || b.memA[at * 5], b.memA[at * 5 + 1], mi + 1, pw, 1, w);
       b.memW[at] = 0; // (not "nothing" any more)
       c.lm[k] = -1;
     }
@@ -565,7 +628,7 @@
     slot.ai = true;
     slot.brain = null;
     slot.c = {
-      t: 0, mode: 1, modeT: 0, cpu: true, stk: 0, ang: 0, spr: 0, btnMask: 0, holdLeft: 0, tBtn: 0,
+      t: 0, mode: 1, modeT: 0, cpu: true, stk: 0, ang: 0, spr: 0, btnMask: 0, holdLeft: 0, tBtn: 0, offK: 0,
       traj: new Float32Array(TRAJ * F), ta: new Int8Array(TRAJ * 4), tv: new Float32Array(TRAJ), tr: new Float32Array(TRAJ),
       tctx: new Int8Array(TRAJ), tn: 0, th: 0,
       ts: new Float64Array(TRAJ), tnote: new Int8Array(TRAJ),   // each decision's time, and "a move worth a clap" (a button, a ball won)
@@ -591,17 +654,22 @@
     if (b && b.learns()) {
       var o = i0 * F;
       for (var j = 0; j < F; j++) ux[j] = c.traj[o + j];
-      forward(b, ux);
-      var A = clamp(R - out[O_V], -2, 2);
-      dout.fill(0);
-      dout[O_V] = (out[O_V] - R) * 0.5;
       var ao = i0 * 4;
-      headGrad(O_ST, NST, null, c.ta[ao], A, 0.01);
-      headGrad(O_SP, NSP, null, c.ta[ao + 1], A * 0.5, 0.01);
-      if (c.ta[ao + 2] >= 0) {
-        setMask(c.tctx[i0]);
-        headGrad(O_BT, NBT, bmask, c.ta[ao + 2], A, 0.01);
-        if (c.ta[ao + 3] >= 0) headGrad(O_PW, NPW, null, c.ta[ao + 3], A * 0.5, 0.005);
+      var stk = c.ta[ao], spr = c.ta[ao + 1], btn = c.ta[ao + 2], pw = c.ta[ao + 3];
+      var ctx = c.tctx[i0];
+      // Scale down learning on distant off-ball jogging so on-ball play and active defending dominate network capacity
+      var focus = (ctx === 1 || btn > 0) ? 1.0 : ((ux[14] < 0.28 || ux[19] > 0.5 || ux[20] > 0.5) ? 0.7 : 0.2);
+      forward(b, ux);
+      var A = clamp(R - out[O_V], -2, 2) * focus;
+      dout.fill(0);
+      dout[O_V] = (out[O_V] - R) * 0.5 * focus;
+      headGrad(O_ST, NST, null, stk, A, 0.01 * focus);
+      headGrad(O_SP, NSP, null, spr, A * 0.5, 0.01 * focus);
+      if (btn >= 0 && !isDistantIdle(ux, ctx, btn)) {
+        setMask(ctx);
+        var bScale = (ctx === 2 && btn === 0) ? 0.25 : 1.0;
+        headGrad(O_BT, NBT, bmask, btn, A * bScale, 0.01 * focus);
+        if (btn > 0 && pw >= 0) headGrad(O_PW, NPW, null, pw, A * 0.5, 0.005);
       }
       backward(b, ux);
       b.st.rl++;
@@ -649,7 +717,19 @@
     matchReward[team] += r;
     if (why !== undefined) tally(team, why, r);
     if (p) { var v = slotOf(p); if (v && !v.watch) rewardTo(v.c, r, own); return; }
-    for (var i = 0; i < vlist.length; i++) if (vlist[i].team === team && !vlist[i].watch) rewardTo(vlist[i].c, r, own);
+    var ball = World.ball;
+    for (var i = 0; i < vlist.length; i++) {
+      var vi = vlist[i];
+      if (vi.team !== team || vi.watch) continue;
+      // Weight team-wide rewards by proximity to the ball so nearby players get full credit and distant players get less noise
+      var qp = vi.player;
+      var w = 1.0;
+      if (qp && ball) {
+        var dx = ball.pos.x - qp.pos.x, dz = ball.pos.z - qp.pos.z;
+        w = clamp(1.25 - Math.sqrt(dx * dx + dz * dz) / 45, 0.25, 1.0);
+      }
+      rewardTo(vi.c, r * w, own);
+    }
   }
   function rewardTo(c, r, own) { if (c.tn && (own || !c.cpu)) c.tr[(c.th + c.tn - 1) % TRAJ] += r; }
 
@@ -709,30 +789,68 @@
     forward(b, xs);
     var temp = TEMP[b.cfg.explore] || 1;
     var eps = EPS[b.cfg.explore] || EPS[1];
-    softmax(O_ST, NST, null, temp);
-    // the stick: where his odds point on average (the single likeliest of the 9 is too often "stand": Legend's players
-    // often walk to their spot, so "stand" can win while the 8 directions together say "go that way")
-    var ex = 0, ez = 0, k;
-    for (k = 1; k < NST; k++) { ex += prob[k] * DIRX[k]; ez += prob[k] * DIRZ[k]; }
+    var ctx = ctxOf(p);
+    var ga = NS.attack(p.team);
+    var px = p.pos.x * ga, pz = p.pos.z;
+    var HW = NS.PITCH_HALF_W, HH = NS.PITCH_HALF_H;
     var stk;
-    if (Math.random() < eps) { stk = sample(NST); c.ang = stk ? (stk - 1) * Math.PI / 4 : 0; }
-    else if (ex * ex + ez * ez > STAND * STAND) {
-      c.ang = Math.atan2(ez, ex);
-      stk = 1 + ((Math.round(c.ang / (Math.PI / 4)) + 8) % 8);
-    } else stk = 0;
+    // While holding a pass / cross / shot button down on the ball, lock the aimed stick direction so subsequent 0.1s
+    // ticks do not overwrite the kick aim with a dribble vector before Controls.update releases the ball.
+    if (c.holdLeft > 0 && ctx === 1 && c.stk > 0) {
+      stk = c.stk;
+    } else {
+      softmax(O_ST, NST, null, temp);
+      stk = decodeStick(eps);
+      c.ang = decAng;
+    }
     softmax(O_SP, NSP, null, temp);
     var spr = pick(NSP, eps);
     var btn = -1, pw = -1;
-    var ctx = ctxOf(p);
     if (c.holdLeft <= 0) {
       setMask(ctx);
-      softmax(O_BT, NBT, bmask, temp);
-      // a button only when he is fairly sure of it (his best choice would nearly always be "nothing": buttons are rare)
+      // Evaluate button probabilities at temp = 1 so high exploration temperature does not flatten rare kick logits below PRESS
+      softmax(O_BT, NBT, bmask, 1);
       btn = pressPick(eps);
+      // Tactical assist for brains recovering from old corner-running habits:
+      // 1) In the deep byline/corner pocket with the ball, trigger a cross or cutback when pass/cross logits show intent
+      //    or when about to run out of bounds at the byline.
+      if (ctx === 1 && btn === 0) {
+        var passMass = (bmask[1] ? prob[1] : 0) + (bmask[2] ? prob[2] : 0) + (bmask[3] ? prob[3] : 0);
+        var shotMass = (bmask[4] ? prob[4] : 0) + (bmask[5] ? prob[5] : 0) + (bmask[6] ? prob[6] : 0);
+        if (px > HW - 18 && Math.abs(pz) < 10 && shotMass > 0.14 && bmask[4]) {
+          btn = 4; // shoot in prime central box
+        } else if (px > HW * 0.68 && Math.abs(pz) > 12 && (passMass > 0.14 || (px > HW - 6.5 && holdT > 0.35))) {
+          btn = (Math.abs(pz) > 14.5 && bmask[3]) ? 3 : (bmask[1] ? 1 : 0); // cross (LONG) from wide wing or cutback (PASS)
+        }
+      }
       if (btn > 0) {
         softmax(O_PW, NPW, null, temp);
         pw = pick(NPW, eps);
         var mv = B.MOVES[btn - 1];
+        if (mv.ctx === 1) {
+          var id = mv.id;
+          if (id === 'shoot' || id === 'curve' || id === 'chip') {
+            // Aim shots toward the opponent's goalmouth instead of the corner flag
+            var tz = clamp(-pz * 0.25, -NS.GOAL_HALF_W * 0.75, NS.GOAL_HALF_W * 0.75);
+            var gAng = Math.atan2(tz - pz, Math.max(1, HW - px));
+            var dAng = Math.atan2(Math.sin(c.ang - gAng), Math.cos(c.ang - gAng));
+            if (!stk || Math.abs(dAng) > 0.62) {
+              c.ang = gAng;
+              stk = 1 + ((Math.round(c.ang / (Math.PI / 4)) + 8) % 8);
+            }
+          } else if ((id === 'long' || id === 'pass' || id === 'through') && px > HW * 0.58 && Math.abs(pz) > 11) {
+            // On deep wing crosses / cutbacks, if the stick is neutral or pointing out toward the corner/touchline,
+            // aim inward toward a teammate in the box / penalty spot.
+            var outByline = px > HW - 9 && Math.cos(c.ang) > 0.45;
+            var outSideline = Math.sin(c.ang) * pz > 0.35;
+            if (!stk || outByline || outSideline) {
+              var bt = findBoxTarget(p, ga);
+              c.ang = Math.atan2(bt.z - pz, bt.x - px);
+              stk = 1 + ((Math.round(c.ang / (Math.PI / 4)) + 8) % 8);
+              if (id === 'long' && pw === 0) pw = 1; // ensure crosses have enough gauge power to reach the box
+            }
+          }
+        }
         var full = World.settings.gaugeTime > 0 ? World.settings.gaugeTime : 0.5;
         c.btnMask = mv.mask;
         c.holdLeft = mv.kind === 2 ? HOLD_CONT[pw] : (mv.ctx === 2 ? 0.1 : HOLD_PASS[pw] * full);
@@ -765,6 +883,7 @@
     var b = slot.brain, c = slot.c;
     var a = NS.attack(p.team);
     if (c.tBtn === 0) {
+      var ctx = ctxOf(p);
       features(p, xs, b);
       var sp = Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z);
       var lab = sp < 1.5 ? 0 : stickClass(p.vel.x, p.vel.z, a);
@@ -775,9 +894,14 @@
       b.st.agree = (b.st.agree || 0) * 0.998 + (best === lab ? 0.002 : 0);
       b.st.agreeN = (b.st.agreeN || 0) + 1;
       if (b.learns()) {
-        c.lm[c.lmi] = remember(b, xs, lab, sp > 10.2 ? 1 : 0, 0, -1, ctxOf(p), 0.6);
-        c.lmt[c.lmi] = c.clock;
-        c.lmi = (c.lmi + 1) % c.lm.length;
+        // Prioritize on-ball play (ctx === 1) and active ball contesters/receivers; down-sample distant off-ball jogging
+        var nearBall = ctx === 1 || xs[14] < 0.28 || xs[19] > 0.5 || xs[20] > 0.5 || World.aiSlots[p.team].player === p;
+        if (nearBall || (++c.offK % 5) === 0) {
+          var w = ctx === 1 ? 1.1 : (nearBall ? 0.6 : 0.25);
+          c.lm[c.lmi] = remember(b, xs, lab, sp > 10.2 ? 1 : 0, 0, -1, ctx, w);
+          c.lmt[c.lmi] = c.clock;
+          c.lmi = (c.lmi + 1) % c.lm.length;
+        }
       }
     }
     b.st.cpuSamples++;
@@ -801,11 +925,29 @@
   var origRelease = Actions.release;
   Actions.release = function (p, type) {
     var sc = World.match.running ? slotOf(p) : null;
-    if (sc && sc.c.cpu && KICK_MOVE[type] !== undefined) {
-      copyMove(sc, p, KICK_MOVE[type], type >= ACT.SHOOT ? 2 : 1, 1.2); // he still has the ball here
-      sc.c.tBtn = 1;
+    var copyKick = sc && sc.c.cpu && KICK_MOVE[type] !== undefined;
+    var preSp = 0;
+    if (copyKick) {
+      // Capture features BEFORE origRelease while p still owns the ball
+      features(p, kickXs, sc.brain);
+      preSp = Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z);
     }
     origRelease.apply(this, arguments);
+    if (copyKick) {
+      // Now World.ball.vel holds the true executed kick vector (cross, pass, through-ball, or shot)
+      var bv = World.ball.vel;
+      var bsp = Math.sqrt(bv.x * bv.x + bv.z * bv.z);
+      var kx = bv.x, kz = bv.z;
+      if (bsp < 1.0) {
+        var ga = NS.attack(p.team);
+        if (type >= ACT.SHOOT) { kx = NS.PITCH_HALF_W * ga - p.pos.x; kz = -p.pos.z; }
+        else if (World.ball.receiver) { kx = World.ball.receiver.pos.x - p.pos.x; kz = World.ball.receiver.pos.z - p.pos.z; }
+        else { kx = p.vel.x; kz = p.vel.z; }
+      }
+      var pw = type >= ACT.SHOOT ? (bsp < 18 ? 0 : (bsp < 25 ? 1 : 2)) : (bsp < 13 ? 0 : (bsp < 20 ? 1 : 2));
+      copyMove(sc, p, KICK_MOVE[type], pw, 1.4, kickXs, kx, kz, preSp);
+      sc.c.tBtn = 1;
+    }
     if (!World.match.running) return;
     modelPass = !!sc && !sc.c.cpu && type < ACT.SHOOT;
     if (type >= ACT.SHOOT) { shotsT[p.team]++; shotAgo[p.team] = 0; }
@@ -841,6 +983,7 @@
 
   function poll(dt) {
     var ball = World.ball, m = World.match;
+    var HW = NS.PITCH_HALF_W, HH = NS.PITCH_HALF_H;
     var o = ball.owner, b;
     if (o) poss[o.team] += dt;
     for (var t = 0; t < 2; t++) {
@@ -870,9 +1013,18 @@
           if (o.team !== lt) { b.st.lost++; addReward(lt, -0.25 * b.styleW(5), false, lastOwner, W_LOST); }
           else if (modelPass) {
             b.st.passOk++;
-            var gain = (o.pos.x - lastOwner.pos.x) * a;
-            addReward(lt, 0.08 * b.styleW(2) + (gain > 5 ? 0.12 * b.styleW(3) : 0), true, lastOwner, W_PASS);
-            if (gain > 5) b.st.fwdPass++;
+            var lx = lastOwner.pos.x * a, lz = lastOwner.pos.z;
+            var rx2 = o.pos.x * a, rz = o.pos.z;
+            var gain = rx2 - lx;
+            // Distance to the penalty spot (HW - 11, 0) before and after the pass/cross
+            var spotX = HW - 11;
+            var d0 = Math.sqrt((spotX - lx) * (spotX - lx) + lz * lz);
+            var d1 = Math.sqrt((spotX - rx2) * (spotX - rx2) + rz * rz);
+            var isBoxCross = Math.abs(lz) > 12 && rx2 > HW - 22 && Math.abs(rz) < 14 && Math.abs(lz) - Math.abs(rz) > 5;
+            var isProg = gain > 5 || (rx2 > HW * 0.35 && d0 - d1 > 5) || isBoxCross;
+            var passRew = 0.08 * b.styleW(2) + (isProg ? 0.13 * b.styleW(3) : 0) + (isBoxCross ? 0.06 * b.styleW(3) : 0);
+            addReward(lt, passRew, true, lastOwner, W_PASS);
+            if (isProg) b.st.fwdPass++;
           }
         }
         var bo = brainOfTeam(o.team);
@@ -884,7 +1036,29 @@
     if (o && aiOf(o)) {
       b = brainOfTeam(o.team);
       b.st.carryT += dt;
-      addReward(o.team, 0.004 * b.styleW(6) * o.vel.x * NS.attack(o.team) * dt, false, o, W_CARRY);
+      var ca = NS.attack(o.team);
+      var cpx = o.pos.x * ca, cpz = o.pos.z;
+      var cvx = o.vel.x * ca, cvz = o.vel.z;
+      var carryProg;
+      if (cpx < HW * 0.58) {
+        // In build-up and midfield, reward forward progression upfield (including wing runs down the flanks)
+        carryProg = cvx;
+      } else {
+        // In the final third, measure velocity toward the penalty spot (HW * 0.82, 0) so wingers are rewarded both for
+        // driving into the attacking third and for cutting inside from the corner toward the box!
+        var tx = HW * 0.82 - cpx, tz = -cpz;
+        var td = Math.sqrt(tx * tx + tz * tz) || 1;
+        carryProg = (cvx * tx + cvz * tz) / td;
+      }
+      var carryRew = 0.004 * b.styleW(6) * carryProg * dt;
+      // Gentle anti-stall penalty if a player lingers in the deep corner pocket (> 1.0s) instead of crossing or cutting inside
+      if (cpx > HW - 9 && Math.abs(cpz) > HH - 9) {
+        cornerT += dt;
+        if (cornerT > 1.0) carryRew -= 0.007 * dt;
+      } else {
+        cornerT = Math.max(0, cornerT - dt * 2);
+      }
+      addReward(o.team, carryRew, false, o, W_CARRY);
     }
     if (m.setPiece !== lastSetPiece) {
       var ft = 1 - m.setTeam;
@@ -964,7 +1138,8 @@
     var c = v.c, pad = v.pad, m = World.match;
     c.clock = teamClock[v.team];
     c.modeT -= dt;
-    if (c.modeT <= 0) {
+    // Do not interrupt an active pass/cross/shot power-bar charge (c.holdLeft > 0) with a mode switch
+    if (c.modeT <= 0 && c.holdLeft <= 0) {
       c.modeT = 1.5 + Math.random();
       var newMode = Math.random() < help ? 0 : 1;
       if (newMode !== c.mode) {
@@ -995,10 +1170,10 @@
     if (c.stk) {
       var ang = c.ang;
       pad.x = Math.cos(ang) * a2; pad.y = Math.sin(ang);
-      // never runs himself off the pitch (the lines are walls for his stick)
+      // never runs himself off the pitch (the lines are walls for his stick); apply a tiny step penalty if pushing into the wall
       var HW = NS.PITCH_HALF_W - 1.2, HH = NS.PITCH_HALF_H - 1.2;
-      if ((p.pos.x > HW && pad.x > 0) || (p.pos.x < -HW && pad.x < 0)) pad.x = 0;
-      if ((p.pos.z > HH && pad.y > 0) || (p.pos.z < -HH && pad.y < 0)) pad.y = 0;
+      if ((p.pos.x > HW && pad.x > 0) || (p.pos.x < -HW && pad.x < 0)) { pad.x = 0; rewardTo(c, -0.004 * dt * 10, true); }
+      if ((p.pos.z > HH && pad.y > 0) || (p.pos.z < -HH && pad.y < 0)) { pad.y = 0; rewardTo(c, -0.004 * dt * 10, true); }
     } else { pad.x = 0; pad.y = 0; }
     if (c.spr) b.st.sprintT += dt / 10;
     var cur = c.spr ? B.sprintMask() : 0;
@@ -1608,16 +1783,21 @@
     c.lmi = (c.lmi + 1) % c.lm.length;
   }
   // a pass / shot / tackle / press of a Legend player, as it happens (from the hooks, through copyMove)
-  function recMove(v, p, mi, pw) {
-    var c = v.c, ctx = B.MOVES[mi].ctx;
-    features(p, xs, null);
+  function recMove(v, p, mi, pw, preX, dirX, dirZ, preSp) {
+    var c = v.c, ctx = B.MOVES[mi].ctx, a = NS.attack(p.team);
+    if (preX) { for (var j0 = 0; j0 < F; j0++) xs[j0] = preX[j0]; }
+    else features(p, xs, null);
     moveLabel(p);
-    recAdd(xs, ML[0], ML[1], mi + 1, pw, ctx, p.team);
+    var stk = dirX !== undefined ? stickClass(dirX, dirZ, a) : ML[0];
+    var spr = preSp !== undefined ? (preSp > 10.2 ? 1 : 0) : ML[1];
+    if (!stk && ctx === 1 && dirX !== undefined) stk = stickClass(NS.PITCH_HALF_W * a - p.pos.x, -p.pos.z, a);
+    recAdd(xs, stk, spr, mi + 1, pw, ctx, p.team);
     if (ctx !== 1) return;
     for (var k = 0; k < c.lm.length; k++) {
       var at = c.lm[k];
       if (at < 0 || c.clock - c.lmt[k] > PRE_PRESS || rb.a[at * DA + 4] !== 1) continue;
-      rb.a[at * DA + 2] = mi + 1; rb.a[at * DA + 3] = pw; // (his decision just before: when the button would go down)
+      if (stk) rb.a[at * DA] = stk;
+      rb.a[at * DA + 2] = mi + 1; rb.a[at * DA + 3] = pw; // (his decision just before: when the button would go down and aim)
       c.lm[k] = -1;
     }
   }
@@ -1851,7 +2031,9 @@
     headGrad(O_ST, NST, null, stk, 1, 0);
     headGrad(O_SP, NSP, null, lab[1], 0.5, 0);
     setMask(ctx);
-    if (bmask[btn]) headGrad(O_BT, NBT, bmask, btn, 1, 0);
+    if (bmask[btn] && !isDistantIdle(rx, ctx, btn)) {
+      headGrad(O_BT, NBT, bmask, btn, (ctx === 2 && btn === 0) ? 0.25 : 1, 0);
+    }
     if (btn && lab[3] >= 0) headGrad(O_PW, NPW, null, lab[3], 1, 0);
     dout[O_V] = (out[O_V] - lab[5] / 100) * 0.25;
     backward(b, rx);
@@ -1868,15 +2050,13 @@
       sampleOf(V, k);
       forward(b, rx);
       softmax(O_ST, NST, null, 1);
-      var ex = 0, ez = 0;
-      for (var d = 1; d < NST; d++) { ex += prob[d] * DIRX[d]; ez += prob[d] * DIRZ[d]; }
-      var mine = ex * ex + ez * ez > STAND * STAND ? 1 + ((Math.round(Math.atan2(ez, ex) / (Math.PI / 4)) + 8) % 8) : 0;
+      var mine = decodeStick(0);
       v.n++; if (mine === lab[0]) v.dir++;
       setMask(lab[4]);
       softmax(O_BT, NBT, bmask, 1);
-      var bi = 1;
-      for (d = 2; d < NBT; d++) if (prob[d] > prob[bi]) bi = d;
-      var press = bmask[bi] && prob[bi] > PRESS ? bi : 0;
+      var bi = 1, actSum = 0;
+      for (var d = 1; d < NBT; d++) { actSum += prob[d]; if (prob[d] > prob[bi]) bi = d; }
+      var press = bmask[bi] && (prob[bi] > PRESS || (actSum > 0.32 && prob[bi] > 0.09)) ? bi : 0;
       if (lab[2] > 0) { v.pn++; v.odds += prob[lab[2]]; if (press === lab[2]) v.same++; }
       else if (lab[4] === 1) { v.cn++; if (press) v.extra++; }
     }
@@ -2269,7 +2449,7 @@
         teamClock[t] += dt;
         b.st.playT += dt; b.st.opsT += dt;
         // a real-time match on "1 player": the brain plays only the team's selected player (the marker, switched like a
-        // human's cursor), Legend the others; a training plays all of them (more to learn from)
+        // human's cursor), Legend the others; a training plays all of them (with distant off-ball players down-weighted)
         var solo = b.cfg.ctl !== '11P' && !training, one = solo ? as.player : null;
         if (one !== oneP[t]) {
           var ov = oneP[t] && slotOf(oneP[t]);
