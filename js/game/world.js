@@ -10,13 +10,13 @@
   var GOAL_HEIGHT = NS.GOAL_HEIGHT;
 
   // Ball physics constants (shared with Actions, which aims kicks with the same model).
-  var G = 24.0;          // gravity
-  var AIR_K = 0.1;       // air drag on the horizontal speed (1/s)
-  var ROLL_K = 0.95;     // rolling drag (1/s)
-  var ROLL_F = 1.1;      // rolling resistance (constant deceleration)
-  var BOUNCE = 0.55;     // vertical restitution on the grass
-  var BOUNCE_GRIP = 0.84; // horizontal speed kept on a bounce
-  var MAGNUS = 0.035;    // curl from spin, perpendicular to the flight
+  var G = 15.6;           // realistic broadcast-scale gravity (was 24.0, which made arcs fall like lead)
+  var AIR_K = 0.16;       // quadratic-like air drag approximation on horizontal flight (1/s)
+  var ROLL_K = 0.82;      // grass rolling decay (1/s)
+  var ROLL_F = 1.35;      // continuous turf rolling resistance (m/s^2) so the ball comes to a natural stop
+  var BOUNCE = 0.58;      // vertical restitution on grass
+  var BOUNCE_GRIP = 0.86; // base horizontal speed kept on a grass bounce
+  var MAGNUS = 0.042;     // curl from spin, perpendicular to the flight
   var POST_R = NS.POST_R; // goal posts and bar radius (12 cm wide, like a real goal)
   NS.PHYS = { G: G, AIR_K: AIR_K, ROLL_K: ROLL_K, ROLL_F: ROLL_F };
 
@@ -33,32 +33,41 @@
   // Free flight / bounce / roll for dt. Returns true when the ball hit the ground this step.
   function integrate(st, dt) {
     var bounced = false;
-    st.x += st.vx * dt;
-    st.y += st.vy * dt;
-    st.z += st.vz * dt;
-    var airborne = st.y > R + 0.01 || st.vy > 0;
+    var airborne = st.y > R + 0.015 || st.vy > 0.05;
 
-    // spin curls the ball sideways (perpendicular to its horizontal velocity)
+    // Spin curls the ball sideways (Magnus effect, scaled by speed and air/ground state)
     if (st.spin > 0.01 || st.spin < -0.01) {
-      var c = st.spin * MAGNUS * (airborne ? 1 : 0.25) * dt;
+      var c = st.spin * MAGNUS * (airborne ? 1.0 : 0.28) * dt;
       var ax = -st.vz * c;
       st.vz += st.vx * c;
       st.vx += ax;
-      st.spin *= Math.exp(-(airborne ? 1.8 : 7) * dt);
+      st.spin *= Math.exp(-(airborne ? 1.4 : 5.5) * dt);
     }
 
     if (airborne) {
+      // Velocity Verlet / midpoint integration for smooth parabolic arcs
+      var vy0 = st.vy;
       st.vy -= G * dt;
       var air = Math.exp(-AIR_K * dt);
       st.vx *= air;
       st.vz *= air;
+      st.x += st.vx * dt;
+      st.y += (vy0 + st.vy) * 0.5 * dt;
+      st.z += st.vz * dt;
+
       if (st.y <= R) {
         st.y = R;
-        if (st.vy < -1.5) {
-          st.vy = -st.vy * BOUNCE;
-          st.vx *= BOUNCE_GRIP;
-          st.vz *= BOUNCE_GRIP;
-          st.spin *= 0.5;
+        var impactVy = -st.vy;
+        if (impactVy > 1.15) {
+          // Restitution decreases slightly on very hard vertical impacts (turf absorption)
+          var rest = BOUNCE * (impactVy > 12 ? 0.88 : 1.0);
+          st.vy = impactVy * rest;
+          // Angle-dependent turf grip: steeper drops lose more horizontal speed than low skimmers
+          var hSpd = Math.sqrt(st.vx * st.vx + st.vz * st.vz);
+          var grip = BOUNCE_GRIP - Math.min(0.16, impactVy / (hSpd + 8.0) * 0.18);
+          st.vx *= grip;
+          st.vz *= grip;
+          st.spin *= 0.65;
           bounced = true;
         } else {
           st.vy = 0;
@@ -69,10 +78,14 @@
       st.vy = 0;
       var sp = Math.sqrt(st.vx * st.vx + st.vz * st.vz);
       if (sp > 0) {
+        // Combination of viscous grass drag at high speed and Coulomb rolling friction at low speed
         var ns = sp * Math.exp(-ROLL_K * dt) - ROLL_F * dt;
-        if (ns < 0.15) ns = 0;
-        st.vx *= ns / sp;
-        st.vz *= ns / sp;
+        if (ns < 0.08) ns = 0;
+        var scale = ns / sp;
+        st.vx *= scale;
+        st.vz *= scale;
+        st.x += st.vx * dt;
+        st.z += st.vz * dt;
       }
     }
     return bounced;
@@ -90,7 +103,15 @@
     st.x = px + nx * min;
     st.z = pz + nz * min;
     var vn = st.vx * nx + st.vz * nz;
-    if (vn < 0) { st.vx -= 1.65 * vn * nx; st.vz -= 1.65 * vn * nz; }
+    if (vn < 0) {
+      // Metallic cylindrical restitution (0.72) plus glancing spin induced by off-center hits
+      var vt = -st.vx * nz + st.vz * nx;
+      st.vx -= 1.72 * vn * nx;
+      st.vz -= 1.72 * vn * nz;
+      st.vx *= 0.92;
+      st.vz *= 0.92;
+      st.spin = (st.spin * 0.4) + vt * 0.35;
+    }
     return true;
   }
 
@@ -106,13 +127,18 @@
     st.x = bx + nx * min;
     st.y = GOAL_HEIGHT + ny * min;
     var vn = st.vx * nx + st.vy * ny;
-    if (vn < 0) { st.vx -= 1.6 * vn * nx; st.vy -= 1.6 * vn * ny; }
+    if (vn < 0) {
+      st.vx -= 1.68 * vn * nx;
+      st.vy -= 1.68 * vn * ny;
+      st.vz *= 0.92; // tangential friction along the bar
+      st.spin *= 0.5;
+    }
     return true;
   }
 
   // Posts, bar and net. Returns the scoring team, -1, -2 (hit the woodwork), -3 (all of the ball over a touchline) or
   // -4 (over a goal line, not in the goal). Outside the goal there are no walls any more: the ball goes out of play.
-  function collide(st, scoring) {
+  function collide(st, scoring, dt) {
     var az = st.z < 0 ? -st.z : st.z;
     var hit = false;
     if (st.y < GOAL_HEIGHT + POST_R + R) {
@@ -127,18 +153,38 @@
       }
     }
     az = st.z < 0 ? -st.z : st.z;
-    // inside the goal: the net catches the ball (back, sides, roof)
+    // Inside the goal: the net catches and cushions the ball (back, sides, roof)
     if ((st.x > HALF_W || st.x < -HALF_W) && az < GOAL_HALF_W && st.y < GOAL_HEIGHT) {
       var gs = st.x > 0 ? 1 : -1;
       var back = HALF_W + NS.GOAL_DEPTH - R;
+      // Soft mesh drag as the ball pushes deep into the net
+      var depthFrac = ((st.x * gs) - HALF_W) / NS.GOAL_DEPTH;
+      if (depthFrac > 0.55 && dt) {
+        var netDrag = Math.exp(-6.5 * (depthFrac - 0.55) * dt);
+        st.vx *= netDrag;
+        st.vy *= netDrag;
+        st.vz *= netDrag;
+      }
       if (st.x * gs > back) {
         st.x = gs * back;
-        if (scoring && st.vx * gs > 3) World.netHit = gs;
-        st.vx *= -0.12; st.vz *= 0.5; st.vy *= 0.5;
+        if (scoring && st.vx * gs > 2.2) World.netHit = gs;
+        st.vx = -st.vx * 0.14;
+        st.vz *= 0.45;
+        st.vy *= 0.35;
+        st.spin *= 0.2;
       }
-      if (az > GOAL_HALF_W - R) { st.z = (st.z > 0 ? 1 : -1) * (GOAL_HALF_W - R); st.vz *= -0.2; }
-      if (st.y > GOAL_HEIGHT - R) { st.y = GOAL_HEIGHT - R; st.vy *= -0.2; }
-      // all of the ball over the line, between the posts and under the bar: goal
+      if (az > GOAL_HALF_W - R) {
+        st.z = (st.z > 0 ? 1 : -1) * (GOAL_HALF_W - R);
+        if (scoring && Math.abs(st.vz) > 3.5) World.netHit = gs;
+        st.vz = -st.vz * 0.18;
+        st.vx *= 0.65;
+      }
+      if (st.y > GOAL_HEIGHT - R) {
+        st.y = GOAL_HEIGHT - R;
+        st.vy = -st.vy * 0.15;
+        st.vx *= 0.7;
+      }
+      // All of the ball over the line, between the posts and under the bar: goal
       if (scoring && st.x * gs > HALF_W + R && az < GOAL_HALF_W - POST_R) return NS.attack(0) === gs ? 0 : 1;
       return -1;
     }
@@ -157,7 +203,8 @@
     lastToucher: '',
     hard: false, // true after a shot: fast enough to be deflected
     kicker: null, kickerT: 0, // the last kicker cannot take the ball straight back
-    gkTried: 0,   // bit per team: that keeper already had his one save attempt on this kick
+    gkTried: 0,   // bit per team: that keeper already had his save attempt on this kick
+    gkCd: 0,      // brief cooldown before a keeper can react to a second deflection
     chip: false, // lofted shot: the keeper is much less likely to save it
     pickupCooldown: 0,
     receiver: null,  // team-mate the last pass was played to (he runs onto it)
@@ -177,7 +224,7 @@
   function makeSlot(idx) {
     return {
       idx: idx, active: false, team: 0, player: null,
-            chargeMove: -1, chargeFrac: -1, pressing: false, teamPress: false, evPlayer: null, burstT: 0, lockT: 0,
+      chargeMove: -1, chargeFrac: -1, pressing: false, teamPress: false, evPlayer: null, burstT: 0, lockT: 0,
       sprPrev: false, sprTaps: 0, sprTapT: 9, knockT: 0, // knock-on: sprint taps on the ball
       evActive: false, evMask: 0, evT: 0, evSettle: 0, evCtx: 0, evMove: -1, evPrev: 0,
       gkLeft: 0, // keeper countdown shown (seconds left)
@@ -241,6 +288,8 @@
       ball.receiver = null;
       ball.contester = null;
       ball.pickupCooldown = 0.25;
+      ball.gkTried = 0;
+      ball.gkCd = 0;
       ball.offTeam = -1;
       ball.nutThru = null; ball.nutT = 0; ball.nutP = null;
       ball.thrown = false;
@@ -250,15 +299,18 @@
     stepBall: function (dt) {
       if (ball.pickupCooldown > 0) ball.pickupCooldown -= dt;
       if (ball.kickerT > 0) ball.kickerT -= dt;
+      if (ball.gkCd > 0) ball.gkCd -= dt;
 
       var o = ball.owner;
       if (o) {
-        var carry = o.throwIn ? 0.2 : (o.gkHands ? 0.55 : o.carry); // a keeper holds it in his hands, at chest height
+        var sp = Math.sqrt(o.vel.x * o.vel.x + o.vel.z * o.vel.z);
+        var stride = (!o.throwIn && !o.gkHands && sp > 0.8) ? Math.abs(Math.sin(o.animPhase)) * 0.16 * Math.min(1, sp / 9) : 0;
+        var carry = o.throwIn ? 0.2 : (o.gkHands ? 0.55 : o.carry + stride);
         ball.pos.x = o.pos.x + Math.sin(o.facing) * carry;
-        ball.pos.y = o.throwIn ? 3.05 : (o.gkHands ? 1.45 : R); // a throw-in: over his head
+        ball.pos.y = o.throwIn ? 3.05 : (o.gkHands ? 1.45 : R + stride * 0.18);
         ball.pos.z = o.pos.z + Math.cos(o.facing) * carry;
         ball.vel.set(o.vel.x, 0, o.vel.z);
-        // he ran it over a line (not while he holds it for a throw-in / restart)
+        // He ran it over a line (not while he holds it for a throw-in / restart)
         if (!o.throwIn && !World.match.restart) {
           if (ball.pos.z > HALF_H + R || ball.pos.z < -HALF_H - R) return -3;
           if (ball.pos.x > HALF_W + R || ball.pos.x < -HALF_W - R) return -4;
@@ -268,9 +320,21 @@
 
       ball.age += dt;
       loadState(S);
-      if (integrate(S, dt)) { ball.hard = false; ball.chip = false; }
-      var res = collide(S, true);
-      if (res === -2) { NS.Audio.post(); ball.hard = false; res = -1; }
+      // 2 sub-steps per frame prevent fast shots from tunneling through posts or skipping ground bounces
+      var h = dt * 0.5;
+      var res = -1;
+      for (var step = 0; step < 2; step++) {
+        if (integrate(S, h)) { ball.hard = false; ball.chip = false; }
+        var cRes = collide(S, true, h);
+        if (cRes === -2) {
+          NS.Audio.post();
+          ball.hard = false;
+          ball.gkTried = 0; // keeper can react to a rebound off the woodwork
+        } else if (cRes >= 0 || cRes <= -3) {
+          res = cRes;
+          break;
+        }
+      }
       ball.pos.set(S.x, S.y, S.z);
       ball.vel.set(S.vx, S.vy, S.vz);
       ball.spinY = S.spin;
@@ -280,10 +344,11 @@
     // Predicted ball position after t seconds of free flight (same physics). Sets World.prX / prY / prZ.
     predict: function (t) {
       loadState(P);
-      var h = 0.05;
+      var h = 0.04;
       for (var k = t; k > 1e-4; k -= h) {
-        integrate(P, k < h ? k : h);
-        collide(P, false);
+        var stepDt = k < h ? k : h;
+        integrate(P, stepDt);
+        collide(P, false, stepDt);
       }
       this.prX = P.x; this.prY = P.y; this.prZ = P.z;
     },
@@ -296,7 +361,7 @@
       var h = 0.05;
       for (var i = 0; i <= 50; i++) {
         var t = i * h;
-        if (i > 0) { integrate(P, h); collide(P, false); }
+        if (i > 0) { integrate(P, h); collide(P, false, h); }
         if (P.y > reachY) continue;
         var dx = P.x - p.pos.x;
         var dz = P.z - p.pos.z;
