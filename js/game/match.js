@@ -38,6 +38,36 @@
   function SX() { return HALF_W / 52.5; }
   function SZ() { return HALF_H / 34; }
 
+  // Dev mode aim arrows: while a human charges a pass / shot, where it would go now (its direction and power: the
+  // same planning as the kick, worked out 20 times a second); after a kick, where it was played (fading out).
+  var aimCache = [null, null], aimCd = [0, 0];
+  var AIM_TYPE = { lowpass: 1, onetwo: 1, through: 2, lobthrough: 2, long: 3, shoot: 4, curve: 5, chip: 6 };
+  function hideAims() { for (var k = 0; k < 3; k++) NS.Scene.setAim(k, false); }
+  function aimArrows(dt) {
+    var s = World.settings, ball = World.ball;
+    if (!s.devArrow) { hideAims(); return; }
+    for (var i = 0; i < 2; i++) {
+      var sl = World.slots[i], p = sl.player, mv = sl.chargeMove;
+      var mid = sl.active && p && mv >= 0 && sl.chargeFrac >= 0 && (sl.evCtx === 1 || sl.evCtx === 3 || sl.evCtx === 4) ? NS.Bindings.MOVES[mv].id : '';
+      var type = AIM_TYPE[mid] || 0;
+      if (!type) { aimCache[i] = null; NS.Scene.setAim(i, false); continue; }
+      aimCd[i] -= dt;
+      if (aimCd[i] <= 0 || !aimCache[i]) {
+        aimCd[i] = 0.05;
+        var pad = NS.Input.pads[sl.idx] || { x: 0, y: 0 };
+        aimCache[i] = NS.Actions.aimPoint(p, type, sl.chargeFrac, pad.x, pad.y, mid === 'lobthrough');
+      }
+      var a = aimCache[i];
+      var fx = ball.owner === p ? ball.pos.x : p.pos.x, fz = ball.owner === p ? ball.pos.z : p.pos.z;
+      NS.Scene.setAim(i, true, fx, fz, a[0], a[1], a[2], 0.55 + 0.4 * sl.chargeFrac);
+    }
+    var sh = NS.Actions.shown;
+    if (sh && sh.t > 0) {
+      sh.t -= dt;
+      NS.Scene.setAim(2, true, sh.fx, sh.fz, sh.x, sh.z, sh.kind, 0.6 * Math.min(1, sh.t / 0.5));
+    } else NS.Scene.setAim(2, false);
+  }
+
   function animate(p, dt) {
     var mesh = p.mesh;
     if (p.kickT > 0) p.kickT -= dt;
@@ -189,6 +219,10 @@
     } else if (p.gkHands && World.ball.owner === p) {
       armL = armR = -1.3; outL = outR = 0.1; // ball held in front
       elbL = elbR = -1.0; // (hands together at the chest)
+    } else if (p.role === 'GK' && p.spreadT > 0 && !p.mood) {
+      // one against one: making himself big, arms and legs wide, low on bent knees
+      armL = armR = -1.0; outL = outR = 1.05; elbL = elbR = -0.2;
+      kneeL = kneeR = 0.55; spread = 0.3; lean = 0.25; hipY = H0 - 0.16 * hs;
     } else if (p.role === 'GK' && sp < 3 && !p.mood) {
       // a keeper set for a shot: crouched on bent knees, feet apart, arms out low with the elbows bent, palms forward
       armL = armR = -0.5; outL = outR = 0.42; elbL = elbR = -0.95;
@@ -570,6 +604,7 @@
       animate(p, dt);
     }
     for (var j = 0; j < 2; j++) NS.Scene.setRing(j, false, 0, 0);
+    hideAims();
     if (breakKind === 1 && scorer) NS.Scene.followBall(dt, scorer.pos.x, scorer.pos.z, camMode);
     else NS.Scene.followBall(dt, ball.pos.x * 0.5, 0, camMode);
   }
@@ -1167,6 +1202,7 @@
         p.facing = NS.attack(p.team) * Math.PI / 2;
         p.stun = 0; p.tackleT = 0; p.tackleCd = 0; p.runToT = 0; p.returnTo = null; p.dribbling = false;
         p.kickT = 0; p.lungeT = 0; p.slideT = 0; p.fallT = 0; p.diveT = 0; p.headT = 0; p.catchT = 0; p.gkHands = false;
+        p.smotherT = 0; p.spreadT = 0; p.oneT = 0;
         p.mood = 0; p.slid = false; p.throwIn = false; p.throwT = 0; p.shoulderT = 0; p.offside = false; p.bumpT = 0;
         animate(p, 0);
         p.mark = null; p.drX = 0; p.drZ = 0; p.runT = 0; p.runCd = 0; p.aiT = 0; p.gkRT = 0; p.stamina = Math.min(100, p.stamina + 30); p.gkHold = 0;
@@ -1269,6 +1305,7 @@
       NS.Scene.setRing(1, false, 0, 0);
       NS.Scene.setRing(2, false, 0, 0);
       NS.Scene.setRing(3, false, 0, 0);
+      hideAims();
       if (NS.Aima && finished !== true) NS.Aima.matchEnd(false);
       if (NS.Replay && NS.Replay.active()) NS.Replay.stop();
       var inComp = NS.Comp && NS.Comp.active();
@@ -1695,6 +1732,7 @@
         if (al.active && al.player) NS.Scene.setRing(2 + i, true, al.player.pos.x, al.player.pos.z, false);
         else NS.Scene.setRing(2 + i, false, 0, 0);
       }
+      aimArrows(dt);
       NS.Scene.followBall(dt, ball.pos.x, ball.pos.z, settings.cameraMode);
     },
 

@@ -22,6 +22,9 @@
   var ARROW_Y = 4.1;
   var ARROW_SCALE = 0.6;                   // a small pyramid above the head, not a big marker
   var arrowT = 0;
+  // Dev mode aim arrows on the grass: P1's and P2's aim while charging a kick, and the last kick (where it was played)
+  var aims = [];
+  var AIM_COLORS = [0xffffff, 0xfacc15, 0xf87171]; // along the ground, lofted, a shot
   var lookTarget = null;
   var canvasEl = null;
   var width = 0;
@@ -120,6 +123,28 @@
     if (cheerT <= 0 && mat.map !== tx[0]) mat.map = tx[0];
   }
 
+  // one aim arrow: a flat shaft and head pointing along +z (scaled to its length), and a ring where it lands
+  function makeAim(sc) {
+    var mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide });
+    var root = new THREE.Group();
+    var sg = new THREE.PlaneGeometry(1, 1);
+    sg.rotateX(-Math.PI / 2);
+    sg.translate(0, 0, 0.5);
+    var shaft = new THREE.Mesh(sg, mat);
+    var tri = new THREE.Shape();
+    tri.moveTo(-0.6, 0); tri.lineTo(0.6, 0); tri.lineTo(0, 1.6); tri.lineTo(-0.6, 0);
+    var hg = new THREE.ShapeGeometry(tri);
+    hg.rotateX(Math.PI / 2);
+    var head = new THREE.Mesh(hg, mat);
+    var rg = new THREE.RingGeometry(0.7, 0.95, 20);
+    rg.rotateX(-Math.PI / 2);
+    var ring = new THREE.Mesh(rg, mat);
+    root.add(shaft, head, ring);
+    root.visible = false;
+    sc.add(root);
+    return { root: root, shaft: shaft, head: head, ring: ring, mat: mat };
+  }
+
   NS.Scene = {
     init: function (canvas, tier) {
       canvasEl = canvas;
@@ -173,7 +198,26 @@
         rings[i].visible = false;
         scene.add(rings[i]);
       }
+      for (var a = 0; a < 3; a++) aims.push(makeAim(scene));
       this.applyTier(tier);
+    },
+    // An aim arrow (i: 0 / 1 the players' aim, 2 the last kick) from (x0, z0) to (x1, z1); kind 0 ground, 1 lofted, 2 shot.
+    setAim: function (i, on, x0, z0, x1, z1, kind, alpha) {
+      var g = aims[i];
+      if (!g) return;
+      g.root.visible = on;
+      if (!on) return;
+      var dx = x1 - x0, dz = z1 - z0, len = Math.sqrt(dx * dx + dz * dz);
+      if (len < 0.5) { g.root.visible = false; return; }
+      var head = Math.min(1.6, len * 0.4);
+      g.root.position.set(x0, 0.07 + i * 0.01, z0);
+      g.root.rotation.y = Math.atan2(dx, dz);
+      g.shaft.scale.set(0.32, 1, len - head);
+      g.head.position.z = len - head;
+      g.head.scale.set(1, 1, head / 1.6);
+      g.ring.position.z = len;
+      g.mat.color.setHex(AIM_COLORS[kind] || AIM_COLORS[0]);
+      g.mat.opacity = alpha === undefined ? 0.85 : alpha;
     },
     applyTier: function (tier) {
       if (!renderer) return;

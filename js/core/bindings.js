@@ -42,7 +42,7 @@
     { id: 'press', ctx: 2, kind: 2, cls: 2, mask: PA },
     { id: 'teampress', ctx: 2, kind: 2, cls: 3, mask: PY },
     { id: 'switch', ctx: 2, kind: 0, cls: 1, mask: PL },
-    // (last on purpose: checkoAI's button head has one slot per move above; this one is for humans only)
+    // (checkoAI's button head has one slot per move above and this one, v1.51; the keeper move is for humans only)
     { id: 'lobthrough', ctx: 1, kind: 0, cls: 2, mask: PL | PY },
     // held: the keeper comes off his line for the ball (claims it, or goes in on the man who has it); humans only
     { id: 'keeper', ctx: 2, kind: 2, cls: 3, mask: PZL }

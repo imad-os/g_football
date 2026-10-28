@@ -14,15 +14,30 @@
   var AIR_K = 0.16;       // quadratic-like air drag approximation on horizontal flight (1/s)
   var ROLL_K = 0.82;      // grass rolling decay (1/s)
   var ROLL_F = 1.35;      // continuous turf rolling resistance (m/s^2) so the ball comes to a natural stop
-  var BOUNCE = 0.58;      // vertical restitution on grass
-  var BOUNCE_GRIP = 0.86; // base horizontal speed kept on a grass bounce
+  var BOUNCE = 0.68;      // vertical restitution on grass (Settings > Dev mode > Ball bounce)
+  var BOUNCE_GRIP = 0.88; // base horizontal speed kept on a grass bounce
   var MAGNUS = 0.042;     // curl from spin, perpendicular to the flight
   var POST_R = NS.POST_R; // goal posts and bar radius (12 cm wide, like a real goal)
   NS.PHYS = { G: G, AIR_K: AIR_K, ROLL_K: ROLL_K, ROLL_F: ROLL_F };
 
-  // Scratch states (no allocation in the step): S = the live ball, P = the predictor.
+  // Scratch states (no allocation in the step): S = the live ball, P = the predictor, Q = kick planning.
   var S = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, spin: 0 };
   var P = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, spin: 0 };
+  var Q = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, spin: 0 };
+
+  // A ball struck along the ground (or skimmed off it with vertical speed vy) at horizontal speed v: its horizontal
+  // speed once it has covered d (-1: it stops before), and the time it took (Q.t). Same physics as the play.
+  function rollTo(v, vy, d) {
+    Q.x = 0; Q.y = R; Q.z = 0; Q.vx = v; Q.vy = vy; Q.vz = 0; Q.spin = 0;
+    var h = 1 / 60, t = 0;
+    while (Q.x < d) {
+      integrate(Q, h);
+      t += h;
+      if (Q.vx < 0.1 || t > 8) { Q.t = t; return -1; }
+    }
+    Q.t = t;
+    return Q.vx;
+  }
 
   function loadState(st) {
     st.x = ball.pos.x; st.y = ball.pos.y; st.z = ball.pos.z;
@@ -58,9 +73,10 @@
       if (st.y <= R) {
         st.y = R;
         var impactVy = -st.vy;
-        if (impactVy > 1.15) {
+        if (impactVy > 0.9) {
           // Restitution decreases slightly on very hard vertical impacts (turf absorption)
-          var rest = BOUNCE * (impactVy > 12 ? 0.88 : 1.0);
+          var bk = World.settings && World.settings.ballBounce > 0 ? World.settings.ballBounce : BOUNCE;
+          var rest = bk * (impactVy > 12 ? 0.9 : 1.0);
           st.vy = impactVy * rest;
           // Angle-dependent turf grip: steeper drops lose more horizontal speed than low skimmers
           var hSpd = Math.sqrt(st.vx * st.vx + st.vz * st.vz);
@@ -353,6 +369,20 @@
       this.prX = P.x; this.prY = P.y; this.prZ = P.z;
     },
     prX: 0, prY: 0, prZ: 0,
+
+    // The horizontal launch speed for a ball played along the ground (vertical speed vy) to cover d and still roll on
+    // at vEnd there. World.kickT: the time it takes to get there.
+    speedFor: function (d, vEnd, vy) {
+      var lo = 1, hi = 60, k;
+      for (k = 0; k < 22; k++) {
+        var mid = (lo + hi) * 0.5, ve = rollTo(mid, vy || 0, d);
+        if (ve < vEnd) lo = mid; else hi = mid;
+      }
+      rollTo(hi, vy || 0, d);
+      this.kickT = Q.t;
+      return hi;
+    },
+    kickT: 0,
 
     // Earliest time player p (running at `speed`) can meet the ball at a height he can play (<= reachY).
     // Sets World.icX / icZ to the meeting point. For a lofted ball this is where it comes down.

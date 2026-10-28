@@ -124,6 +124,34 @@ corners are hard. The keeper catches (hands) shots and balls played by the oppon
 team-mate must be played with the feet. A keeper may hold the ball 5 seconds at most: after that it is kicked long anyway.
 Player 2: the second controller or phone controller connected.
 
+**The keeper's own rules** (js/game/keeper.js, every keeper: CPU, human team, checkoAI) since v1.51:
+* **Position**: on the line splitting the angle between the ball and his posts, off his line by how far the ball is
+  (about 6 m out with it 35 m away, 1-2 m with it in the box, at the near post with it wide). With the ball far up the
+  pitch he plays as a **sweeper** behind his back line (up to 6 m behind it, at most 24 m out for Hard / Legend).
+  On his line for **corners** (a step towards the far post) and **penalties**, 1-2 m out for a **free kick** near the box.
+* **One against one** (a man through on goal, no team-mate in his lane or on him): after his reaction time he comes out
+  to **narrow the angle** about 4.5 m in front of the man, makes himself **big** (arms and legs spread) and, once the
+  man is close (~3 m) or his touch runs away from him, **dives at his feet** (smother): his rating against the
+  attacker's dribbling (a man flat out has less control). Won in his box: the ball is in his hands; outside it: pushed away.
+* A loose ball he gets to first (in and around the box, a ball over the top) is claimed, diving on it when an attacker
+  arrives too. The keeper button (held) sends him straight out with the same smother.
+
+## Dev mode (Settings > Dev mode)
+
+* **Aim arrow** (on by default): while a pass / shot is charged, an arrow on the grass shows where it would go now (the
+  same planning as the kick: direction and power bar; white along the ground, yellow lofted, red a shot), and after the
+  kick where it was really played (fading out).
+* **Low / through / long pass power, shot power**: x0.7 to x1.5 the normal pace (human and checkoAI kicks only).
+* **Pass assist** 0-100 (default 60): 100 = always to the best team-mate that way (the old behaviour); 0 = exactly where
+  the stick and the power bar send it (the team-mate nearest that spot runs onto it); in between, part of the way.
+* **Through ball lift**: a through ball to a receiver 20 m or more away skims this high off the grass (default 0.4 m).
+* **Ball bounce**: how much vertical speed the ball keeps on a bounce (default 0.68, was 0.58).
+
+**Through balls** (v1.51): played into the space ahead of the runner's path (the stick bent towards goal) at the spot
+where he and the ball arrive together, before any defender or the keeper; the ball is struck so it still rolls on at
+~4 m/s there. The receiver sprints to that spot and only turns to the ball once it is within ~4 m of him (before, he
+came back to meet it: a through ball was just a pass). The power bar picks how deep.
+
 ## Replays and the full-time screen
 
 - **Replays** (js/game/replay.js) use the match camera. The last 10, 15 or 20 seconds (Settings > Video > Replay length)
@@ -154,6 +182,13 @@ spent in each moment of the game, pressing triggers, time over a line, and the k
 top, cross, chip to a runner). A checkoAI side is named with its brain and its Legend help. The game reports its events through `NS.dbg` (js/game/debug.js), which is null otherwise.
 
 ## checkoAI (CPU level "checkoAI")
+
+**v1.51: lessons, and the plan to beat Legend** (docs/checkoai-plan.md). Every clap, punishment and move of the trainer is
+kept as a lesson (the situation, the move, a score) and every decision looks them up: one punishment cuts that move's odds
+in situations like it at once and by the 5th it is gone there; 5 claps make a move his first choice there; each of the
+trainer's own moves counts as a third of a clap. The network also learns them (and replays them), and they are saved with
+the brain (400 at most). checkoAI now has the long through pass too (an older brain gets it with weights of 0). The CPU
+(Hard / Legend) plays one-twos, long through passes and knock-ons like a human.
 
 A learning team named after the owner's white rooster (js/game/aima.js). On a CPU team at level checkoAI one network
 plays every outfield player, each through his own virtual controller with the same stick, sprint, buttons and hold times
@@ -529,7 +564,7 @@ vendor/zzfx.js        ZzFX sound generator (MIT), self-hosted
 js/core/              config (constants + settings schema), i18n (en fr es ar), bindings (button map), gamepad (MyPC.gamepad), audio, storage (MyPC.save/load), input (per-player controller state), quality
 js/data/              teams (110 clubs and nations), players (ratings), formations
 js/render/            assets (procedural kits and players), scene (three.js scene, camera, stadium)
-js/game/              world (state + ball physics), actions (kicks, tackle), ai (CPU), controls (human), match (flow + fixed step), comp (league / cup / world cup)
+js/game/              world (state + ball physics), actions (kicks, tackle), ai (CPU), keeper (goalkeepers), controls (human), match (flow + fixed step), comp (league / cup / world cup)
 js/ui/                hud (cached DOM writes, radar), menu (remote-friendly spatial focus navigation), mapper (real button detection)
 js/main.js            My PC lifecycle (init / ready / start / pause / resume / destroy) and the single rAF loop
 ```

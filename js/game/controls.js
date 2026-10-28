@@ -27,7 +27,7 @@
   var I_SLIDE = B.index('slide');
   var I_TEAM = B.index('teampress');
   var I_SWITCH = B.index('switch');
-  var I_LOB = B.index('lobthrough'); // long through pass: lands over the defenders (humans only, checkoAI never sees it)
+  var I_LOB = B.index('lobthrough'); // long through pass: lands over the defenders (checkoAI has it too since v1.51)
   var I_KEEP = B.index('keeper');    // held: the keeper rushes out (js/game/ai.js aiGoalkeeper; humans only)
 
   // seconds to fill the power bar (shot gauge, pass power): Settings > Gameplay > Power bar speed
@@ -155,10 +155,12 @@
     else if (mi === I_CHIP) { type = ACT.CHIP; power = holdPower(d); follow = false; }
     else if (mi === I_ONETWO) { if (NS.Aima) NS.Aima.humanMove(slot, mi, d); Actions.oneTwo(p, pad.x, pad.y); slot.lockT = 1.4; return; }
     else return;
-    if (NS.Aima && !lob) NS.Aima.humanMove(slot, mi, d);
+    if (NS.Aima) NS.Aima.humanMove(slot, mi, d);
     Actions.passPower = follow ? power : -1;
     Actions.lob = lob;
+    Actions.human = true;
     Actions.kick(p, type, power, pad.x, pad.y, 1);
+    Actions.human = false;
     Actions.lob = false;
     Actions.passPower = -1;
     var target = Actions.lastTarget;
@@ -223,7 +225,7 @@
   // Pass / through / long = headed pass; shot / curve / chip = headed shot.
   function header(slot, p, mi, pad) {
     var shot = mi === I_SHOOT || mi === I_CURVE || mi === I_CHIP;
-    if (NS.Aima && mi !== I_LOB) NS.Aima.humanMove(slot, mi, slot.evT);
+    if (NS.Aima) NS.Aima.humanMove(slot, mi, slot.evT);
     var type = mi === I_THR || mi === I_LOB ? ACT.THROUGH : (mi === I_LONG ? ACT.LONG : ACT.PASS);
     Actions.header(p, shot, type, pad.x, pad.y);
     var t = Actions.lastTarget;
@@ -579,10 +581,10 @@
       // height when a header was asked for). The stick is ignored until somebody has the ball.
       if (!has && receiving(p)) {
         var chase = slot.knockT > 0 ? 14.4 : 0; // his own knock-on: flat out after it
-        // a through ball: he meets it as usual, but where meeting it would take him back towards his own goal he runs on
-        // into the space instead and lets it come
         World.intercept(p, chase || (sprint ? 12.5 : 11), slot.evActive && slot.evCtx === 3 ? 3.1 : 1.9);
-        if (ball.thru && ball.receiver === p && (World.icX - p.pos.x) * NS.attack(p.team) < 0) { World.icX = ball.thruX; World.icZ = ball.thruZ; }
+        // a through ball: he sprints on into the space it is played into and meets it there (only once it is close to
+        // him does he go to the ball itself)
+        if (Actions.runOn(p)) { World.icX = ball.thruX; World.icZ = ball.thruZ; chase = 12.8; }
         var ix = World.icX - p.pos.x;
         var iz = World.icZ - p.pos.z;
         var il = Math.sqrt(ix * ix + iz * iz);

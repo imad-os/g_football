@@ -34,8 +34,9 @@
   // brain sizes (hidden layers)
   var SIZES = { TINY: [32, 24], MEDIUM: [64, 48], LARGE: [256, 128], HUGE: [512, 256] }; // MEDIUM = the old SMALL (same layers)
   var LOCAL_SIZES = {};   // no model data in My PC's profile save: every brain lives in the cloud
-  var NST = 9, NSP = 2, NBT = 13, NPW = 3;
-  var O_ST = 0, O_SP = 9, O_BT = 11, O_PW = 24, O_V = 27, NOUT = 28;
+  var NST = 9, NSP = 2, NBT = 14, NPW = 3;   // (v1.51: + the long through pass, NBT 13 -> 14)
+  var O_ST = 0, O_SP = 9, O_BT = 11, O_PW = 25, O_V = 28, NOUT = 29;
+  var OLD_NOUT = 28, LOB_ROW = O_BT + 13;     // a brain saved before it gets the new button with weights of 0
   // per-brain options (index into these): decision speed, foresight, copied moves kept, weight of the trainer's play
   var TICKS = [0.08, 0.1, 0.15];
   var GAMMAS = [0.94, 0.97, 0.99];
@@ -44,7 +45,7 @@
   var PRE_PRESS = 0.25;     // Legend's decisions up to this long before his kick count as that press (a button goes down, then is held)
   var BATCH = 8;            // learning steps averaged into one change of the weights
   var IM_RATE = 150;        // copying steps per second of play (per team)
-  var MINEW = [1.5, 3, 6];
+  var MINEW = [3, 6, 12];    // weight of the trainer's own play (x a copied Legend move)
   var NSTEP = 20;           // n-step returns: 20 decisions
   var TRAJ = 64;
   var CLAP_BACK = 3.5;      // a clap is for something he did up to this many seconds before the button went down
@@ -78,6 +79,7 @@
       matches: 0, mins: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, goals: 0, shots: 0, onTarget: 0, passes: 0, passOk: 0,
       fwdPass: 0, tackles: 0, won: 0, lost: 0, fouls: 0, pressN: 0, pressSame: 0, pressOdds: 0, claps: 0, clapSum: 0, punish: 0, reward: 0, decisions: 0, modelDec: 0,
       rl: 0, im: 0, humanSamples: 0, cpuSamples: 0, carryT: 0, sprintT: 0, playT: 0, xSum: 0, xN: 0, trainMatches: 0,
+      lessons: 0, // lessons kept (claps, punishments, the trainer's moves)
       opsP: 0, opsL: 0, opsT: 0, // arithmetic operations, and the seconds of play they were counted over: playing (its decisions) and learning (the same count on every device)
       btn: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], hist: []
     };
@@ -132,6 +134,7 @@
     }
     this.P[this.OB3 + O_BT] = 1.2;  // moderate no-button prior so passes, crosses and shots can emerge quickly
     this.P[this.OB3 + O_PW + 1] = 0.5;
+    this.P[this.OB3 + LOB_ROW] = -1;  // the long through pass: rarer than the others to start with
     this.AM.fill(0); this.AV.fill(0); this.G.fill(0); this.adamT = 0; this.gN = 0;
   };
   Brain.prototype.learns = function () { return trainer && this.cfg.learn && !this.frozen; };
@@ -534,6 +537,7 @@
   }
 
   function imitateOne(b) {
+    if (b.les && b.les.n && Math.random() < LES_REPLAY) { replayLesson(b); return; }
     if (!b.memN && !b.pmN) return;
     var press = b.pmN > 0 && (!b.memN || Math.random() < PRESS_SHARE);
     var X = press ? b.pmX : b.memX, Ac = press ? b.pmA : b.memA;
@@ -560,6 +564,129 @@
     backward(b, rx);
     b.st.im++;
     b.st.opsL += b.stepOps;
+  }
+
+  /* ------------------------------------------------------------------ lessons (claps, punishments, the trainer's moves) */
+
+  // A lesson: the situation (the inputs that describe the play around him, LF), what he did in it (a button, or the
+  // way he ran when he pressed none) and a score: + for each clap or each time the trainer made that move himself,
+  // - for each punishment. Every decision looks them up: in a situation like a lesson's (closer = stronger) that move's
+  // odds go up or down at once, so the 1st punishment already shows and by the 5th he no longer does it there; the 5th
+  // clap makes it his first choice there. Each lesson is also learnt by the network itself (many steps at once, then
+  // again now and then), so it carries over to situations a little different. Kept with the brain.
+  var LF = [0, 1, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33,
+    34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49];
+  var NLF = LF.length;
+  var LES_MAX = 400;      // lessons kept per brain (the weakest goes first)
+  var LES_S2 = 0.035;     // similarity: exp(-mean square distance / LES_S2) (0.5 for ~ the same moment of play)
+  var LES_MERGE = 0.012;  // closer than this to a lesson with the same move: the same lesson (its score adds up)
+  var LES_MIN = 0.06;     // similarity below which a lesson does not apply
+  var LES_FULL = 3.6, LES_LEAD = 1.6;   // a clapped / shown move: at this score it leads his other choices by this logit
+  var LES_DOWN = 3, LES_DOWN_MAX = 16;  // logit taken per point of a punished one's score (at most)
+  var LES_DISTIL = 24;    // network steps on a new or changed lesson
+  var LES_REPLAY = 0.04;  // share of the copying steps that replay a lesson
+  function lesInit(b) {
+    if (b.les) return;
+    b.les = { n: 0, X: new Float32Array(LES_MAX * F), K: new Int8Array(LES_MAX), A: new Int8Array(LES_MAX),
+      C: new Int8Array(LES_MAX), W: new Float32Array(LES_MAX), T: new Float64Array(LES_MAX) };
+  }
+  function lesDist(L, i, x) {
+    var o = i * F, d = 0;
+    for (var j = 0; j < NLF; j++) { var e = L.X[o + LF[j]] - x[LF[j]]; d += e * e; }
+    return d / NLF;
+  }
+  // kind 0: a button (act = 0..NBT-1, 0 = none), kind 1: the stick (act = 0..8). delta: + clap / shown, - punishment
+  function addLesson(b, x, kind, act, ctx, delta) {
+    if (!b || act < 0) return -1;
+    lesInit(b);
+    var L = b.les, i, at = -1, bd = LES_MERGE;
+    for (i = 0; i < L.n; i++) {
+      if (L.K[i] !== kind || L.A[i] !== act || L.C[i] !== ctx) continue;
+      var d = lesDist(L, i, x);
+      if (d < bd) { bd = d; at = i; }
+    }
+    if (at < 0) {
+      if (L.n < LES_MAX) at = L.n++;
+      else { // full: the weakest (then oldest) makes room
+        at = 0;
+        for (i = 1; i < L.n; i++) if (Math.abs(L.W[i]) < Math.abs(L.W[at]) || (Math.abs(L.W[i]) === Math.abs(L.W[at]) && L.T[i] < L.T[at])) at = i;
+      }
+      for (i = 0; i < F; i++) L.X[at * F + i] = x[i];
+      L.K[at] = kind; L.A[at] = act; L.C[at] = ctx; L.W[at] = 0;
+    } else {
+      // the same lesson again: its situation moves a little towards this one
+      for (i = 0; i < F; i++) L.X[at * F + i] += (x[i] - L.X[at * F + i]) * 0.25;
+    }
+    L.W[at] = clamp(L.W[at] + delta, -8, 8);
+    L.T[at] = Date.now();
+    b.dirty = true;
+    if (b.learns()) for (var k = 0; k < LES_DISTIL; k++) distil(b, x, kind, act, ctx, L.W[at]);
+    return at;
+  }
+  // his odds right now (out[]) moved by the lessons like this situation (ctx: 1 on the ball, 2 off it)
+  function lessonBias(b, x, ctx) {
+    var L = b.les;
+    if (!L || !L.n) return;
+    setMask(ctx);
+    for (var i = 0; i < L.n; i++) {
+      if (L.C[i] !== ctx || L.W[i] === 0) continue;
+      var sim = Math.exp(-lesDist(L, i, x) / LES_S2);
+      if (sim < LES_MIN) continue;
+      var w = L.W[i], off = L.K[i] ? O_ST : O_BT, at = off + L.A[i];
+      if (w < 0) { out[at] += sim * Math.max(-LES_DOWN_MAX, LES_DOWN * w); continue; }
+      // a clapped move climbs towards his favourite one there and past it: a full lesson (score LES_FULL, ~5 claps)
+      // makes it his first choice, each clap before that a step of the way
+      var n = L.K[i] ? NST : NBT, mx = -1e9;
+      for (var k = 0; k < n; k++) if (k !== L.A[i] && (L.K[i] || bmask[k]) && out[off + k] > mx) mx = out[off + k];
+      var gap = Math.max(0, mx - out[at]);
+      out[at] += sim * Math.min(1, w / LES_FULL) * (gap + LES_LEAD);
+    }
+  }
+  // one network step on a lesson: towards that move (w > 0), or away from it (w < 0: -log(1 - p), its odds pushed down)
+  function distil(b, x, kind, act, ctx, w) {
+    forward(b, x);
+    dout.fill(0);
+    var off = kind ? O_ST : O_BT, n = kind ? NST : NBT, mask = null;
+    if (!kind) { setMask(ctx); mask = bmask; if (!mask[act]) return; }
+    var coef = Math.min(2, Math.abs(w) * 0.5 + 0.5);
+    if (w > 0) headGrad(off, n, mask, act, coef, 0);
+    else {
+      softmax(off, n, mask, 1);
+      var pa = Math.min(0.999, prob[act]);
+      for (var i = 0; i < n; i++) {
+        if (mask && !mask[i]) continue;
+        dout[off + i] += coef * (i === act ? pa : -pa * prob[i] / (1 - pa));
+      }
+    }
+    dout[O_V] = out[O_V] * 0.015;
+    backward(b, x);
+    b.st.opsL += b.stepOps;
+  }
+  function replayLesson(b) {
+    var L = b.les;
+    if (!L || !L.n) return;
+    var i = Math.floor(Math.random() * L.n);
+    if (L.W[i] === 0) return;
+    for (var j = 0; j < F; j++) rx[j] = L.X[i * F + j];
+    distil(b, rx, L.K[i], L.A[i], L.C[i], L.W[i]);
+  }
+  function packLessons(b) {
+    var L = b.les;
+    if (!L || !L.n) return null;
+    var q = new Int8Array(L.n * F), w = [], m = [];
+    for (var i = 0; i < L.n * F; i++) q[i] = clamp(Math.round(L.X[i] * 60), -127, 127);
+    for (i = 0; i < L.n; i++) { w.push(Math.round(L.W[i] * 100) / 100); m.push(L.K[i] * 1000 + L.C[i] * 100 + L.A[i]); }
+    return { f: F, x: b64(new Uint8Array(q.buffer)), w: w, m: m };
+  }
+  function unpackLessons(b, o) {
+    if (!o || o.f !== F || !o.w) return;
+    lesInit(b);
+    var L = b.les, q = new Int8Array(unb64(o.x).buffer), n = Math.min(LES_MAX, o.w.length);
+    for (var i = 0; i < n * F; i++) L.X[i] = q[i] / 60;
+    for (i = 0; i < n; i++) {
+      L.W[i] = o.w[i]; L.K[i] = Math.floor(o.m[i] / 1000); L.C[i] = Math.floor(o.m[i] / 100) % 10; L.A[i] = o.m[i] % 100;
+    }
+    L.n = n;
   }
 
   // stick (world) -> one of 9 classes in the team's frame (0 = none)
@@ -747,6 +874,15 @@
       if (d < nd) { nd = d; near = idx; }
     }
     idx = best >= 0 ? best : near;
+    // the lesson: that decision in that situation (its button, or the way he ran when he pressed none)
+    var delta = (r < 0 ? -1 : 1) * (0.6 + 0.4 * strength);
+    if (idx >= 0) {
+      var ao = idx * 4, lbtn = c.ta[ao + 2], o0 = idx * F;
+      for (var j = 0; j < F; j++) ux[j] = c.traj[o0 + j];
+      if (lbtn > 0) addLesson(b, ux, 0, lbtn, c.tctx[idx], delta);
+      else addLesson(b, ux, 1, c.ta[ao], c.tctx[idx], delta);
+      b.st.lessons = b.les ? b.les.n : 0;
+    }
     var copied = 0;
     if (b.memW) {
       for (k = 0; k < c.cp.length; k++) {
@@ -787,6 +923,10 @@
     var b = slot.brain, c = slot.c;
     features(p, xs, b);
     forward(b, xs);
+    var ctx0 = ctxOf(p);
+    var v0 = out[O_V];
+    lessonBias(b, xs, ctx0);
+    out[O_V] = v0;
     var temp = TEMP[b.cfg.explore] || 1;
     var eps = EPS[b.cfg.explore] || EPS[1];
     var ctx = ctxOf(p);
@@ -1213,15 +1353,15 @@
   }
   // (a brain saved with fewer inputs, OLD_FS: its first layer gets the new inputs with weights of 0 = it plays the same)
   function unpackWeights(b, obj) {
-    if (!obj || !obj.dims || obj.dims[3] !== NOUT) return false;
-    var f0 = obj.dims[0];
+    if (!obj || !obj.dims || (obj.dims[3] !== NOUT && obj.dims[3] !== OLD_NOUT)) return false;
+    var f0 = obj.dims[0], n0 = obj.dims[3];
     if (f0 !== F && OLD_FS.indexOf(f0) < 0) return false;
     var size = null;
     for (var k in SIZES) if (SIZES[k][0] === obj.dims[1] && SIZES[k][1] === obj.dims[2]) size = k;
     if (!size) return false;
     if (b.H1 !== obj.dims[1] || b.H2 !== obj.dims[2]) b.build(size);
     var u = unb64(obj.w);
-    if (u.length !== (b.NP - b.H1 * (F - f0)) * 2) return false;
+    if (u.length !== (b.NP - b.H1 * (F - f0) - (NOUT - n0) * (b.H2 + 1)) * 2) return false;
     var q = new Int16Array(u.buffer);
     var src = 0;
     for (var t = 0; t < b.TENS.length; t++) {
@@ -1229,6 +1369,18 @@
       if (t === 0 && f0 !== F) {
         for (i = 0; i < b.H1; i++) for (var j = 0; j < F; j++) b.P[o + i * F + j] = j < f0 ? q[src + i * f0 + j] * s : 0;
         src += b.H1 * f0;
+        continue;
+      }
+      if ((t === 4 || t === 5) && n0 !== NOUT) {
+        // an older brain: every output row moves one down from the new button's row, which starts at 0 (bias -1)
+        var w = t === 4 ? b.H2 : 1;
+        for (i = 0; i < w; i++) b.P[o + LOB_ROW * w + i] = 0;
+        if (t === 5) b.P[o + LOB_ROW] = -1;
+        for (var r = 0; r < n0; r++) {
+          var r2 = r < LOB_ROW ? r : r + 1;
+          for (i = 0; i < w; i++) b.P[o + r2 * w + i] = q[src + r * w + i] * s;
+        }
+        src += n0 * w;
         continue;
       }
       for (i = 0; i < n; i++) b.P[o + i] = q[src + i] * s;
@@ -1241,7 +1393,7 @@
 
   function toDoc(b) {
     return { v: 2, alg: ALG, id: b.id, name: b.name, created: b.created, saved: b.saved, parent: b.parent, from: b.from,
-      cfg: b.cfg, st: b.st, hist: b.hist, data: b.data, m: packWeights(b) };
+      cfg: b.cfg, st: b.st, hist: b.hist, data: b.data, m: packWeights(b), les: packLessons(b) };
   }
   function fromDoc(d) {
     if (!d || d.v !== 2 || !d.m) return null;
@@ -1254,6 +1406,8 @@
     if (d.st) for (k in d.st) if (Object.prototype.hasOwnProperty.call(b.st, k)) b.st[k] = d.st[k];
     b.hist = d.hist || [];
     b.data = d.data || {};
+    unpackLessons(b, d.les);
+    b.st.lessons = b.les ? b.les.n : 0;
     if (b.upgraded) { b.log('inputs', { from: b.upgraded, to: F }); b.upgraded = 0; } // (saved with the new inputs next time)
     return b;
   }
@@ -2518,11 +2672,28 @@
       var p = slot.player, pad = NS.Input.pads[slot.idx];
       features(p, xs, b);
       remember(b, xs, stickClass(pad.x, pad.y, NS.attack(p.team)), B.sprintDown(pad.cur) ? 1 : 0, mi + 1, f < 0.3 ? 0 : (f < 0.75 ? 1 : 2), mv.ctx, MINEW[b.cfg.mineW] || 3);
+      // and a lesson: in a situation like this one, this is the move (a third of a clap each time he plays it)
+      if (mi + 1 < NBT && mv.id !== 'switch') { addLesson(b, xs, 0, mi + 1, mv.ctx, 0.35 * (CLAP_W[b.cfg.clap] || 1)); b.st.lessons = b.les.n; }
       b.st.humanSamples++;
     },
 
     // what a brain sees right now for player p (a copy: for checks, not the play loop)
     inputs: function (p, b) { var x = new Float32Array(F); features(p, x, b || active); return x; },
+    // his button odds for player p right now, lessons included (checks): [none, lowpass, through, ...]
+    buttonOdds: function (p, b) {
+      b = b || active;
+      features(p, xs, b); forward(b, xs);
+      var ctx = ctxOf(p);
+      lessonBias(b, xs, ctx); setMask(ctx); softmax(O_BT, NBT, bmask, 1);
+      return Array.prototype.slice.call(prob, 0, NBT);
+    },
+    // a lesson by hand (checks): button btn (0 none, 1.. B.MOVES + 1) for player p's situation, + a clap, - a punishment
+    teach: function (p, btn, delta, b) {
+      b = b || active;
+      features(p, xs, b);
+      return addLesson(b, xs, 0, btn, ctxOf(p), delta);
+    },
+    lessonCount: function (b) { b = b || active; return b && b.les ? b.les.n : 0; },
 
     // the clap button (js/core/input.js): down starts the gauge, up gives the clap
     clapButton: function (down) { coach(down, 1); },

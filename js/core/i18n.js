@@ -1190,6 +1190,40 @@
     'learn.w.foul': 'خطأ', 'learn.w.clap': 'تصفيقك', 'learn.w.punish': 'عقابك',
     'learn.hint': 'كل مكافأة درس للحركات التي أدت إليها: الأخضر يجعله يكررها أكثر، والأحمر أقل. تقليد Legend يعلمه كيف يتحرك اللاعب الجيد.' });
 
+  // v1.51: Dev mode tab (aim arrow, kick powers, pass assist, ball), checkoAI lessons
+  Object.assign(D.en, { 'set.g.dev': 'DEV MODE',
+    'set.devarrow': 'Aim arrow', 'set.devarrow.h': 'An arrow on the grass shows where a pass / shot goes (direction and power) while you aim it, and where it really went',
+    'set.powlow': 'Low pass power', 'set.powthru': 'Through pass power', 'set.powlong': 'Long pass power', 'set.powshot': 'Shot power',
+    'set.pow.h': 'Pace of that kick, x the normal pace',
+    'set.assist': 'Pass assist', 'set.assist.h': '0: the ball goes exactly where you aim, with the power you give it; 100: always to the best team-mate that way',
+    'set.thrulift': 'Through ball lift', 'set.thrulift.h': 'A long through ball (receiver 20 m or more away) skims this high off the grass',
+    'set.bounce': 'Ball bounce', 'set.bounce.h': 'How much of its speed the ball keeps when it bounces on the grass',
+    'aima.lessons': 'Lessons', 'learn.w.lesson': 'Lesson' });
+  Object.assign(D.fr, { 'set.g.dev': 'MODE DEV',
+    'set.devarrow': 'Fleche de visee', 'set.devarrow.h': 'Une fleche au sol montre ou va la passe / le tir (direction et puissance) pendant la visee, et ou il est vraiment alle',
+    'set.powlow': 'Puissance passe courte', 'set.powthru': 'Puissance passe en profondeur', 'set.powlong': 'Puissance passe longue', 'set.powshot': 'Puissance de tir',
+    'set.pow.h': 'Vitesse de cette frappe, x la vitesse normale',
+    'set.assist': 'Assistance de passe', 'set.assist.h': '0 : la balle va exactement ou vous visez ; 100 : toujours au meilleur coequipier dans cette direction',
+    'set.thrulift': 'Hauteur de la passe en profondeur', 'set.thrulift.h': 'Une longue passe en profondeur (receveur a 20 m ou plus) decolle a cette hauteur',
+    'set.bounce': 'Rebond du ballon', 'set.bounce.h': 'Part de sa vitesse que le ballon garde en rebondissant sur la pelouse',
+    'aima.lessons': 'Lecons', 'learn.w.lesson': 'Lecon' });
+  Object.assign(D.es, { 'set.g.dev': 'MODO DEV',
+    'set.devarrow': 'Flecha de apuntado', 'set.devarrow.h': 'Una flecha en el cesped muestra adonde va el pase / tiro (direccion y potencia) al apuntar, y adonde fue',
+    'set.powlow': 'Potencia pase corto', 'set.powthru': 'Potencia pase al hueco', 'set.powlong': 'Potencia pase largo', 'set.powshot': 'Potencia de tiro',
+    'set.pow.h': 'Velocidad de ese golpeo, x la velocidad normal',
+    'set.assist': 'Asistencia de pase', 'set.assist.h': '0: el balon va exactamente adonde apuntas; 100: siempre al mejor companero en esa direccion',
+    'set.thrulift': 'Altura del pase al hueco', 'set.thrulift.h': 'Un pase al hueco largo (receptor a 20 m o mas) se eleva hasta esta altura',
+    'set.bounce': 'Bote del balon', 'set.bounce.h': 'Cuanta velocidad conserva el balon al botar en el cesped',
+    'aima.lessons': 'Lecciones', 'learn.w.lesson': 'Leccion' });
+  Object.assign(D.ar, { 'set.g.dev': 'وضع المطور',
+    'set.devarrow': 'سهم التصويب', 'set.devarrow.h': 'سهم على العشب يبين اتجاه وقوة التمريرة / التسديدة أثناء التصويب، وأين ذهبت فعلاً',
+    'set.powlow': 'قوة التمريرة القصيرة', 'set.powthru': 'قوة التمريرة البينية', 'set.powlong': 'قوة التمريرة الطويلة', 'set.powshot': 'قوة التسديد',
+    'set.pow.h': 'سرعة هذه الضربة مضروبة في السرعة العادية',
+    'set.assist': 'مساعدة التمرير', 'set.assist.h': '0: الكرة تذهب حيث تصوب تماماً؛ 100: دائماً إلى أفضل زميل في ذلك الاتجاه',
+    'set.thrulift': 'ارتفاع التمريرة البينية', 'set.thrulift.h': 'التمريرة البينية الطويلة (المستقبل على بعد 20 م أو أكثر) ترتفع إلى هذا الحد',
+    'set.bounce': 'ارتداد الكرة', 'set.bounce.h': 'مقدار السرعة التي تحتفظ بها الكرة عند ارتدادها على العشب',
+    'aima.lessons': 'الدروس', 'learn.w.lesson': 'درس' });
+
   var lang = 'en';
 
   NS.I18n = {

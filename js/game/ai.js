@@ -872,10 +872,18 @@
       // through ball into the space ahead of a forward-moving team-mate
       // (three depths, bent a little towards the goal: the one he wins the race to)
       if (mt.role !== 'DEF' && (mt.pos.x - px) * a > -3 && md < 40) {
-        for (var li = 0; li < THRU_LEAD.length; li++) {
-          var lead = THRU_LEAD[li];
-          var lx = mt.pos.x + a * lead + mt.vel.x * 0.3;
-          var lz = clamp(mt.pos.z * (1 - lead * 0.02) + mt.vel.z * 0.3, -HALF_H + 3, HALF_H - 3);
+        // (the last one: the spot where he and the ball get there together, ahead of every defender: Actions.throughSpot)
+        for (var li = 0; li <= THRU_LEAD.length; li++) {
+          var lead = li < THRU_LEAD.length ? THRU_LEAD[li] : 0;
+          var lx, lz;
+          if (li < THRU_LEAD.length) {
+            lx = mt.pos.x + a * lead + mt.vel.x * 0.3;
+            lz = clamp(mt.pos.z * (1 - lead * 0.02) + mt.vel.z * 0.3, -HALF_H + 3, HALF_H - 3);
+          } else {
+            if (prof.iq < 2) break;
+            var tsp = Actions.throughSpot(p, mt, 0, 0, -1);
+            lx = tsp[0]; lz = tsp[1];
+          }
           if (Math.abs(lx) > HALF_W - 4) continue;
           var ldx = lx - px, ldz = lz - pz;
           var ld = Math.sqrt(ldx * ldx + ldz * ldz);
@@ -966,7 +974,22 @@
     } else if (bType === ACT.SHOOT) {
       shootNow(p, prof);
     } else {
-      Actions.kickTo(p, bType, bx, bz, bMate, prof.acc);
+      var bdx = bMate ? bMate.pos.x - px : 0, bdz = bMate ? bMate.pos.z - pz : 0, bmd = Math.sqrt(bdx * bdx + bdz * bdz);
+      if (bType === ACT.PASS && prof.iq >= 2 && bmd > 5 && bmd < 16 && pressure < 4.5 && (HALF_W - px * a) > 14 &&
+          oppDist(px + a * 12, pz, p.team) > 6 && Math.random() < 0.45) {
+        // Hard / Legend: a man on him, a team-mate close by and space behind the defender: a one-two (he runs on
+        // for the return, as a human's LB + A)
+        if (NS.dbg) NS.dbg('cpu_one_two', p.team);
+        Actions.oneTwo(p, bdx, bdz);
+      } else if (bKind === 'chip_to_runner' && bType === ACT.LONG) {
+        // a runner in behind with a defender in the lane: the long through pass, lofted over the line into his path
+        if (NS.dbg) NS.dbg('cpu_lob_through', p.team);
+        Actions.lob = true;
+        Actions.kickTo(p, ACT.THROUGH, bx, bz, bMate, prof.acc);
+        Actions.lob = false;
+      } else {
+        Actions.kickTo(p, bType, bx, bz, bMate, prof.acc);
+      }
       p.drX = 0; p.drZ = 0;
     }
   }
@@ -1062,6 +1085,17 @@
     }
 
     p.aiCd -= dt;
+    if (p.knockCd > 0) p.knockCd -= dt;
+    // Hard / Legend in open grass, already running: a knock-on (the ball pushed ahead, he sprints onto it), as a human's
+    // sprint taps
+    if (prof.iq >= 2 && !counter && pressure > 7 && !(p.knockCd > 0) && p.aiCd <= 0 && p.stamina > 30 &&
+        p.vel.x * p.vel.x + p.vel.z * p.vel.z > 64 && (p.pos.x * a) < HALF_W - 22 && Math.abs(p.pos.z) < HALF_H - 8 &&
+        oppDist(p.pos.x + dx / dl * 12, p.pos.z + dz / dl * 12, p.team) > 9 && Math.random() < 0.25) {
+      p.knockCd = 3;
+      if (NS.dbg) NS.dbg('cpu_knock_on', p.team);
+      Actions.knockOn(p, dx, dz);
+      return;
+    }
     if (pressure < 2.2 && p.aiCd > prof.react * 0.5) p.aiCd = prof.react * 0.5; // a defender arrives: think faster
     if (counter && p.aiCd > prof.react * 0.6) p.aiCd = prof.react * 0.6;          // a counter: look up quickly
     if (p.aiCd > 0) return;
@@ -1359,7 +1393,16 @@
     return n;
   }
 
+  // the keeper's own rules live in js/game/keeper.js; these are the tools he shares with the team AI
+  var IC = { x: 0, z: 0 };
+  var KIT = {
+    teams: TEAMS, moveToward: moveToward, interceptTime: interceptTime, gkDistribute: gkDistribute,
+    blockersToGoal: blockersToGoal, oppDist: oppDist,
+    ic: function () { IC.x = ICX; IC.z = ICZ; return IC; }
+  };
+
   function aiGoalkeeper(p, dt, prof) {
+    if (NS.Keeper) { NS.Keeper.step(p, dt, prof, KIT); return; }
     var ball = World.ball;
     var a = attackOf(p);
     var ownGoalX = -a * HALF_W;
@@ -1522,14 +1565,14 @@
 
       // a pass was played to this player (or he is the opponent nearest to it): meet it where it can be played
       if (!ball.owner && (ball.receiver === p || ball.contester === p)) {
-        // a through ball: he meets it as usual, but where meeting it would take him back towards his own goal he runs on
-        // into the space instead and lets it come
-        interceptTime(p, 11.5 * prof.speedMul, 1.9);
-        if (ball.thru && ball.receiver === p && (ICX - p.pos.x) * NS.attack(p.team) < 0) {
-          moveToward(p, ball.thruX, ball.thruZ, 11.8 * prof.speedMul, dt);
+        // a through ball: he sprints on into the space it is played into and meets it there (only once it is close to
+        // him does he go to the ball itself)
+        if (Actions.runOn(p)) {
+          moveToward(p, ball.thruX, ball.thruZ, 12.6 * prof.speedMul, dt);
           p.runToT = 0;
           return;
         }
+        interceptTime(p, 11.5 * prof.speedMul, 1.9);
         moveToward(p, ICX, ICZ, 11.5 * prof.speedMul, dt);
         p.runToT = 0;
         return;

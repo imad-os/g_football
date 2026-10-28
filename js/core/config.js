@@ -2,7 +2,7 @@
 (function (NS) {
   'use strict';
 
-  NS.VERSION = '1.50.0';
+  NS.VERSION = '1.51.0';
 
   // Pitch geometry (world units; x = length, z = width, y = up). NS.M: world units per metre, from the players: an
   // average footballer (1.81 m) is 2.9 units tall. Everything is at real size at that scale: the ball, the players,
@@ -88,11 +88,23 @@
     commTalk: 'NORMAL',
     commSubs: true,
     commFallback: 'EN',
-    commDuck: true
+    commDuck: true,
+    // Dev mode (Settings > Dev mode): tuning of the kicks and the ball, and the aim arrow
+    devArrow: true,
+    powLow: 1.0,
+    powThru: 1.0,
+    powLong: 1.0,
+    powShot: 1.0,
+    passAssist: 60,
+    thruLift: 0.4,
+    ballBounce: 0.68
   };
 
   // Settings groups (the tabs of the Settings screen)
-  NS.SETTING_GROUPS = [['game', 'set.g.game'], ['video', 'set.g.video'], ['audio', 'set.g.audio'], ['comm', 'set.g.comm'], ['aima', 'set.g.aima']];
+  NS.SETTING_GROUPS = [['game', 'set.g.game'], ['video', 'set.g.video'], ['audio', 'set.g.audio'], ['comm', 'set.g.comm'], ['aima', 'set.g.aima'], ['dev', 'set.g.dev']];
+
+  // Dev mode kick power: x the normal pace
+  var POW = [[0.7, 'x0.7'], [0.85, 'x0.85'], [1.0, 'x1'], [1.15, 'x1.15'], [1.3, 'x1.3'], [1.5, 'x1.5']];
 
   // Settings schema: drives the Settings screen, validation and the app_config merge.
   NS.SETTING_DEFS = [
@@ -160,7 +172,23 @@
     { key: 'commFallback', group: 'comm', label: 'set.commfb', hint: 'set.commfb.h',
       options: [['EN', 'opt.comm.english'], ['TEXT', 'opt.comm.text'], ['SILENT', 'opt.comm.silent']] },
     { key: 'commDuck', group: 'comm', label: 'set.commduck', hint: 'set.commduck.h',
-      options: [[true, 'opt.on'], [false, 'opt.off']] }
+      options: [[true, 'opt.on'], [false, 'opt.off']] },
+    // Dev mode: the aim arrow (where a pass / shot is going, by its direction and power), kick powers, pass assist, ball
+    { key: 'devArrow', group: 'dev', label: 'set.devarrow', hint: 'set.devarrow.h',
+      options: [[true, 'opt.show'], [false, 'opt.hide']] },
+    { key: 'powLow', group: 'dev', label: 'set.powlow', hint: 'set.pow.h', options: POW },
+    { key: 'powThru', group: 'dev', label: 'set.powthru', hint: 'set.pow.h', options: POW },
+    { key: 'powLong', group: 'dev', label: 'set.powlong', hint: 'set.pow.h', options: POW },
+    { key: 'powShot', group: 'dev', label: 'set.powshot', hint: 'set.pow.h', options: POW },
+    // 0: the ball goes exactly where the stick and the power bar say; 100: always to the best team-mate that way
+    { key: 'passAssist', group: 'dev', label: 'set.assist', hint: 'set.assist.h',
+      options: [[0, '0'], [20, '20'], [40, '40'], [60, '60'], [80, '80'], [100, '100']] },
+    // how high (metres) a long through ball skims off the grass (0: along the ground)
+    { key: 'thruLift', group: 'dev', label: 'set.thrulift', hint: 'set.thrulift.h',
+      options: [[0, '0 m'], [0.2, '0.2 m'], [0.4, '0.4 m'], [0.6, '0.6 m']] },
+    // how much of its vertical speed the ball keeps when it bounces on the grass
+    { key: 'ballBounce', group: 'dev', label: 'set.bounce', hint: 'set.bounce.h',
+      options: [[0.5, '0.50'], [0.58, '0.58'], [0.68, '0.68'], [0.75, '0.75'], [0.82, '0.82']] }
   ];
 
   // Returns the validated value for a setting, or undefined when it is not allowed.

@@ -37,13 +37,33 @@
   var HEAD_SHOT_MAX = 22;   // metres from the goal a header at goal can come from
   var REACT_TOUCH = 0.34;
 
+  // a through ball still rolls on at this pace where it meets the runner (slower than him: he runs onto it)
+  var THRU_END = 6.5;
+  var ROLL_F = NS.PHYS.ROLL_F;
+  // Rolling ball (grass drag K and friction F): the time it takes to cover d and still roll at vEnd (closed form).
+  function rollV0(d, vEnd) {
+    var K = DRAG_K, F = ROLL_F, lo = vEnd, hi = 80;
+    for (var i = 0; i < 26; i++) {
+      var v0 = (lo + hi) * 0.5;
+      var x = (v0 - vEnd) / K - F / (K * K) * Math.log((K * v0 + F) / (K * vEnd + F));
+      if (x < d) lo = v0; else hi = v0;
+    }
+    return hi;
+  }
+  function rollTime(d, vEnd) {
+    var v0 = rollV0(d, vEnd);
+    return Math.log((DRAG_K * v0 + ROLL_F) / (DRAG_K * vEnd + ROLL_F)) / DRAG_K;
+  }
+
   function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
   function gaussR() { return (Math.random() + Math.random() + Math.random() - 1.5) * 2; } // ~N(0, 1)
 
   var Actions = {
     lastTarget: null, // receiver of the last pass (so the cursor can follow it)
     passPower: -1,    // 0..1 from a human's hold time (-1 = normal pace, the CPU)
+    human: false,     // the kick being played is a human's (or checkoAI's controller): Dev mode powers apply
     lob: false,       // the pass being played is a long through ball (ACT.THROUGH, lofted over the defenders)
+    shown: null,      // a human's last kick for the aim arrow (Dev mode): from (fx, fz) to (x, z), kind, t (seconds left)
 
     // Assisted pass: the team-mate nearest to where the ball is aimed (stick direction, or facing without input),
     // at a distance that suits the pass type (short / through / long), not marked tight, with a free lane.
@@ -188,7 +208,7 @@
           angle = Math.atan2(goalX - p.pos.x, curveZ - p.pos.z);
           this.shotForm(p, goalX, 0);
           angle += (Math.random() - 0.5) * (1.05 - power) * 0.09 * (accuracy || 1) * (p.bumpT > 0 ? BUMP_ACC : 1) * this.shotErr;
-          speed = (24 + power * 10) * (0.88 + p.st.sht / 99 * 0.16) * this.shotPow * (p.bumpT > 0 ? BUMP_POW : 1);
+          speed = (24 + power * 10) * (0.88 + p.st.sht / 99 * 0.16) * this.shotPow * (p.bumpT > 0 ? BUMP_POW : 1) * this.powMul(ACT.SHOOT);
           var cvx = goalX - p.pos.x, cvz = curveZ - p.pos.z;
           var cd0 = Math.sqrt(cvx * cvx + cvz * cvz);
           var kd = cd0 * AIR_K / speed;
@@ -232,25 +252,40 @@
         return;
       }
 
-      var mate = forceTarget || this.pickTarget(p, ax, az, type);
-      if (!mate && p.throwT > 0.35) mate = this.nearestMate(p, 24);
+      var plan = this.plan(p, type, ax, az, forceTarget, false);
+      var mate = plan[2];
       this.lastTarget = mate;
       ball.spinY = 0;
+      this.launch(p, type, plan[0], plan[1], mate, accuracy, forceTarget);
+    },
+
+    // Where a pass goes (x, z) and to whom: [x, z, receiver]. dry: only looking (the aim arrow), nothing is played.
+    plan: function (p, type, ax, az, forceTarget, dry) {
+      var attack = NS.attack(p.team);
+      var human = this.passPower >= 0 && !forceTarget && !(p.throwT > 0.35);
+      var asst = human ? this.assist() : 1;
+      var mate = forceTarget || (asst > 0.05 ? this.pickTarget(p, ax, az, type) : null);
+      if (!mate && p.throwT > 0.35) mate = this.nearestMate(p, 24);
+      var tx, tz, man = null;
       if (!mate) {
-        var al = Math.sqrt(ax * ax + az * az);
-        var kx = al > 0.1 ? ax / al : Math.sin(p.facing);
-        var kz = al > 0.1 ? az / al : Math.cos(p.facing);
-        d = type === ACT.LONG ? 36 : (type === ACT.THROUGH ? (this.lob ? 34 : 28) : 14);
-        tx = p.pos.x + kx * d; tz = p.pos.z + kz * d;
+        if (human) man = this.manualSpot(p, type, ax, az);
+        else {
+          var al = Math.sqrt(ax * ax + az * az);
+          var kx = al > 0.1 ? ax / al : Math.sin(p.facing);
+          var kz = al > 0.1 ? az / al : Math.cos(p.facing);
+          var d = type === ACT.LONG ? 36 : (type === ACT.THROUGH ? (this.lob ? 34 : 28) : 14);
+          man = [p.pos.x + kx * d, p.pos.z + kz * d];
+        }
+        tx = man[0]; tz = man[1];
       } else if (type === ACT.THROUGH) {
         if (forceTarget) {
           tx = mate.pos.x + mate.vel.x * 0.5;
           tz = mate.pos.z + mate.vel.z * 0.4;
         } else {
           var pw = this.passPower;
-          var lead = pw >= 0 ? (this.lob ? 3 + 21 * pw : 4 + 15 * pw) : (this.lob ? 14 : 11);
-          var runLead = pw >= 0 ? 0.25 + 0.45 * pw : 0.7;
-          var spot = this.throughSpot(p, mate, ax, az, lead, runLead);
+          // the power bar: how deep into the space ahead of him (a long through ball: further)
+          var want = pw >= 0 ? (this.lob ? 8 + 30 * pw : 5 + 30 * pw) : -1;
+          var spot = this.throughSpot(p, mate, ax, az, want);
           tx = spot[0]; tz = spot[1];
           if (this.lob && (pw < 0 || pw >= 0.35)) {
             var ldx2 = tx - p.pos.x, ldz2 = tz - p.pos.z, ldl = Math.sqrt(ldx2 * ldx2 + ldz2 * ldz2) || 1;
@@ -268,18 +303,26 @@
             if (lfd > 52) { tx = p.pos.x + (tx - p.pos.x) * 52 / lfd; tz = p.pos.z + (tz - p.pos.z) * 52 / lfd; }
           }
         }
-        tx = clamp(tx, -HALF_W + 2, HALF_W - 2);
-        tz = clamp(tz, -HALF_H + 2, HALF_H - 2);
       } else if (type === ACT.LONG) {
         var ldx = mate.pos.x - p.pos.x, ldz = mate.pos.z - p.pos.z;
         var lT = clamp(Math.sqrt(ldx * ldx + ldz * ldz) / 26, 0.8, 1.75);
-        tx = clamp(mate.pos.x + mate.vel.x * lT * 0.6 + attack * 2, -HALF_W + 2, HALF_W - 2);
-        tz = clamp(mate.pos.z + mate.vel.z * lT * 0.6, -HALF_H + 2, HALF_H - 2);
+        tx = mate.pos.x + mate.vel.x * lT * 0.6 + attack * 2;
+        tz = mate.pos.z + mate.vel.z * lT * 0.6;
       } else {
         tx = mate.pos.x + mate.vel.x * 0.25;
         tz = mate.pos.z + mate.vel.z * 0.25;
       }
-      this.launch(p, type, tx, tz, mate, accuracy, forceTarget);
+      // pass assist below 100: the ball goes part of the way from the team-mate to where the stick and power bar say
+      if (human && mate && asst < 0.999) {
+        man = this.manualSpot(p, type, ax, az);
+        tx = man[0] + (tx - man[0]) * asst;
+        tz = man[1] + (tz - man[1]) * asst;
+      }
+      tx = clamp(tx, -HALF_W + 2, HALF_W - 2);
+      tz = clamp(tz, -HALF_H + 2, HALF_H - 2);
+      // no help (or not all of it): the team-mate nearest to where it goes runs onto it
+      if (human && (asst < 0.999 || !mate)) mate = this.nearestTo(p, tx, tz, type === ACT.PASS ? 9 : 14) || (asst > 0.5 ? mate : null);
+      return [tx, tz, mate];
     },
 
     gaugeHeight: function (g) {
@@ -339,7 +382,7 @@
       this.shotForm(p, goalX, goalZ);
       err *= this.shotErr;
       var angle = Math.atan2(sdx, sdz) + gaussR() * err;
-      var speed = this.shotSpeed(g) * (0.84 + p.st.sht / 99 * 0.24) * this.shotPow * (p.bumpT > 0 ? BUMP_POW : 1);
+      var speed = this.shotSpeed(g) * (0.84 + p.st.sht / 99 * 0.24) * this.shotPow * (p.bumpT > 0 ? BUMP_POW : 1) * this.powMul(ACT.SHOOT);
       var ty = this.gaugeHeight(g);
       var vy;
       if (ty < 0) {
@@ -356,6 +399,7 @@
         if (vy > 18) vy = 18;
       }
       ball.vel.set(Math.sin(angle) * speed, vy, Math.cos(angle) * speed);
+      if (this.human) this.shown = { x: ball.pos.x + Math.sin(angle) * sd, z: ball.pos.z + Math.cos(angle) * sd, fx: ball.pos.x, fz: ball.pos.z, kind: 2, t: 1.4 };
       ball.spinY = -(bend || 0) * attack * 2.2 + (g > 0.8 ? (Math.random() - 0.5) * 3.5 : 0);
     },
 
@@ -371,34 +415,95 @@
       this.launch(p, type, clamp(tx, -HALF_W + 2, HALF_W - 2), clamp(tz, -HALF_H + 2, HALF_H - 2), mate, accuracy, null);
     },
 
-    throughSpot: function (p, mate, ax, az, lead, runLead) {
+    // A through ball: the spot in the space ahead of the runner where he and the ball arrive together, before any
+    // defender (or the keeper) can get there. The run goes the way the stick points, bent towards the goal; `want` (a
+    // human's power bar, -1 for the CPU) picks how deep.
+    throughSpot: function (p, mate, ax, az, want) {
       var attack = NS.attack(p.team), players = World.players;
       var al = Math.sqrt(ax * ax + az * az);
       var sx = al > 0.1 ? ax / al : Math.sin(p.facing), sz = al > 0.1 ? az / al : Math.cos(p.facing);
-      var bx = mate.pos.x + mate.vel.x * runLead, bz = mate.pos.z + mate.vel.z * runLead;
+      var bx = mate.pos.x + mate.vel.x * 0.2, bz = mate.pos.z + mate.vel.z * 0.2;
       var wide = Math.abs(bz) > HALF_H * 0.45;
       var gx = attack * HALF_W - bx, gl = Math.sqrt(gx * gx + bz * bz) || 1;
       var fx = wide ? attack : (attack * 0.6 + gx / gl * 0.4), fz = wide ? 0 : -bz / gl * 0.4;
       var dx = sx * 0.5 + fx * 0.5, dz = sz * 0.5 + fz * 0.5, dl = Math.sqrt(dx * dx + dz * dz) || 1;
       dx /= dl; dz /= dl;
-      if (dx * attack < 0.15) { dx = attack * 0.15 + dx * 0.5; dl = Math.sqrt(dx * dx + dz * dz) || 1; dx /= dl; dz /= dl; }
-      var best = null, bestSc = -1e9, K = [0.6, 0.8, 1, 1.2, 1.4];
-      for (var k = 0; k < K.length; k++) {
-        var L = lead * K[k];
-        var tx = clamp(bx + dx * L, -HALF_W + 4, HALF_W - 4);
-        var tz = clamp(bz + dz * L, -HALF_H + 3.5, HALF_H - 3.5);
-        var mt = Math.sqrt((tx - mate.pos.x) * (tx - mate.pos.x) + (tz - mate.pos.z) * (tz - mate.pos.z)) / 9;
+      if (dx * attack < 0.3) { dx = attack * 0.3 + dx * 0.5; dl = Math.sqrt(dx * dx + dz * dz) || 1; dx /= dl; dz /= dl; }
+      var run = 11.2 * (mate.st ? 0.9 + mate.st.spd / 99 * 0.2 : 1);
+      var vEnd = THRU_END, best = null, bestSc = -1e9;
+      for (var L = 5; L <= 40; L += 2.5) {
+        var tx = clamp(bx + dx * L, -HALF_W + 3, HALF_W - 3);
+        var tz = clamp(bz + dz * L, -HALF_H + 2.5, HALF_H - 2.5);
+        var ex = tx - p.pos.x, ez = tz - p.pos.z, d = Math.sqrt(ex * ex + ez * ez);
+        if (d < 6) continue;
+        var bt = rollTime(d, vEnd);                       // the ball gets there
+        var mx = tx - mate.pos.x, mz = tz - mate.pos.z;
+        var rt = 0.25 + Math.sqrt(mx * mx + mz * mz) / run; // the runner gets there
         var ot = 99;
         for (var i = 0; i < players.length; i++) {
           var o = players[i];
           if (o.team === p.team || o.stun > 0) continue;
-          var t = Math.sqrt((tx - o.pos.x) * (tx - o.pos.x) + (tz - o.pos.z) * (tz - o.pos.z)) / 9;
+          var ox = tx - o.pos.x, oz = tz - o.pos.z;
+          var t = 0.3 + Math.sqrt(ox * ox + oz * oz) / (o.role === 'GK' ? 10.5 : 10.8);
+          // a defender standing in the ball's path cuts it out on the way
+          var u = ((o.pos.x - p.pos.x) * ex + (o.pos.z - p.pos.z) * ez) / d;
+          if (u > 1 && u < d - 1 && o.role !== 'GK') {
+            var perp = Math.abs((o.pos.x - p.pos.x) * ez - (o.pos.z - p.pos.z) * ex) / d;
+            var tu = rollTime(u, Math.max(vEnd, 1)) * 0.9;
+            if (perp < 1.6 + tu * 3) t = Math.min(t, tu + 0.1);
+          }
           if (t < ot) ot = t;
         }
-        var sc = clamp(ot - mt, -1, 1.2) * 0.8 - Math.abs(K[k] - 1) * 0.5;
+        var meet = Math.max(bt, rt);
+        var sc = clamp(ot - meet, -1.5, 1.5) * 1.6       // first to it
+          - Math.abs(bt - rt) * 0.9                        // together (he does not wait, it does not run away from him)
+          + (tx - mate.pos.x) * attack * 0.012;            // deeper is better
+        if (want > 0) sc -= Math.abs(L - want) / Math.max(want, 8) * 1.4;
         if (sc > bestSc) { bestSc = sc; best = [tx, tz]; }
       }
+      if (!best) best = [clamp(bx + dx * 12, -HALF_W + 3, HALF_W - 3), clamp(bz + dz * 12, -HALF_H + 2.5, HALF_H - 2.5)];
       return best;
+    },
+
+    // Where a human aims (the stick, or the way he faces) and how far the power bar sends it: the pass with no help.
+    manualSpot: function (p, type, ax, az) {
+      var al = Math.sqrt(ax * ax + az * az);
+      var kx = al > 0.1 ? ax / al : Math.sin(p.facing), kz = al > 0.1 ? az / al : Math.cos(p.facing);
+      var t = type >= ACT.PASS && type <= ACT.LONG ? type : ACT.PASS;
+      var pw = this.passPower >= 0 ? this.passPower : 0.5;
+      var d = this.lob ? 16 + 36 * pw : DEPTH0[t] + DEPTH1[t] * pw;
+      return [clamp(p.pos.x + kx * d, -HALF_W + 2, HALF_W - 2), clamp(p.pos.z + kz * d, -HALF_H + 2, HALF_H - 2)];
+    },
+
+    // Dev mode: the pace of a kick type x its setting
+    powMul: function (type) {
+      var s = World.settings;
+      if (!s || !this.human) return 1;
+      if (type === ACT.PASS) return s.powLow || 1;
+      if (type === ACT.THROUGH) return s.powThru || 1;
+      if (type === ACT.LONG) return s.powLong || 1;
+      return s.powShot || 1;
+    },
+    // Dev mode: pass assist 0..1 (a human's pass)
+    assist: function () {
+      var s = World.settings;
+      return s && s.passAssist >= 0 ? s.passAssist / 100 : 1;
+    },
+
+    // The aim arrow (Dev mode): where the pass / shot being charged would go, without playing it. Returns
+    // [x, z, kind] (kind 0 ground, 1 lofted, 2 shot) or null.
+    aimPoint: function (p, type, power, ax, az, lob) {
+      if (type >= ACT.SHOOT) {
+        var attack = NS.attack(p.team), goalX = attack * HALF_W;
+        var aimed = az > 0.1 || az < -0.1;
+        var gz = aimed ? clamp(az, -1, 1) * (GOAL_HALF_W - 0.9) : (p.pos.z > 0 ? -1 : 1) * (GOAL_HALF_W - 1.3);
+        return [goalX, gz, 2];
+      }
+      var keepP = this.passPower, keepL = this.lob;
+      this.passPower = power; this.lob = !!lob;
+      var plan = this.plan(p, type, ax, az, null, true);
+      this.passPower = keepP; this.lob = keepL;
+      return [plan[0], plan[1], type === ACT.LONG || lob ? 1 : 0];
     },
 
     // Realistic ground pass speeds calibrated to ROLL_K = 0.82 so passes arrive crisply at ~11-14 m/s
@@ -446,22 +551,27 @@
         ball.pos.y = NS.BALL_R + 0.12;
         if (mate) { mate.runToX = tx; mate.runToZ = tz; mate.runToT = Tl + 0.9; }
       } else if (type === ACT.THROUGH) {
-        speed = forceTarget ? clamp(d * DRAG_K + 7, 14, 34) : this.thruSpeed(d);
-        vy = 0.55;
-        if (mate) { mate.runToX = tx; mate.runToZ = tz; mate.runToT = 1.5; }
+        // along the ground into his path, still rolling (slower than him) when he gets there; a long one (20 m and
+        // more) is skimmed a little off the grass (Settings > Dev mode > Through ball lift)
+        var lift = World.settings && World.settings.thruLift >= 0 ? World.settings.thruLift : 0.4;
+        vy = d > 20 * NS.M && lift > 0 ? Math.sqrt(2 * G * lift * NS.M) : 0.5;
+        speed = World.speedFor(d, forceTarget ? 4.5 : THRU_END, vy);
+        if (mate) { mate.runToX = tx; mate.runToZ = tz; mate.runToT = World.kickT + 0.8; }
       } else {
         speed = this.passSpeed(d);
         vy = d > 18 ? 0.65 : 0.35; // slight turf hop on longer ground passes
         if (mate) { mate.runToX = tx - (dx / d) * 1.5; mate.runToZ = tz - (dz / d) * 1.5; mate.runToT = Math.min(1.0, d / speed + 0.25); }
       }
-      if (this.passPower > 0 && !(p.throwT > 0.35)) {
+      if (this.passPower > 0 && !(p.throwT > 0.35) && !(type === ACT.THROUGH && !this.lob)) {
         var pw = 1 + this.passPower * 0.15;
         speed *= pw;
         if (type === ACT.LONG) vy /= pw;
       }
       if (bumped) { speed *= BUMP_POW; vy *= BUMP_POW; }
       if (type === ACT.PASS || (type === ACT.THROUGH && !this.lob)) speed *= fpow;
+      if (!thrown) speed *= this.powMul(type);
       ball.vel.set(Math.sin(angle) * speed, vy, Math.cos(angle) * speed);
+      if (this.human) this.shown = { x: tx, z: tz, fx: ball.pos.x, fz: ball.pos.z, kind: type === ACT.LONG || (type === ACT.THROUGH && this.lob) ? 1 : 0, t: 1.4 };
       ball.receiver = mate || null;
       ball.thru = !!mate && type === ACT.THROUGH && !(p.throwT > 0.35);
       ball.thruX = tx; ball.thruZ = tz;
@@ -817,6 +927,28 @@
       ball.kicker = p;
       ball.kickerT = hardShot ? 0.22 : 0.32;
       return false;
+    },
+
+    // The receiver of a through ball keeps running on to the spot it is played into while the ball is still far from
+    // him (more than ~4 m) and he is not there yet.
+    runOn: function (p) {
+      var ball = World.ball;
+      if (!ball.thru || ball.receiver !== p || ball.owner) return false;
+      var bx = ball.pos.x - p.pos.x, bz = ball.pos.z - p.pos.z;
+      var sx = ball.thruX - p.pos.x, sz = ball.thruZ - p.pos.z;
+      return bx * bx + bz * bz > 49 && sx * sx + sz * sz > 2.5;
+    },
+
+    // the team-mate (not the keeper) nearest to (x, z) within r of it
+    nearestTo: function (p, x, z, r) {
+      var players = World.players, best = null, bestD = r * r;
+      for (var i = 0; i < players.length; i++) {
+        var q = players[i];
+        if (q.team !== p.team || q === p || q.role === 'GK' || q.stun > 0) continue;
+        var dx = q.pos.x - x, dz = q.pos.z - z, d = dx * dx + dz * dz;
+        if (d < bestD) { bestD = d; best = q; }
+      }
+      return best;
     },
 
     nearestMate: function (p, maxD) {
