@@ -10,7 +10,7 @@
  *   - copying (step B): every decision of a Legend team in its matches, and the trainer's own moves (x3), teach it to
  *     choose what they chose (cross-entropy over the options);
  *   - rewards (step C): each of its own choices gets the rewards of the next 10 seconds (discounted 0.85 a second):
- *     goals +-1, shots (more for a better chance), passes that move the ball forward, the ball lost; the advantage over
+ *     goals +-3, shots (more for a better chance), passes that move the ball forward, the ball lost -0.05; the advantage over
  *     a value network (12 situation inputs -> 16 -> 1) pushes that option's odds up or down (policy gradient);
  *     a pull towards r = 0 keeps it close to Legend except where the rewards say otherwise;
  *   - the trainer's claps and punishments: lessons (as in AIMA-AC 1.2: the situation and the option, a score; 5 claps
@@ -40,6 +40,10 @@
   var BC_W = 1, HUMAN_W = 3;
   var CLAP_BACK = 3.5;
   var RING = 64;
+  // rewards: a goal +-GOAL_R (the match is won by goals: they outweigh the small ones), a ball lost LOST_R. The result's
+  // points (win 3, draw 1) are added to the match's reward at full time by aima.js (a measure, not taught: they would
+  // reach only the choices of the last HORIZON seconds)
+  var GOAL_R = 3, LOST_R = -0.05;
   // its level (Settings > CPU level; the rest of the team plays with that level's rules): [share of its choices drawn
   // from its odds instead of its best, how flat those odds are (x TAU)]. Legend: always its best
   var SHARP = { EASY: [0.55, 3], NORMAL: [0.3, 2], HARD: [0.12, 1.4], LEGEND: [0, 1] };
@@ -369,24 +373,33 @@
     var orig = Actions.release;
     Actions.release = function (p, type) {
       orig.apply(this, arguments);
-      if (!World.match.running || !optBrain(p.team)) return;
-      if (type >= ACT.SHOOT) reward(p.team, 0.05 + 0.5 * Math.min(1, NS.AI.shotQuality(p.pos.x, p.pos.z, p.team)), 'shot');
-      else { passFrom = p; passX = p.pos.x * NS.attack(p.team); }
+      var b = World.match.running && optBrain(p.team);
+      if (!b) return;
+      if (type >= ACT.SHOOT) { b.st.shots++; reward(p.team, 0.05 + 0.5 * Math.min(1, NS.AI.shotQuality(p.pos.x, p.pos.z, p.team)), 'shot'); }
+      else { b.st.passes++; passFrom = p; passX = p.pos.x * NS.attack(p.team); }
     };
   }
+  // wrapped once on load, like aima.js's hooks: a debug run (trainings) wraps Actions on top while it runs and puts back
+  // what it found, so a hook added during a run would be lost after it (it was: no shot / pass rewards after the 1st match)
+  wrapShots();
   function poll(dt) {
     clock += dt;
     var m = World.match, o = World.ball.owner, t;
     if (!optBrain(0) && !optBrain(1)) { lastOwner = o; lastScore[0] = m.score[0]; lastScore[1] = m.score[1]; return; }
     for (t = 0; t < 2; t++) {
-      if (m.score[t] > lastScore[t]) { reward(t, 1, 'goal'); reward(1 - t, -1, 'conceded'); }
+      if (m.score[t] > lastScore[t]) { reward(t, GOAL_R, 'goal'); reward(1 - t, -GOAL_R, 'conceded'); }
       lastScore[t] = m.score[t];
     }
     if (o && o !== lastOwner) {
       var prev = lastOwner || passFrom;
-      if (prev && prev.team !== o.team && !m.restart) reward(prev.team, -0.12, 'lost');
-      else if (prev && prev.team === o.team && prev !== o && passFrom && passFrom.team === o.team) {
-        var gain = o.pos.x * NS.attack(o.team) - passX;
+      if (prev && prev.team !== o.team && !m.restart) {
+        reward(prev.team, LOST_R, 'lost');
+        var bl = optBrain(prev.team), bw = optBrain(o.team);
+        if (bl) bl.st.lost++;
+        if (bw) bw.st.won++;
+      } else if (prev && prev.team === o.team && prev !== o && passFrom && passFrom.team === o.team) {
+        var gain = o.pos.x * NS.attack(o.team) - passX, bp = optBrain(o.team);
+        if (bp) { bp.st.passOk++; if (gain > 0) bp.st.fwdPass++; }
         reward(o.team, 0.02 + 0.08 * clamp(gain / 30, 0, 1), 'pass');
       }
       passFrom = null;

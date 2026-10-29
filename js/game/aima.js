@@ -1715,13 +1715,20 @@
     return run;
   }
   function addDelta(acc, a, b) {
-    for (var k in b) if (typeof b[k] === 'number') acc[k] = (acc[k] || 0) + b[k] - (a[k] || 0);
+    for (var k in b) {
+      if (typeof b[k] === 'number') acc[k] = (acc[k] || 0) + b[k] - (a[k] || 0);
+      else if (k === 'optPick' && Array.isArray(b[k])) { // (an OPT brain's choices per kind)
+        var x = acc[k] || (acc[k] = []), y = a[k] || [];
+        for (var i = 0; i < b[k].length; i++) x[i] = (x[i] || 0) + b[k][i] - (y[i] || 0);
+      }
+    }
   }
 
   // the charts' numbers (trainer.html). A run keeps its matches in at most SER_MAX points: when full, neighbours merge
   // and each point holds twice as many matches, so a long benchmark still draws as one readable line of averages. The
   // brain keeps a block per PROG_N matches of one session (b.prog, saved with it): only full blocks, so every block's
   // numbers are over the same, large number of matches
+  var MATCH_PTS = [3, 1]; // full time: win, draw
   var SER_MAX = 60, PROG_N = 1000, PROG_MAX = 400;
   function point() { return { n: 0, r: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0 }; }
   function addPoint(p, r, my, th) { p.n++; p.r += r; p.gf += my; p.ga += th; if (my > th) p.w++; else if (my < th) p.l++; else p.d++; }
@@ -1851,17 +1858,32 @@
     L.push('\u25b6 ' + b.name + '  v  ' + (oppList(run) || '-') + '   (' + d.matches + ' ' + T('aima.tr.matches') + ')');
     L.push(T('aima.tr.results') + ': ' + d.w + ' - ' + d.d + ' - ' + d.l + '   ' + T('aima.tr.goals') + ' ' + d.gf + ' - ' + d.ga +
       '   (' + r1(d.gf / n) + ' - ' + r1(d.ga / n) + ' ' + T('aima.tr.permatch') + ')');
-    L.push(T('aima.tr.hisplay') + ': ' + d.shots + ' ' + T('aima.tr.shots') + ' (' + d.onTarget + ' ' + T('aima.k.ontarget') + ', ' + d.goals + ' ' +
+    var opt = b.algo === 'OPT';
+    if (opt) {
+      // an OPT brain: its team's shots and passes, ball won / lost, and its choices (aimaopt.js)
+      L.push(T('aima.tr.hisplay') + ': ' + d.shots + ' ' + T('aima.tr.shots') + ', ' + d.passes + ' ' + T('aima.tr.passes') + ' (' + pct(d.passOk, d.passes) +
+        ', ' + d.fwdPass + ' ' + T('aima.k.fwd') + '), ' + T('aima.k.wonlost') + ' ' + d.won + ' / ' + d.lost);
+      L.push('Choices: ' + optChoices(run.acc));
+    } else L.push(T('aima.tr.hisplay') + ': ' + d.shots + ' ' + T('aima.tr.shots') + ' (' + d.onTarget + ' ' + T('aima.k.ontarget') + ', ' + d.goals + ' ' +
       T('aima.tr.goalsby') + '), ' + d.passes + ' ' + T('aima.tr.passes') + ' (' + pct(d.passOk, d.passes) + ', ' + d.fwdPass + ' ' + T('aima.k.fwd') + '), ' +
       T('aima.k.wonlost') + ' ' + d.won + ' / ' + d.lost + ', ' + d.tackles + ' ' + T('aima.tr.tackles') + ', ' + d.fouls + ' ' + T('aima.tr.fouls'));
     if (d.opsT > 0) L.push(T('aima.w.title') + ': ' + fmtOps((d.opsP + d.opsL) / d.opsT) + ' ' + T('aima.w.persec') + '  (' +
       T('aima.w.play') + ' ' + fmtOps(d.opsP / d.opsT) + ', ' + T('aima.w.learn') + ' ' + fmtOps(d.opsL / d.opsT) + ')');
-    if (d.pressN) L.push(T('aima.k.presssame') + ': ' + pct(d.pressSame, d.pressN) + '   ' + T('aima.k.pressodds') + ' ' +
+    if (d.pressN && !opt) L.push(T('aima.k.presssame') + ': ' + pct(d.pressSame, d.pressN) + '   ' + T('aima.k.pressodds') + ' ' +
       Math.round(d.pressOdds * 100 / d.pressN) + '%   (' + d.pressN + ')');
-    L.push(T('aima.tr.learning') + ': ' + d.rl + ' RL + ' + d.im + ' ' + T('aima.k.copy') + '   ' + T('aima.k.own') + ' ' + pct(d.modelDec, d.decisions) +
+    if (opt) L.push(T('aima.tr.learning') + ': ' + d.rl + ' RL + ' + d.im + ' ' + T('aima.k.copy') + '   ' + d.decisions + ' choices');
+    else L.push(T('aima.tr.learning') + ': ' + d.rl + ' RL + ' + d.im + ' ' + T('aima.k.copy') + '   ' + T('aima.k.own') + ' ' + pct(d.modelDec, d.decisions) +
       '   ' + T('aima.k.help') + ' ' + Math.round(run.help0 * 100) + '% -> ' + Math.round(b.help() * 100) + '%');
     L.push(T('aima.tr.reward') + ': ' + r1(a1) + ' -> ' + r1(a2) + ' ' + T('aima.tr.permatch') + '   ' + trend);
     return L.join('\n');
+  }
+
+  // an OPT brain's choices in this run per kind of option, and the share that were Legend's own choice
+  function optChoices(d) {
+    var names = ['dribble', 'clear', 'shot', 'pass', 'one-two', 'through', 'lofted through', 'cross', 'long'], p = d.optPick || [], n = 0, out = [];
+    for (var i = 0; i < names.length; i++) n += p[i] || 0;
+    for (i = 0; i < names.length; i++) if (p[i]) out.push(names[i] + ' ' + Math.round(p[i] * 100 / n) + '%');
+    return n ? out.join(' · ') + '  (same as Legend ' + Math.round((d.optSame || 0) * 100 / n) + '%)' : '-';
   }
 
   function trainFull(S) {
@@ -1873,7 +1895,7 @@
       L.push('', T('aima.tr.brainstats') + ': ' + run.b.name);
       var keys = Object.keys(d).sort();
       for (var i = 0; i < keys.length; i++) {
-        if (keys[i] === 'trainMatches') continue;
+        if (keys[i] === 'trainMatches' || typeof d[keys[i]] !== 'number') continue;
         L.push('  ' + (keys[i] + '                    ').slice(0, 20) + (Math.round(d[keys[i]] * 100) / 100));
       }
       L.push('  ' + T('aima.tr.rewards') + ': ' + run.rew.map(function (x) { return r1(x); }).join(' '));
@@ -2611,6 +2633,9 @@
         done[b.id] = true; // brain v itself: one result
         var my = m.score[t], th = m.score[1 - t];
         b.st.matches++; b.st.gf += my; b.st.ga += th;
+        // the result's points, like a league: win 3, draw 1 (in the match's reward: a won match always counts more)
+        var pts = my > th ? MATCH_PTS[0] : (my === th ? MATCH_PTS[1] : 0);
+        matchReward[t] += pts; b.st.reward += pts;
         if (my > th) b.st.w++; else if (my < th) b.st.l++; else b.st.d++;
         b.st.hist.push(Math.round(matchReward[t] * 100) / 100);
         if (b.st.hist.length > 40) b.st.hist.shift();

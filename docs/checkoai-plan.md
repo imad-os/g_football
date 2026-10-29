@@ -14,6 +14,7 @@ tackles, press).
 | D. defence / off-ball options | Not yet (the OPT team defends and runs with Legend's rules). |
 | E. fast training | Partly: a headless match takes ~2.5 s (trainer.html / gfb.js), so 1,000 matches is ~45 min on one browser page. No parallel workers yet. |
 | F. benchmark gate | **Done**: Benchmark button (in-game Training page, trainer.html) and `node gfb.js bench`. |
+| Rewards (v1.54.1) | Goal +-3 (was +-1), ball lost -0.05 (was -0.12), shots / passes as before. A match's reward also gets the result's points (win 3, draw 1) as a measure (not taught). Fixed: the shot / pass rewards were lost after a training's 1st match (debug.js put back the Actions it found). trainer.html charts: reward, results, goals per run, and per brain every 1,000 matches (Stats). |
 | Coaching (claps, punishments, your moves) | **Done** for both algorithms (lessons). |
 | Levels (v1.53) | **Done**: Settings > CPU opponent (Classic / checkoAI) + CPU level (Easy / Normal / Pro / Legend). One brain plays every level: below Legend its team uses that level's rules (ai.js PROFILES) and an OPT brain sometimes plays its 2nd / 3rd best option (aimaopt.js SHARP). Read only below Legend: only Legend-level matches teach it (claps still add lessons). |
 
