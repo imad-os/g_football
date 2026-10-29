@@ -346,6 +346,8 @@
     $('bLearn').onclick = function () {
       var b = A.loadedBrain(sel);
       if (!b || !setSel) { msg('Pick a brain and a data set first.', true); return; }
+      // recorded sets hold sticks and buttons (AIMA-AC); an OPT brain learns Legend's choices during its training matches
+      if (b.algo === 'OPT') { msg('An OPT 2.0 brain does not use data sets: it copies Legend inside its training matches. Use Start training.', true); return; }
       var J = A.startLearn({ brain: b.id, sets: [setSel], passes: num('dPasses'), win: num('dWin'), rounds: num('dRounds'), hours: num('dHours') });
       msg(J ? '' : 'Cannot start: the brain is busy, the set has other inputs, or you are not signed in as the trainer.', !J);
       dirty = true;
