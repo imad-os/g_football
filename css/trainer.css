@@ -86,3 +86,13 @@ select { min-width: 0; }
 .kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; }
 .kv .k { color: var(--muted); }
 .hist { margin: 0; padding-left: 18px; max-height: 70vh; overflow: auto; font-size: 12px; }
+
+/* charts: reward, results, goals (js/trainer/trainer.js, canvas) */
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; margin-top: 10px; }
+.chart { border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--card); min-width: 0; }
+.ctitle { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; font-size: 12px; margin-bottom: 4px; }
+.chart canvas { display: block; width: 100%; height: 150px; }
+#prog .charts { margin-top: 12px; }
+.legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; font-size: 11px; color: var(--muted); }
+.legend span::before { content: ''; display: inline-block; width: 10px; height: 3px; margin-right: 5px; vertical-align: middle; background: var(--c); border-radius: 2px; }
+.legend span.faint::before { opacity: .4; height: 1px; }

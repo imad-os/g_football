@@ -14,6 +14,7 @@
   var sel = '';           // the brain every tab works on (default: the active one)
   var setSel = '';        // the data set
   var confirmKey = '', open = {}, shape = '', dirty = true, loading = '', failed = '', newName = '';
+  var progKind = 'train'; // the Stats tab's improvement charts: training or benchmark blocks
 
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -231,6 +232,122 @@
       (lr.next ? ' · goes on from chunk ' + (lr.next + 1) : '') : 'nothing learnt from this set yet') : '';
   }
 
+  // ---- charts (canvas, no library). Points: [{ n, r, w, d, l, gf, ga }] (sums over n matches), xs: the match number at
+  // each point's end. Three charts: reward per match (with its trend), results (win / draw / loss share), goals per match
+  var C_R = '#c084fc', C_W = '#22c55e', C_D = '#475569', C_L = '#ef4444', C_GF = '#38bdf8', C_GA = '#f97316';
+  var PAD = { l: 36, r: 8, t: 8, b: 18 };
+  function charts() {
+    var box = el('div', 'charts');
+    box._c = [['Reward per match', 'higher = better play', [['average', C_R], ['trend', C_R]]], ['Results', 'win · draw · loss', [['win', C_W], ['draw', C_D], ['loss', C_L]]],
+      ['Goals per match', 'scored · conceded', [['scored', C_GF], ['conceded', C_GA]]]].map(function (t) {
+      var w = el('div', 'chart'), h = el('div', 'ctitle'), lg = el('div', 'legend');
+      h.appendChild(el('b', null, t[0]));
+      w._note = h.appendChild(el('span', 'muted small', t[1]));
+      w.appendChild(h);
+      w._cv = w.appendChild(document.createElement('canvas'));
+      t[2].forEach(function (k, i) { var s = lg.appendChild(el('span', null, k[0])); s.style.setProperty('--c', k[1]); if (t[0] === 'Reward per match' && !i) s.className = 'faint'; });
+      w.appendChild(lg);
+      box.appendChild(w);
+      return w;
+    });
+    return box;
+  }
+  function per(p, k) { return p.n ? p[k] / p.n : 0; }
+  // first third v last third of the matches (weighted by matches): "a -> b"
+  function change(pts, f, fmt) {
+    var n = pts.length, k = Math.max(1, Math.floor(n / 3)), a = 0, an = 0, b = 0, bn = 0, i;
+    for (i = 0; i < k; i++) { a += f(pts[i]) * pts[i].n; an += pts[i].n; }
+    for (i = n - k; i < n; i++) { b += f(pts[i]) * pts[i].n; bn += pts[i].n; }
+    return n < 3 ? '' : fmt(a / an) + ' → ' + fmt(b / bn);
+  }
+  function drawCharts(box, pts, xs) {
+    var c = box._c, r1 = function (v) { return (Math.round(v * 10) / 10).toFixed(1); };
+    var rew = pts.map(function (p) { return per(p, 'r'); });
+    lineChart(c[0]._cv, xs, [{ v: rew, c: C_R, trend: true }], r1);
+    c[0]._note.textContent = change(pts, function (p) { return per(p, 'r'); }, r1) || 'higher = better play';
+    stackChart(c[1]._cv, xs, pts);
+    c[1]._note.textContent = change(pts, function (p) { return per(p, 'w'); }, pct).replace(/^(.)/, 'wins $1') || 'win · draw · loss';
+    lineChart(c[2]._cv, xs, [{ v: pts.map(function (p) { return per(p, 'gf'); }), c: C_GF }, { v: pts.map(function (p) { return per(p, 'ga'); }), c: C_GA }], r1, true);
+    c[2]._note.textContent = pts.length >= 3 ? 'difference ' + change(pts, function (p) { return per(p, 'gf') - per(p, 'ga'); }, function (v) { return (v > 0 ? '+' : '') + r1(v); }) : 'scored · conceded';
+  }
+  function canvas(cv) {
+    var dpr = window.devicePixelRatio || 1, w = cv.clientWidth || 300, h = cv.clientHeight || 150;
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+    var g = cv.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, w, h);
+    g.font = '10px system-ui, sans-serif';
+    return { g: g, w: w, h: h, pw: w - PAD.l - PAD.r, ph: h - PAD.t - PAD.b };
+  }
+  // the grid (3 levels), y labels, and the first / last match number under the x axis
+  function frame(k, lo, hi, xs, yfmt) {
+    var g = k.g;
+    g.strokeStyle = '#24324d'; g.fillStyle = '#8a9bb8'; g.lineWidth = 1;
+    g.textAlign = 'right'; g.textBaseline = 'middle';
+    for (var i = 0; i <= 2; i++) {
+      var v = lo + (hi - lo) * i / 2, y = Math.round(PAD.t + k.ph * (1 - i / 2)) + 0.5;
+      g.beginPath(); g.moveTo(PAD.l, y); g.lineTo(k.w - PAD.r, y); g.stroke();
+      g.fillText(yfmt(v), PAD.l - 4, y);
+    }
+    g.textBaseline = 'alphabetic';
+    g.textAlign = 'left'; g.fillText(String(xs.length ? xs[0] : ''), PAD.l, k.h - 4);
+    g.textAlign = 'right'; g.fillText(xs.length ? xs[xs.length - 1] + ' matches' : '', k.w - PAD.r, k.h - 4);
+  }
+  function xAt(k, i, n) { return PAD.l + k.pw * (n > 1 ? i / (n - 1) : 0.5); }
+  // series: [{ v: [numbers], c: colour, trend: also its smoothed line }]; zero: the axis starts at 0
+  function lineChart(cv, xs, series, yfmt, zero) {
+    var k = canvas(cv), g = k.g, lo = Infinity, hi = -Infinity, n = xs.length;
+    series.forEach(function (s) { s.v.forEach(function (v) { if (v < lo) lo = v; if (v > hi) hi = v; }); });
+    if (!n) return;
+    if (zero) lo = Math.min(0, lo);
+    if (hi - lo < 1e-6) { hi += 0.5; lo -= 0.5; }
+    var m = (hi - lo) * 0.08; hi += m; if (!zero) lo -= m;
+    frame(k, lo, hi, xs, yfmt);
+    var yAt = function (v) { return PAD.t + k.ph * (1 - (v - lo) / (hi - lo)); };
+    function path(v, c, w, a) {
+      g.globalAlpha = a; g.strokeStyle = g.fillStyle = c; g.lineWidth = w;
+      if (v.length === 1) { g.beginPath(); g.arc(xAt(k, 0, 1), yAt(v[0]), 3, 0, 7); g.fill(); g.globalAlpha = 1; return; }
+      g.beginPath();
+      for (var i = 0; i < v.length; i++) { var x = xAt(k, i, v.length), y = yAt(v[i]); if (i) g.lineTo(x, y); else g.moveTo(x, y); }
+      g.stroke(); g.globalAlpha = 1;
+    }
+    series.forEach(function (s) {
+      if (!s.trend || n < 4) { path(s.v, s.c, 2, 1); return; }
+      // the points thin, their moving average (over about a sixth of the run) thick: the trend through the noise
+      path(s.v, s.c, 1, 0.35);
+      var w = Math.max(2, Math.round(n / 6)), t = [], i, j;
+      for (i = 0; i < n; i++) {
+        var a = 0, c = 0;
+        for (j = Math.max(0, i - w); j <= Math.min(n - 1, i + w); j++) { a += s.v[j]; c++; }
+        t.push(a / c);
+      }
+      path(t, s.c, 2.5, 1);
+    });
+  }
+  // results: one bar per point, its wins (bottom), draws, losses as shares; a line at 50%
+  function stackChart(cv, xs, pts) {
+    var k = canvas(cv), g = k.g, n = pts.length;
+    frame(k, 0, 1, xs, pct);
+    if (!n) return;
+    var bw = Math.max(1, k.pw / n - (n > 30 ? 1 : 2));
+    for (var i = 0; i < n; i++) {
+      var p = pts[i], x = PAD.l + k.pw * i / n + (k.pw / n - bw) / 2, y = PAD.t + k.ph;
+      [[p.w, C_W], [p.d, C_D], [p.l, C_L]].forEach(function (q) {
+        var h = p.n ? k.ph * q[0] / p.n : 0;
+        g.fillStyle = q[1]; g.fillRect(x, y - h, bw, h); y -= h;
+      });
+    }
+    g.strokeStyle = 'rgba(255,255,255,.35)'; g.setLineDash([3, 3]);
+    g.beginPath(); g.moveTo(PAD.l, PAD.t + k.ph / 2 + 0.5); g.lineTo(k.w - PAD.r, PAD.t + k.ph / 2 + 0.5); g.stroke();
+    g.setLineDash([]);
+  }
+  // a session's points (A.series) as the charts' input: the match number at the end of each point
+  function sesPoints(S) {
+    var s = A.series(S), pts = s ? s.b.filter(function (p) { return p.n > 0; }) : [], xs = [], m = 0;
+    pts.forEach(function (p) { m += p.n; xs.push(m); });
+    return { pts: pts, xs: xs, size: s ? s.size : 1 };
+  }
+
   // ---- JOBS tab: training sessions and data jobs, newest first
   function jobCard(kind, x) {
     var c = el('div', 'job ' + x.state);
@@ -245,6 +362,7 @@
       c.appendChild(bar);
       c._bar = f;
     }
+    if (kind === 'ses') { c._charts = charts(); c._charts.classList.add('hidden'); c.appendChild(c._charts); }
     var pre = el('pre', 'jtext');
     c.appendChild(pre);
     c._pre = pre;
@@ -270,6 +388,18 @@
       if (c._bar) c._bar.style.width = (x.total ? Math.min(100, x.steps * 100 / x.total) : 0) + '%';
     }
     if (c._pre.textContent !== t) c._pre.textContent = t;
+    if (c._charts) liveCharts(c);
+  }
+  // a session's charts, redrawn when a match was added (or the page was resized); from 2 matches on
+  function liveCharts(c) {
+    var s = sesPoints(c._x), last = s.pts[s.pts.length - 1];
+    var key = s.pts.length + ':' + s.size + ':' + (last ? last.n : 0) + ':' + c._charts.clientWidth;
+    if (key === c._chartKey) return;
+    c._chartKey = key;
+    var show = s.xs.length && s.xs[s.xs.length - 1] >= 2;
+    c._charts.classList.toggle('hidden', !show);
+    if (show && c._charts.clientWidth) drawCharts(c._charts, s.pts, s.xs);
+    if (show) c._charts.title = s.size > 1 ? 'each point: the average of ' + s.size + ' matches' : 'each point: one match';
   }
   function copy(text) {
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { msg('Copied.'); }, function () {});
@@ -286,7 +416,7 @@
     box.innerHTML = '';
     var all = allJobs();
     if (!all.length) box.appendChild(el('div', 'muted', 'nothing yet: start a training (Training tab) or a recording / learning run (Data sets tab)'));
-    all.forEach(function (j) { box.appendChild(jobCard(j[0], j[1])); });
+    all.forEach(function (j) { var c = box.appendChild(jobCard(j[0], j[1])); if (c._charts) liveCharts(c); });
     $('bStopAll').disabled = !all.some(function (j) { return live(j[1]); });
   }
   function drawBusy() {
@@ -327,12 +457,42 @@
       rows.push(['data "' + d.name + '"', d.passes.toFixed(3) + ' passes · ' + d.chunks + ' chunks · ' + d.steps + ' steps' + (d.next ? ' · next chunk ' + (d.next + 1) : '')]);
     });
     rows.forEach(function (r) { box.appendChild(el('span', 'k', r[0])); box.appendChild(el('span', 'v', r[1])); });
+    drawProg(b);
     b.hist.slice(-60).reverse().forEach(function (h) {
       var li = el('li');
       li.appendChild(el('span', 'muted', new Date(h.t).toLocaleString() + '  '));
       li.appendChild(document.createTextNode(h.k + (h.d ? ' ' + JSON.stringify(h.d) : '')));
       ul.appendChild(li);
     });
+  }
+  // the brain's improvement: its blocks of A.PROG_N matches (b.prog, saved with it), trainings and benchmarks apart
+  // (a training explores, so its numbers sit lower than a benchmark's of the same brain)
+  function drawProg(b) {
+    var box = $('prog'), prog = b.prog || [];
+    box.innerHTML = '';
+    var has = { train: prog.some(function (p) { return !p.bench; }), bench: prog.some(function (p) { return p.bench; }) };
+    if (!has[progKind]) progKind = has.train || !has.bench ? 'train' : 'bench';
+    var pts = prog.filter(function (p) { return !!p.bench === (progKind === 'bench'); });
+    var row = el('div', 'row');
+    [['train', 'Training'], ['bench', 'Benchmark']].forEach(function (k) {
+      var n = prog.filter(function (p) { return !!p.bench === (k[0] === 'bench'); }).length;
+      var bt = button(k[1] + ' (' + n + ')', progKind === k[0] ? 'primary' : '', function () { progKind = k[0]; dirty = true; });
+      bt.disabled = !n;
+      row.appendChild(bt);
+    });
+    box.appendChild(row);
+    if (!pts.length) {
+      box.appendChild(el('p', 'muted small', 'Nothing yet. A block is added after every ' + A.PROG_N.toLocaleString() + ' matches of one training or ' +
+        'benchmark (Training tab: Matches ' + A.PROG_N.toLocaleString() + ' or more, or ∞). Shorter runs are not kept: too few matches to be accurate.'));
+      return;
+    }
+    var ch = box.appendChild(charts());
+    var xs = pts.map(function (p) { return p.at; });
+    drawCharts(ch, pts, xs);
+    ch.title = 'each point: ' + A.PROG_N.toLocaleString() + ' matches; along the bottom: the brain\'s training matches so far';
+    var last = pts[pts.length - 1];
+    box.appendChild(el('p', 'muted small', pts.length + ' block' + (pts.length > 1 ? 's' : '') + ' of ' + A.PROG_N.toLocaleString() + ' matches · latest ' +
+      when(last.t) + ' v ' + (last.opp || '?') + ': ' + last.w + '-' + last.d + '-' + last.l + ', reward ' + (Math.round(last.r / last.n * 10) / 10) + ' per match'));
   }
   // an OPT brain's choices per kind of option, and the share that were Legend's own
   function optPicks(s) {
@@ -383,6 +543,7 @@
     var bs = $('tabs').querySelectorAll('[data-tab]');
     for (var i = 0; i < bs.length; i++) bs[i].onclick = function () { showTab(this.getAttribute('data-tab')); tick(); };
     $('brainSel').onchange = function () { pick(this.value); tick(); };
+    window.addEventListener('resize', function () { if (tab === 'stats') dirty = true; }); // (the charts fit the new width)
 
     // CPU load (kept in this browser)
     var ld = +stored('load') || 100;

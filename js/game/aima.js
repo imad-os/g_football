@@ -106,6 +106,7 @@
     for (var k in CFG_DEF) this.cfg[k] = CFG_DEF[k];
     this.st = freshStats();
     this.hist = [];
+    this.prog = [];   // its progress: a block per PROG_N matches of one training / benchmark (trainer.html's Stats charts)
     this.data = {};   // per recorded data set it learnt from: { name, chunks (how many it had), passes (done over them), steps }
     this.frozen = false;  // an opponent in training: plays, does not learn
     this.dirty = false;
@@ -1401,7 +1402,7 @@
 
   function toDoc(b) {
     return { v: 2, alg: ALGOS[b.algo], algo: b.algo, id: b.id, name: b.name, created: b.created, saved: b.saved, parent: b.parent,
-      from: b.from, cfg: b.cfg, st: b.st, hist: b.hist, data: b.data, m: packWeights(b), les: packLessons(b),
+      from: b.from, cfg: b.cfg, st: b.st, hist: b.hist, prog: b.prog, data: b.data, m: packWeights(b), les: packLessons(b),
       opt: b.algo === 'OPT' && NS.AimaOpt ? NS.AimaOpt.pack(b) : undefined };
   }
   function fromDoc(d) {
@@ -1415,6 +1416,7 @@
     for (k in SIZES) if (SIZES[k][0] === b.H1 && SIZES[k][1] === b.H2) b.cfg.size = k;
     if (d.st) for (k in d.st) if (Object.prototype.hasOwnProperty.call(b.st, k)) b.st[k] = d.st[k];
     b.hist = d.hist || [];
+    b.prog = d.prog || [];
     b.data = d.data || {};
     unpackLessons(b, d.les);
     b.st.lessons = b.les ? b.les.n : 0;
@@ -1704,7 +1706,7 @@
   function oppList(run) { return Object.keys(run.opps).join(', '); }
   function addRun(S, b, of) {
     if (S.runs[b.id]) return S.runs[b.id];
-    var run = { b: b, help0: b.help(), rew: [], opps: {}, acc: {}, snap: null };
+    var run = { b: b, help0: b.help(), rew: [], opps: {}, acc: {}, snap: null, ser: { size: 1, b: [] }, blk: point() };
     b.frozen = false; // every brain of a training learns
     b.log('train', { opp: '', n: 0, of: of, w: 0, d: 0, l: 0, gf: 0, ga: 0 });
     run.h = b.hist[b.hist.length - 1];
@@ -1714,6 +1716,38 @@
   }
   function addDelta(acc, a, b) {
     for (var k in b) if (typeof b[k] === 'number') acc[k] = (acc[k] || 0) + b[k] - (a[k] || 0);
+  }
+
+  // the charts' numbers (trainer.html). A run keeps its matches in at most SER_MAX points: when full, neighbours merge
+  // and each point holds twice as many matches, so a long benchmark still draws as one readable line of averages. The
+  // brain keeps a block per PROG_N matches of one session (b.prog, saved with it): only full blocks, so every block's
+  // numbers are over the same, large number of matches
+  var SER_MAX = 60, PROG_N = 1000, PROG_MAX = 400;
+  function point() { return { n: 0, r: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0 }; }
+  function addPoint(p, r, my, th) { p.n++; p.r += r; p.gf += my; p.ga += th; if (my > th) p.w++; else if (my < th) p.l++; else p.d++; }
+  function runPoint(S, run, r, my, th) {
+    var s = run.ser, last = s.b[s.b.length - 1];
+    if (!last || last.n >= s.size) {
+      if (s.b.length >= SER_MAX) {
+        var m = [];
+        for (var i = 0; i < s.b.length; i += 2) {
+          var a = s.b[i], c = s.b[i + 1];
+          if (c) for (var k in c) a[k] += c[k];
+          m.push(a);
+        }
+        s.b = m; s.size *= 2;
+      }
+      last = point(); s.b.push(last);
+    }
+    addPoint(last, r, my, th);
+    var bk = run.blk, b = run.b;
+    addPoint(bk, r, my, th);
+    if (bk.n < PROG_N) return;
+    b.prog.push({ t: Date.now(), at: b.st.trainMatches, n: bk.n, r: Math.round(bk.r * 100) / 100, w: bk.w, d: bk.d, l: bk.l, gf: bk.gf, ga: bk.ga,
+      bench: S.cfg.bench ? 1 : 0, opp: oppList(run) });
+    if (b.prog.length > PROG_MAX) b.prog.shift();
+    run.blk = point();
+    b.dirty = true;
   }
 
   function notify(S) { if (Aima.onTrain) Aima.onTrain(S); }
@@ -2515,6 +2549,7 @@
       if (!SIZES[size] || b.algo === 'OPT' || (!LOCAL_SIZES[size] && !cloudCfg()) || Aima.inUse(b.id)) return false;
       b.build(size);
       b.data = {};
+      b.prog = [];
       b.st = freshStats();
       b.log('size', { v: size });
       saveBrain(b);
@@ -2528,6 +2563,7 @@
       if (b.algo === 'OPT' && NS.AimaOpt) b.opt = NS.AimaOpt.create();
       b.les = null;
       b.data = {};
+      b.prog = [];
       b.st = freshStats();
       b.memN = 0; b.memI = 0;
       b.log('reset');
@@ -2578,7 +2614,7 @@
         if (my > th) b.st.w++; else if (my < th) b.st.l++; else b.st.d++;
         b.st.hist.push(Math.round(matchReward[t] * 100) / 100);
         if (b.st.hist.length > 40) b.st.hist.shift();
-        if (training) { b.st.trainMatches++; var rw = training.runs[b.id]; if (rw) { rw.rew.push(matchReward[t]); if (rw.rew.length > REW_KEEP) rw.rew.shift(); } }
+        if (training) { b.st.trainMatches++; var rw = training.runs[b.id]; if (rw) { rw.rew.push(matchReward[t]); if (rw.rew.length > REW_KEEP) rw.rew.shift(); runPoint(training, rw, matchReward[t], my, th); } }
         else b.log('match', { s: my + '-' + th, vs: World.slots[0].active || World.slots[1].active ? 'human' : 'cpu' });
       }
       matchOn = false;
@@ -2902,6 +2938,9 @@
     dataMissing: missOf,
     resendSet: resendSet,
     jobText: jobText,
+    // a session's chart points (its own brain's run): { size: matches a point, b: [{ n, r, w, d, l, gf, ga }] }
+    series: function (S) { var run = S.b && S.runs[S.b.id]; return run ? run.ser : null; },
+    PROG_N: PROG_N,
     sessionText: function (S, full) { return S.b ? (full ? trainFull(S) : trainSummary(S)) : (S.error || ''); },
 
     // style read from what he chooses himself
