@@ -506,7 +506,8 @@
   // ATHLETE / TOON: rounded bodies; ATHLETE players differ in height (1.72 - 1.92 m, keepers taller), hair and boots.
   function buildRounded(mesh, Mat, look, m) {
     var b = BUILDS[m], mats = mesh.mats, root = mesh.root, seg = SIDES[detail()], s = look.seed;
-    var metres = m === 'ATHLETE' ? 1.72 + rnd(s, 1) * 0.2 + (look.gk ? 0.05 : 0) : 1.81;
+    // his real height when known (js/data/squads.js), else one from his look
+    var metres = m === 'ATHLETE' ? (look.ht > 150 ? look.ht / 100 : 1.72 + rnd(s, 1) * 0.2 + (look.gk ? 0.05 : 0)) : 1.81;
     var h = Math.round(metres * NS.M * 50) / 50; // (a few sizes, so the lathes are shared)
     var hairStyle = HAIR_STYLES[Math.floor(rnd(s, 2) * HAIR_STYLES.length)];
     var hairColor = look.skin === 0x8d5524 ? 0x111111 : HAIR_COLORS[Math.floor(rnd(s, 3) * HAIR_COLORS.length)];

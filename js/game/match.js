@@ -1257,7 +1257,8 @@
           var slot = layout[i];
           var gk = slot.role === 'GK';
           var mesh = NS.Assets.createPlayer({ pattern: gk ? 'SOLID' : td.pattern, c1: gk ? kits.gk[t] : td.c1, c2: td.c2,
-            shorts: td.shorts, skin: SKIN[(i + t) % SKIN.length], gk: gk, seed: seedOf(names[i] || '', t * 31 + i) }, lit);
+            shorts: td.shorts, skin: SKIN[(i + t) % SKIN.length], gk: gk, seed: seedOf(names[i] || '', t * 31 + i),
+            ht: names[i] ? NS.Players.statsFor(NS.Teams.byId(t === 0 ? s.homeTeamId : s.awayTeamId), names[i]).ht : 0 }, lit);
           NS.Scene.add(mesh.root);
           var pos = mesh.root.position;
           pos.set(slot.x * dir * SX(), 0, slot.z * dir * SZ());

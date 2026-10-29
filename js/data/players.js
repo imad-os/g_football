@@ -211,10 +211,11 @@
   NS.Players = {
     // Ratings of the player called `name` in team `t` (a NS.Teams entry).
     statsFor: function (t, name) {
-      var d = DB[t.id + ':' + name] || DB[name];
-      if (d) return make(d[0], d.slice(1));
+      var d = DB[t.id + ':' + name] || DB[name], s;
+      if (d) { s = make(d[0], d.slice(1)); s.ht = t.ht ? t.ht[name] || 0 : 0; return s; }
       var idx = t.players.indexOf(name);
-      var pos = ORDER[idx >= 0 && idx < ORDER.length ? idx : 8];
+      // his position: given by the squad (a substitute, a new signing: js/data/squads.js), else from the squad order
+      var pos = (t.pos && t.pos[name]) || ORDER[idx >= 0 && idx < ORDER.length ? idx : 8];
       var base = 50 + t.stars * 5 + (CLUB_LEVEL[t.id] !== undefined ? CLUB_LEVEL[t.id] : (CAT_LEVEL[t.cat] || 0));
       var prof = PROFILE[pos];
       var h = hash(t.id + '/' + name);
@@ -223,7 +224,10 @@
         var jitter = ((h >>> (k * 5)) & 31) / 31 * 12 - 6; // -6..+6, fixed per player and stat
         v.push(base + prof[k] + jitter);
       }
-      return make(pos, v);
+      if (idx >= 11) for (k = 0; k < 6; k++) v[k] -= 2; // a substitute: a little below the starters
+      s = make(pos, v);
+      s.ht = t.ht ? t.ht[name] || 0 : 0; // height in cm (0: not known)
+      return s;
     },
 
     // The squad ordered for a formation: each slot gets the best free player of that position (a keeper in goal, the
