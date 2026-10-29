@@ -279,6 +279,9 @@
 
   // Restarts: the free-kick distance (10 m), and where players may stand at a kick-off.
   var FK_DIST = 10 * NS.M;
+  // free kicks: QUICK seconds to play it at once (the fouled side's man on the ball, nobody set); then, in range of
+  // goal, it is set: a wall, the best shooter on it with a run-up, the camera behind him (fkSetup)
+  var FK_QUICK = 2, FK_RANGE = 36 * NS.M, FK_RUNUP = 2.6 * NS.M, WALL_REACH = 2.05 * NS.M;
   function keepAway(p, x, z, r) {
     var dx = p.pos.x - x, dz = p.pos.z - z, d2 = dx * dx + dz * dz;
     if (d2 >= r * r) return;
@@ -1097,6 +1100,108 @@
     }
   }
 
+  /* ---- a free kick in range of goal (after FK_QUICK seconds nobody took it quickly): set like a real one. The best
+   * shooter of the side takes it, standing FK_RUNUP behind the ball (on the side of his strong foot); 2 to 4 of the
+   * defenders nearest the ball make a wall FK_DIST away on the line to the goal, the others stand in the box, the
+   * attackers just behind them (onside), the keeper on his line on the side the wall does not cover. Nobody moves until
+   * it is struck (the taker runs up first: Actions.fkLater, fkRun); the camera is behind the ball (Scene.fkView). */
+  function fkSetup() {
+    var m = World.match, ball = World.ball, players = World.players, t = m.setTeam, a = NS.attack(t), M = NS.M;
+    var bx = ball.pos.x, bz = ball.pos.z, gx = a * HALF_W;
+    var dx = gx - bx, dz = -bz, d = Math.sqrt(dx * dx + dz * dz) || 1, ux = dx / d, uz = dz / d;
+    var i, p, old = m.setTaker;
+    // the taker: the best shooter (fit and on the pitch)
+    var best = old, bs = -1;
+    for (i = 0; i < players.length; i++) {
+      p = players[i];
+      if (p.team !== t || p.role === 'GK' || p.stun > 0) continue;
+      var sv = (p.st ? p.st.sht : 60) + (p.st && p.st.foot === 'L' && bz * a < 0 ? 2 : 0);
+      if (sv > bs) { bs = sv; best = p; }
+    }
+    // the wall: the defenders nearest the ball, 4 central and close, fewer from wide or far
+    var ang = Math.abs(Math.atan2(Math.abs(bz), Math.abs(dx)));
+    var nWall = d < 24 * M ? 4 : (d < 30 * M ? 3 : 2);
+    if (ang > 0.75) nWall = Math.max(1, nWall - 2); else if (ang > 0.45) nWall = Math.max(2, nWall - 1);
+    var defs = [];
+    for (i = 0; i < players.length; i++) { p = players[i]; if (p.team !== t && p.role !== 'GK') defs.push(p); }
+    defs.sort(function (x, y) {
+      return ((x.pos.x - bx) * (x.pos.x - bx) + (x.pos.z - bz) * (x.pos.z - bz)) - ((y.pos.x - bx) * (y.pos.x - bx) + (y.pos.z - bz) * (y.pos.z - bz));
+    });
+    var wx = bx + ux * FK_DIST, wz = bz + uz * FK_DIST, px = -uz, pz = ux; // the wall's middle, and across it
+    var nearSide = bz > 0 ? 1 : -1;                                        // it covers the near post
+    var sideOf = (px * nearSide > 0 || pz * nearSide > 0) ? 1 : -1;
+    for (i = 0; i < defs.length; i++) {
+      p = defs[i];
+      p.vel.set(0, 0, 0); p.wall = false; p.wallT = 0;
+      if (i < nWall) {
+        var off = (i - (nWall - 1) / 2) * 0.62 * M + sideOf * 0.35 * M;
+        p.pos.set(wx + px * off, 0, wz + pz * off);
+        p.wall = true;
+        p.facing = Math.atan2(bx - p.pos.x, bz - p.pos.z);
+      } else {
+        var k = i - nWall;
+        p.pos.set(gx - a * (8 + (k % 3) * 2.2) * M, 0, clamp(((k * 7) % 26 - 13) * M * 0.9, -NS.BOX_HW, NS.BOX_HW));
+        p.facing = a > 0 ? -Math.PI / 2 : Math.PI / 2;
+      }
+    }
+    var k2 = 0;
+    for (i = 0; i < players.length; i++) {
+      p = players[i];
+      if (p.team !== t || p === best) continue;
+      p.vel.set(0, 0, 0);
+      if (p.role === 'GK') continue;
+      p.pos.set(gx - a * (12.5 + (k2 % 2) * 2) * M, 0, clamp(((k2 * 9) % 30 - 15) * M * 0.85, -NS.BOX_HW - 4 * M, NS.BOX_HW + 4 * M));
+      p.facing = a > 0 ? Math.PI / 2 : -Math.PI / 2;
+      k2++;
+    }
+    // the taker: behind the ball, on the side of his strong foot (a right-footer comes from its left)
+    if (best !== old) {
+      if (old) { old.vel.set(0, 0, 0); old.pos.set(bx - ux * 6 * M + uz * 4 * M, 0, bz - uz * 6 * M - ux * 4 * M); }
+      ball.owner = best; ball.lastTouchTeam = t; ball.lastToucher = best.name; best.carry = 0.95;
+      m.setTaker = best;
+    }
+    // (an angle is atan2(x, z); facing the goal his left is +90 degrees: behind the ball and to the left is
+    // the way back turned 0.45 rad towards it)
+    var fs = best.foot === 'L' ? -1 : 1;
+    var ra = Math.atan2(ux, uz) + Math.PI - 0.45 * fs;
+    var rx = Math.sin(ra), rz = Math.cos(ra);
+    m.setX = bx; m.setZ = bz;
+    best.pos.set(bx + rx * FK_RUNUP, 0, bz + rz * FK_RUNUP);
+    best.vel.set(0, 0, 0);
+    best.facing = Math.atan2(bx - best.pos.x, bz - best.pos.z);
+    best.fkSpot = { x: bx, z: bz };
+    best.aiT = 0;
+    m.fkSet = true;
+    m.fkCam = 1;
+    m.restartT = 0;
+    if (NS.HUD.hint) NS.HUD.hideHint();
+    if (NS.dbg) NS.dbg('free_kick_set', t, nWall);
+  }
+  // the run-up: he runs to the ball and plays the kick he chose (Actions.fkLater) as he gets there
+  function fkRun(p, dt) {
+    var m = World.match, ball = World.ball;
+    if (!p.fkSpot) { p.fkPend = null; return; }
+    var gx = NS.attack(p.team) * HALF_W;
+    var dx = p.fkSpot.x - p.pos.x, dz = p.fkSpot.z - p.pos.z, d = Math.sqrt(dx * dx + dz * dz);
+    if (d > 0.95) {
+      p.vel.x = dx / d * 7.5; p.vel.z = dz / d * 7.5;
+      p.facing = Math.atan2(dx, dz);
+      return;
+    }
+    // at the ball: struck (facing the goal, the ball at his feet)
+    p.vel.x *= 0.3; p.vel.z *= 0.3;
+    p.facing = Math.atan2(gx - p.pos.x, -p.pos.z);
+    var go = p.fkPend;
+    p.fkSpot = null; p.fkPend = null;
+    m.fkSet = false;
+    m.fkCam = 1.3; // the camera stays behind it and watches it fly
+    for (var i = 0; i < World.players.length; i++) {
+      var q = World.players[i];
+      if (q.wall) { q.headT = 0.55; q.wallT = 0.9; } // the wall jumps
+    }
+    go();
+  }
+
   function startSetPiece() {
     var m = World.match;
     var ball = World.ball;
@@ -1172,6 +1277,16 @@
       m.restart = 5;
     } else {
       taker = taker || nearestOf(t, bx, bz, null);
+      // a quick free kick is on when a man of the fouled side is at the ball (the fouled one, else one within 6 m):
+      // he has it at once and FK_QUICK seconds to play it; then it is set (fkSetup) when it is within shooting range
+      var gxF = a * HALF_W, gdF = Math.sqrt((gxF - bx) * (gxF - bx) + bz * bz);
+      m.fkShooting = gdF < FK_RANGE && Math.abs(bz) < NS.BOX_HW + 14 * NS.M && (gxF - bx) * a > 6 * NS.M;
+      var near = taker && taker.stun <= 0 ? taker : null;
+      if (!near) { var nq = nearestOf(t, bx, bz, null); if (nq && Math.sqrt((nq.pos.x - bx) * (nq.pos.x - bx) + (nq.pos.z - bz) * (nq.pos.z - bz)) < 6 * NS.M) near = nq; }
+      if (near) taker = near;
+      m.fkQuick = near ? FK_QUICK : 0.01;
+      m.fkSet = false;
+      if (near && humanTeam(t)) NS.HUD.hint(NS.I18n.t('hud.quickfk'), FK_QUICK);
       for (i = 0; i < players.length; i++) {
         p = players[i];
         if (p.team === t) continue;
@@ -1295,6 +1410,7 @@
             fouls: 0, card: 0,
             throwIn: false, throwT: 0, shoulderT: 0, shoulderDir: 1, shCd: 0, offside: false, bumpT: 0, bumpK: 1,
             blockT: 0, blockCd: 0, blockSide: 1, touchT: 0, touchFoot: 1, foot: 'R', kickFoot: 1,
+            fkSpot: null, fkPend: null, wall: false, wallT: 0,
             mark: null, icX: 0, icZ: 0, drX: 0, drZ: 0, runT: 0, runCd: 0, runX: 0, runZ: 0,
             aiT: 0, tgtX: 0, tgtZ: 0, tgtS: 8, gkRT: 0,
             st: null, mSpd: 1, drain: 1,
@@ -1349,6 +1465,7 @@
         p.stun = 0; p.tackleT = 0; p.tackleCd = 0; p.runToT = 0; p.returnTo = null; p.dribbling = false;
         p.kickT = 0; p.lungeT = 0; p.slideT = 0; p.fallT = 0; p.diveT = 0; p.headT = 0; p.catchT = 0; p.gkHands = false;
         p.smotherT = 0; p.spreadT = 0; p.oneT = 0; p.blockT = 0; p.blockCd = 0;
+        p.fkSpot = null; p.fkPend = null; p.wall = false; p.wallT = 0;
         p.mood = 0; p.slid = false; p.throwIn = false; p.throwT = 0; p.shoulderT = 0; p.offside = false; p.bumpT = 0;
         animate(p, 0);
         p.mark = null; p.drX = 0; p.drZ = 0; p.runT = 0; p.runCd = 0; p.aiT = 0; p.gkRT = 0; p.stamina = Math.min(100, p.stamina + 30); p.gkHold = 0;
@@ -1359,6 +1476,7 @@
       walking = false;
       if (ref) { ref.pos.set(-3, 0, -12); ref.vel.set(0, 0, 0); ref.facing = 0; }
       m.setPieceTimer = 0; m.setPiece = 0; m.penalty = false; m.protectT = 0; m.restart = 0; m.setTaker = null;
+      m.fkQuick = 0; m.fkSet = false; m.fkCam = 0; m.fkShooting = false;
       World.ball.offTeam = -1;
       var kicker = null;
       for (var k = 0; k < World.players.length; k++) {
@@ -1534,13 +1652,19 @@
       }
       refStep(dt);
       if (m.protectT > 0) m.protectT -= dt;
+      if (m.restart === 1 && m.fkQuick > 0 && ball.owner === m.setTaker) {
+        m.fkQuick -= dt;
+        if (m.fkQuick <= 0 && m.fkShooting) fkSetup();
+      }
+      if (m.fkCam > 0 && !m.fkSet) m.fkCam -= dt;
       if (m.restart) {
         m.restartT += dt;
         if (ball.owner !== m.setTaker) {
           m.restart = 0;
           m.protectT = 0;
           hurried = false;
-        } else if (m.restartT > 10) {
+          m.fkQuick = 0;
+        } else if (m.restartT > (m.fkSet ? 14 : 10)) {
           if (NS.dbg) NS.dbg('restart_auto_played_10s', m.setTaker.team, m.restart);
           Actions.kick(m.setTaker, m.restart === 5 ? ACT.LONG : ACT.PASS, 0.5, NS.attack(m.setTaker.team), 0, 1);
         }
@@ -1579,6 +1703,7 @@
         if (p.diveCd > 0) p.diveCd -= dt;
         if (p.blockT > 0) p.blockT -= dt;
         if (p.blockCd > 0) p.blockCd -= dt;
+        if (p.wallT > 0) { p.wallT -= dt; if (p.wallT <= 0) p.wall = false; }
         var dx = p.pos.x - ball.pos.x;
         var dz = p.pos.z - ball.pos.z;
         p.dBall = dx * dx + dz * dz;
@@ -1639,6 +1764,10 @@
         } else if (p.stun > 0) {
           p.vel.x *= stunDrag;
           p.vel.z *= stunDrag;
+        } else if (m.fkSet && p !== m.setTaker && p.role !== 'GK') {
+          // a free kick set for a shot: everybody holds his place (the wall, the box) until it is struck
+          p.vel.x = 0; p.vel.z = 0;
+          if (p.wall) p.facing = Math.atan2(ball.pos.x - p.pos.x, ball.pos.z - p.pos.z);
         } else if (p.blockT > 0 && !p.isCtl) {
           // a block (Actions.blockReact): planted, his leg out in the ball's way, until he gets his balance back
           p.vel.x *= stunDrag;
@@ -1654,6 +1783,7 @@
         if (run > 6.5) p.stamina = Math.max(5, p.stamina - (run - 6.5) * 0.325 * dt * p.drain);
         else p.stamina = Math.min(100, p.stamina + 0.9 * dt * (1.6 - p.drain));
 
+        if (p.fkPend) fkRun(p, dt);
         var moveScale = fatigue(p);
         if (p.bumpT > 0) { p.bumpT -= dt; moveScale *= p.bumpK; }
         // Only apply mSpd if not already baked into AI/Control target velocity, or softly blend it
@@ -1795,6 +1925,10 @@
             // a blocking leg reaches further than a standing player (about 1 m): the shot / pass hits it
             takerD = d2;
             taker = p;
+          } else if (p.wall && p.headT > 0 && ball.lastTouchTeam !== p.team && ball.pos.y < WALL_REACH && d2 < Math.max(takerD, 1.6)) {
+            // the wall jumped: a free kick into it is blocked (deflected off a head or a body)
+            takerD = d2;
+            taker = p;
           } else if ((ball.pickupCooldown <= 0 || p === ball.receiver) && (ball.pos.y < (p === ball.receiver ? 2.3 : 1.9) ? d2 < takerD :
               (ball.pos.y < 2.6 && d2 < Math.min(takerD, 0.6)))) {
             takerD = d2;
@@ -1886,7 +2020,8 @@
         else NS.Scene.setRing(2 + i, false, 0, 0);
       }
       aimArrows(dt);
-      NS.Scene.followBall(dt, ball.pos.x, ball.pos.z, settings.cameraMode);
+      if (m.fkCam > 0) NS.Scene.fkView(dt, m.setX, m.setZ, NS.attack(m.setTeam) * HALF_W, !m.fkSet);
+      else NS.Scene.followBall(dt, ball.pos.x, ball.pos.z, settings.cameraMode);
     },
 
     drawHud: function (dt) {

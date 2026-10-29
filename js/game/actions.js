@@ -229,7 +229,23 @@
       if (this.onKick) this.onKick(p, type);
     },
 
+    // A free kick set up for a shot (js/game/match.js fkSetup): the taker stands back from the ball (p.fkSpot). Any kick
+    // he plays then (a human's or the CPU's, a pass or a shot) is kept and played when his run-up reaches the ball
+    // (match.js fkRun), with the same aim, power and assistance. True: kept (nothing is played now).
+    fkLater: function (p, fn, args) {
+      if (!p.fkSpot || this.fkGo) return false;
+      var self = this, a = Array.prototype.slice.call(args), pp = this.passPower, lob = this.lob, hu = this.human;
+      p.fkPend = function () {
+        var s0 = self.passPower, l0 = self.lob, h0 = self.human;
+        self.fkGo = true; self.passPower = pp; self.lob = lob; self.human = hu;
+        try { self[fn].apply(self, a); } finally { self.fkGo = false; self.passPower = s0; self.lob = l0; self.human = h0; }
+      };
+      return true;
+    },
+    fkGo: false,
+
     kick: function (p, type, power, ax, az, accuracy, forceTarget) {
+      if (this.fkLater(p, 'kick', arguments)) return;
       var ball = World.ball;
       if (p.throwIn && type !== ACT.LONG && type !== ACT.THROUGH) type = ACT.PASS;
       var rs = World.match.restart;
@@ -494,11 +510,13 @@
     },
 
     shootAt: function (p, goalZ, g, accuracy) {
+      if (this.fkLater(p, 'shootAt', arguments)) return;
       this.release(p, ACT.SHOOT);
       this.driveShot(p, goalZ, g, accuracy, 0);
     },
 
     kickTo: function (p, type, tx, tz, mate, accuracy) {
+      if (this.fkLater(p, 'kickTo', arguments)) return;
       this.release(p, type);
       this.lastTarget = mate;
       World.ball.spinY = 0;
@@ -835,6 +853,7 @@
     },
 
     oneTwo: function (p, ax, az) {
+      if (this.fkLater(p, 'oneTwo', arguments)) return null;
       var attack = NS.attack(p.team);
       this.kick(p, ACT.PASS, 0.6, ax, az, 1);
       var m = this.lastTarget;

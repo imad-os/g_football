@@ -335,6 +335,14 @@
         ball.dOwner = null;
         return -1;
       }
+      if (o && o.fkSpot) {
+        // a free kick set for a shot: the ball stays on its spot while he stands back and runs up (ball.dA / dR follow)
+        ball.pos.set(o.fkSpot.x, R, o.fkSpot.z);
+        ball.vel.set(0, 0, 0);
+        var fx = ball.pos.x - o.pos.x, fz = ball.pos.z - o.pos.z;
+        ball.dOwner = o; ball.dR = Math.sqrt(fx * fx + fz * fz); ball.dA = Math.atan2(fx, fz); ball.dV = 0; ball.dY = R;
+        return -1;
+      }
       if (o) {
         // ---- the dribble. Nothing is stuck to his foot: the ball keeps its own place round him (angle dA, distance
         // dR). Running, he pushes it ahead with a touch (dV), it rolls out and he catches it up, touch after touch, in

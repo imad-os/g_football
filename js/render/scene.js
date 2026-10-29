@@ -319,8 +319,27 @@
     netHit: function (side) { netT[side > 0 ? 1 : 0] = 1; },
     // a goal: the crowd on its feet for t seconds
     crowdCheer: function (t) { cheerT = t; },
-    // Smooth follow camera; called once per simulation step (also settles the nets).
-    followBall: function (dt, bx, bz, mode) {
+    // A free kick at goal: a third person view from behind the ball (bx, bz), facing the goal at gx; after the kick it
+    // stays where it is and follows the ball (lookBall). Called once per step in place of followBall.
+    fkView: function (dt, bx, bz, gx, lookBall) {
+      this.followBall(dt, bx, bz, 'WIDE', true);
+      var dx = gx - bx, dz = -bz, d = Math.sqrt(dx * dx + dz * dz) || 1, ux = dx / d, uz = dz / d, M = NS.M;
+      var k = Math.min(1, (lookBall ? 2 : 3.5) * dt);
+      if (!lookBall) {
+        // 5 m behind the ball and a little to the side, at about head height
+        camera.position.x += (bx - ux * 5 * M - uz * 0.8 * M - camera.position.x) * k;
+        camera.position.y += (2.3 * M - camera.position.y) * k;
+        camera.position.z += (bz - uz * 5 * M + ux * 0.8 * M - camera.position.z) * k;
+        lookTarget.x += (gx - lookTarget.x) * k; lookTarget.y += (1.1 * M - lookTarget.y) * k; lookTarget.z += (0 - lookTarget.z) * k;
+      } else {
+        var b = NS.World.ball.pos;
+        lookTarget.x += (b.x - lookTarget.x) * k; lookTarget.y += (b.y - lookTarget.y) * k; lookTarget.z += (b.z - lookTarget.z) * k;
+      }
+      camera.lookAt(lookTarget);
+    },
+    // Smooth follow camera; called once per simulation step (also settles the nets). netsOnly: only the nets / crowd
+    // (the free kick camera moves the camera itself)
+    followBall: function (dt, bx, bz, mode, netsOnly) {
       crowdStep(dt);
       for (var n = 0; n < 2; n++) {
         if (netT[n] <= 0 || !nets[n]) continue;
@@ -330,6 +349,7 @@
         nets[n].scale.set(1 + bulge, 1, 1);
         nets[n].position.x = sgn * (NS.PITCH_HALF_W + NS.GOAL_DEPTH * (1 + bulge) / 2);
       }
+      if (netsOnly) return;
       var cfg = CAM[mode] || CAM.WIDE;
       // near a goal the view swings on towards it, so the goal and the box stay on screen on every pitch size
       var HW = NS.PITCH_HALF_W, ax = Math.abs(bx), sg = bx < 0 ? -1 : 1;

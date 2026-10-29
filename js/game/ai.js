@@ -776,6 +776,17 @@
     Actions.shootAt(p, bz, g, 0.55 * prof.acc * (pressure < 2.5 ? 1.35 : 1));
   }
 
+  // A set free kick at goal: mostly a curler round or over the wall into a corner, sometimes a drive; the better his
+  // shooting, the more accurate (the run-up comes first: Actions.fkLater)
+  function fkShot(p, prof) {
+    var a = attackOf(p), bz = World.ball.pos.z;
+    var acc = prof.acc * clamp(1.5 - (p.st ? p.st.sht : 60) / 99, 0.55, 1.2);
+    var far = bz > 0 ? -1 : 1; // the far corner from the ball
+    var side = Math.random() < 0.65 ? far : -far;
+    if (Math.random() < 0.72) Actions.kick(p, ACT.CURVE, 0.62 + Math.random() * 0.25, 0, side * a * a, acc);
+    else Actions.shootAt(p, side * (GOAL_HALF_W - 0.9), Actions.gaugeFor(Math.abs(a * HALF_W - p.pos.x), 1.9), acc);
+  }
+
   // A penalty: corner and height chosen at random (low corners most of the time), struck after a short run-up wait.
   function penaltyShot(p, prof) {
     var side = Math.random() < 0.5 ? -1 : 1;
@@ -1080,6 +1091,13 @@
       // throw-in / corner / goal kick: he stands, looks up, then plays it
       p.vel.x = 0; p.vel.z = 0;
       p.aiT += dt;
+      if (p.fkPend) return; // running up to a free kick (js/game/match.js fkRun)
+      // a free kick in range of goal: not taken quickly, it is set (match.js fkSetup); once set, a curler or a drive
+      if (m.restart === 1 && m.fkQuick > 0 && m.fkShooting) { p.aiT = 0; return; }
+      if (m.restart === 1 && m.fkSet) {
+        if (p.aiT > 2.2) { p.aiT = 0; fkShot(p, prof); }
+        return;
+      }
       if (p.aiT > 1.1) {
         p.aiT = 0;
         // a free kick: the usual choice (a shot when it is on, else a pass); a kick-off and the others: a set play

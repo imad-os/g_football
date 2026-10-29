@@ -500,6 +500,8 @@
 
       // a penalty: nobody runs; the taker aims with the stick and shoots (the gauge sets height and pace)
       // a throw-in / corner / goal kick: the taker stands still, the stick aims the ball
+      if (p.fkPend) return; // a free kick's run-up (js/game/match.js fkRun moves him)
+      if (World.match.fkSet && p !== World.match.setTaker && p.role !== 'GK') { p.vel.x = 0; p.vel.z = 0; pad.burst = false; return; }
       if (World.match.penalty || (World.match.restart && has)) { p.vel.x = 0; p.vel.z = 0; pad.burst = false; return; }
 
       // ---- movement ----
