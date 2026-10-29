@@ -132,6 +132,7 @@
     slot.pressing = false;
     slot.teamPress = false;
     slot.keeper = false;
+    slot.blockCued = false;
   }
 
   // power 0..1 from the hold time for curve / chip shots (a tap is a soft one; full power with a full bar)
@@ -375,6 +376,17 @@
       var has = ball.owner === p;
 
       // ---- gesture engine ----
+      // a fake shot: a shot (shoot / curve / chip) being charged, then the pass button: the shot is off, he swings over
+      // the ball and steps it the way the stick points (Actions.fakeShot); the defenders who bit are left planted
+      if (rising && has && slot.evActive && slot.evCtx === 1 && slot.evSettle <= 0 && B.resolve(1, rising) === I_LOW) {
+        var fm0 = B.resolve(1, slot.evMask);
+        if (fm0 >= 0 && B.MOVES[fm0].kind === 1 && !World.match.restart && !World.match.penalty) {
+          Actions.fakeShot(p, pad.x, pad.y);
+          endEvent(slot);
+          rising = 0;
+          has = ball.owner === p;
+        }
+      }
       if (rising) {
         if (slot.evActive && slot.evSettle > 0) {
           slot.evMask |= held;
@@ -406,6 +418,11 @@
             mv = B.resolve(1, slot.evMask);
             slot.chargeMove = mv;
             slot.chargeFrac = mv >= 0 && slot.evT > 0.06 ? Math.min(1, slot.evT / fullCharge()) : -1;
+            // the shot is being shaped (the wind-up shows): the defenders near him throw a leg out (Actions.blockReact)
+            if (mv >= 0 && B.MOVES[mv].kind === 1 && slot.evT > 0.12 && !slot.blockCued && !World.match.restart) {
+              slot.blockCued = true;
+              Actions.blockReact(p);
+            }
             if (ended) {
               if (mv >= 0) fireAttack(slot, p, mv, slot.evT, pad);
               endEvent(slot);

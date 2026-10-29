@@ -24,6 +24,7 @@
   var SMOTHER_T = 0.7;        // a dive at the feet: seconds on the ground
   var SMOTHER_REACH = 2.1;    // ... reach of his hands and body (units) while it lasts
   var CLOSE_GAP = 4.5 * M;    // in a 1 v 1 he stays about this far in front of the man while closing him down
+  var JUMP_REACH = 2.6 * M;   // the highest he can get a hand to (arms up and a jump): a ball over it goes over him
 
   function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
   function rating(p) { return p.st ? p.st.def / 99 : 0.7; }
@@ -187,11 +188,26 @@
         var t = (lineX - ball.pos.x) / ball.vel.x;
         if (t > 0 && t < 2.4) {
           if (p.gkRT < prof.gkReact) { p.vel.x *= 0.85; p.vel.z *= 0.85; return; }
-          World.predict(t);
-          var cz = World.prZ, cy = World.prY;
-          // off his line: he meets the shot where he stands, not on the line behind him
+          // off his line: he meets the shot where he stands, not on the line behind him; unless it goes over his head
+          // (a chip, a looping ball): then he backpedals to his line and goes up for it there
           var meetX = Math.abs(p.pos.x - ownGoalX) > 1.8 ? p.pos.x : lineX;
+          if (meetX !== lineX) {
+            var tMe = (p.pos.x - ball.pos.x) / ball.vel.x;
+            if (tMe > 0) { World.predict(tMe); if (World.prY > JUMP_REACH) meetX = lineX; }
+          }
+          var tm = meetX === lineX ? t : Math.max(0.05, (meetX - ball.pos.x) / ball.vel.x);
+          World.predict(tm);
+          var cz = World.prZ, cy = World.prY;
+          t = tm;
           var need = Math.abs(cz - p.pos.z);
+          // a high ball near him: he jumps straight up for it, both hands over his head (a dive with no roll)
+          if (p.diveT <= 0 && p.diveCd <= 0 && need <= 1.3 && cy > 1.8 * M && cy < NS.GOAL_HEIGHT + 0.8 && t < 0.45) {
+            p.facing = Math.atan2(ball.pos.x - p.pos.x, ball.pos.z - p.pos.z);
+            p.vel.z = (cz - p.pos.z) * 2; p.vel.x = (meetX - p.pos.x) * 2;
+            p.diveT = 0.8; p.diveCd = 1.2; p.diveHigh = true; p.diveRoll = 0; p.spreadT = 0;
+            if (NS.dbg) NS.dbg('gk_jump', p.team);
+            return;
+          }
           if (p.diveT <= 0 && p.diveCd <= 0 && need > 1.3 && t < 0.6 && cy < NS.GOAL_HEIGHT + 0.8 &&
               Math.abs(cz) < GHW + 1.5) {
             var dir = cz > p.pos.z ? 1 : -1;

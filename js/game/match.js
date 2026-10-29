@@ -28,6 +28,8 @@
   var commAttack = [false, false];  // (the commentator's ATTACK: each team's attack said once)
   var R = NS.BALL_R;
   var PI = Math.PI;
+  var BLOCK_T = 0.55;      // a block (Actions.blockReact): seconds his leg is out
+  var BLOCK_REACH2 = 2.6;  // ... and how far it reaches (squared units, ~1 m): a standing player 1.35
 
   function ease(u) { return u < 0 ? 0 : (u > 1 ? 1 : u * u * (3 - 2 * u)); }
 
@@ -169,6 +171,14 @@
       b = Math.sin(clamp(u, 0, 1) * PI);
       roll = -0.35 * b * p.shoulderDir;
       if (p.shoulderDir > 0) outR = 0.02; else outL = 0.02;
+    } else if (p.blockT > 0) {
+      // a block: one leg stretched out sideways into the ball's way, the weight on the other, arms out for balance
+      u = 1 - p.blockT / BLOCK_T;
+      b = Math.sin(clamp(u * 2.2, 0, 1) * PI * 0.5) * (1 - ease((u - 0.8) / 0.2));
+      hipY = H0 - 0.24 * hs * b; lean = -0.08 * b; spread = 0.25 * b;
+      armL = armR = -0.55 * b; outL = outR = 0.08 + 0.35 * b;
+      if (p.blockSide > 0) { outR = 0.08 + 1.05 * b; legR = -0.3 * b; legL = 0.1 * b; kneeR = 0.05; kneeL = 0.65 * b; }
+      else { outL = 0.08 + 1.05 * b; legL = -0.3 * b; legR = 0.1 * b; kneeL = 0.05; kneeR = 0.65 * b; }
     } else if (p.lungeT > 0) {
       // standing tackle: lunge, front leg stretched to the ball
       u = 1 - p.lungeT / 0.36;
@@ -509,6 +519,7 @@
   function triggerGoal(team) {
     var m = World.match;
     var ball = World.ball;
+    if (m.so) { if (m.so.live) soResult(team === m.so.kt); return; } // a shoot-out kick: counted there, not in the score
     m.score[team]++;
     World.kickoffTeam = 1 - team;
     m.celebrationTimer = 4.6;
@@ -529,7 +540,7 @@
     say('GOAL', team);
     NS.HUD.setScore(m.score[0], m.score[1]);
     var who = k ? k.name : ball.lastToucher;
-    var mins = Math.min(90, Math.floor(m.timeSeconds / 60) + 1);
+    var mins = Math.min(m.half > 2 ? 120 : 90, Math.floor(m.timeSeconds / 60) + 1);
     if (NS.dbg) NS.dbg('goal', team, { own: own, who: who, mins: mins, k: k });
     if (NS.Stats) {
       var g = NS.Stats.goal(team, who, mins, own, !!ball.pen);
@@ -551,6 +562,102 @@
     }
   }
 
+  var HALF_END = [0, 45, 90, 105, 120]; // the minute each half ends (3, 4: extra time)
+
+  // the break into the next half (half time, the start of extra time, extra time's half time): ends change, kick-off
+  function halfBreak(key) {
+    var m = World.match;
+    m.half++;
+    m.dir[0] = -m.dir[0]; m.dir[1] = -m.dir[1];
+    swapHomes();
+    World.kickoffTeam = m.half === 3 ? m.firstKick : 1 - m.firstKick;
+    m.celebrationTimer = 3.4;
+    breakKind = 2;
+    breakClock = 0;
+    scorer = null;
+    setMoods(2, -1);
+    NS.Audio.whistle(1);
+    NS.HUD.banner(NS.I18n.t(key), m.score[0] + ' - ' + m.score[1], 0);
+    if (m.half === 2) say('HALFTIME', 0);
+  }
+
+  /* ---- penalty shoot-out: a cup knockout still level after extra time. 5 kicks each, the teams in turn, then sudden
+   * death; every kick at the same goal, the clock stands, nobody else moves. A kick is a goal if it goes in from the
+   * kick or off the keeper (no rebounds: everybody stays put); saved, held, wide, or not in after 4 s: missed.
+   * m.so: { kt: team kicking, n: [kicks], g: [goals], order: [[takers], [takers]], res: [[true / false]], live: the
+   *         kick is on its way, armed: set up, t: seconds since it was struck, wait: the pause before the next } */
+  function soTakers(team) {
+    var l = [], gk = null, players = World.players;
+    for (var i = 0; i < players.length; i++) {
+      var p = players[i];
+      if (p.team !== team) continue;
+      if (p.role === 'GK') gk = p; else l.push(p);
+    }
+    l.sort(function (x, y) { return (y.st ? y.st.sht : 0) - (x.st ? x.st.sht : 0); }); // the best shooters first
+    if (gk) l.push(gk); // the keeper last
+    return l;
+  }
+  function startShootout() {
+    var m = World.match;
+    m.so = { kt: m.firstKick, n: [0, 0], g: [0, 0], order: [soTakers(0), soTakers(1)], res: [[], []], live: false, armed: false,
+      t: 0, wait: 2.6, kicker: null };
+    stopPlay();
+    World.ball.vel.set(0, 0, 0);
+    setMoods(2, -1);
+    NS.Audio.whistle(2);
+    NS.HUD.banner(NS.I18n.t('hud.shootout'), m.score[0] + ' - ' + m.score[1], 2.4);
+    if (NS.dbg) NS.dbg('shootout_start', 0);
+  }
+  function soKick() {
+    var m = World.match, S = m.so, t = S.kt;
+    m.dir[t] = 1; m.dir[1 - t] = -1; // every kick at the same goal
+    var ord = S.order[t];
+    m.setPiece = 2;
+    m.setTeam = t;
+    m.setTaker = ord[S.n[t] % ord.length];
+    m.setX = HALF_W - NS.PEN_D; m.setZ = 0;
+    m.setPieceTimer = 0.9;
+    stopPlay();
+    World.ball.vel.set(0, 0, 0);
+    S.armed = true; S.live = false; S.t = 0;
+  }
+  function soOver() {
+    var S = World.match.so, a = S.g[0], b = S.g[1], na = S.n[0], nb = S.n[1];
+    if (na <= 5 && nb <= 5) {
+      if (a > b + (5 - nb) || b > a + (5 - na)) return true; // one of them can no longer be caught
+      return na === 5 && nb === 5 && a !== b;
+    }
+    return na === nb && a !== b; // sudden death: after each pair
+  }
+  function soMarks(r) { var s = ''; for (var i = 0; i < r.length; i++) s += r[i] ? '\u25cf' : '\u25cb'; return s; }
+  function soResult(goal) {
+    var m = World.match, S = m.so, t = S.kt;
+    S.live = false;
+    S.res[t].push(goal);
+    S.n[t]++;
+    if (goal) { S.g[t]++; NS.Audio.goal(); NS.Scene.crowdCheer(2); } else NS.Audio.ooh();
+    S.kt = 1 - t;
+    S.wait = 1.8;
+    NS.HUD.banner(NS.I18n.t('hud.shootout') + '  ' + S.g[0] + ' - ' + S.g[1], soMarks(S.res[0]) + '   |   ' + soMarks(S.res[1]), 1.7);
+    if (NS.dbg) NS.dbg(goal ? 'shootout_goal' : 'shootout_miss', t);
+  }
+  function soStep(dt) {
+    var m = World.match, S = m.so, ball = World.ball;
+    if (S.wait > 0) {
+      S.wait -= dt;
+      if (S.wait <= 0) {
+        if (soOver()) { m.pens = S.g.slice(); m.so = null; finish(); }
+        else soKick();
+      }
+      return;
+    }
+    if (S.armed && !m.penalty && m.setPiece === 0 && ball.owner !== m.setTaker) { S.armed = false; S.live = true; S.t = 0; S.kicker = m.setTaker; }
+    if (!S.live) return;
+    S.t += dt;
+    var bs = Math.sqrt(ball.vel.x * ball.vel.x + ball.vel.z * ball.vel.z);
+    if (ball.owner || S.t > 4 || (S.t > 0.8 && bs < 0.5)) soResult(false); // held, dead or stopped: missed
+  }
+
   function finish() {
     var m = World.match;
     m.fullTimeTimer = 5.0;
@@ -561,7 +668,8 @@
     NS.Audio.whistle(2);
     say('FULLTIME', 0);
     if (m.score[0] !== m.score[1]) say(m.score[0] > m.score[1] ? 'HOMEWIN' : 'AWAYWIN', m.score[0] > m.score[1] ? 0 : 1);
-    NS.HUD.banner(NS.I18n.t('hud.fulltime'), m.score[0] + ' - ' + m.score[1], 0);
+    NS.HUD.banner(NS.I18n.t('hud.fulltime'), m.score[0] + ' - ' + m.score[1] +
+      (m.pens ? '  (' + m.pens[0] + ' - ' + m.pens[1] + ' ' + NS.I18n.t('comp.pens') + ')' : ''), 0);
     if (NS.Aima) NS.Aima.matchEnd(true);
     if (World.slots[0].active) {
       var mt = World.slots[0].team;
@@ -818,6 +926,7 @@
   function onOut(code) {
     var m = World.match;
     var ball = World.ball;
+    if (m.so) { if (m.so.live) soResult(false); return; } // a shoot-out kick wide / over: missed
     if (m.setPieceTimer > 0 || breakKind) return;
     var last = ball.lastTouchTeam;
     stopPlay();
@@ -997,12 +1106,19 @@
       bz = 0;
       var best = null;
       for (i = 0; i < players.length; i++) { p = players[i]; if (p.team === t && p.role === 'FWD') { best = p; break; } }
-      taker = best || taker;
+      taker = m.so ? m.setTaker : (best || taker); // (a shoot-out: its order of takers)
       var k = 0;
       for (i = 0; i < players.length; i++) {
         p = players[i];
         if (p === taker) continue;
         if (p.role === 'GK' && p.team !== t) { p.pos.set(goalX - a * 0.6, 0, 0); p.facing = a > 0 ? -Math.PI / 2 : Math.PI / 2; continue; }
+        if (m.so) { // a shoot-out: everybody else waits in the centre circle
+          var ang = (k + p.team * 0.5) * 0.55;
+          p.pos.set(Math.cos(ang) * 4 * NS.M, 0, Math.sin(ang) * 4 * NS.M);
+          p.facing = a > 0 ? Math.PI / 2 : -Math.PI / 2;
+          k++;
+          continue;
+        }
         if (p.role === 'GK') continue;
         p.pos.set(goalX - a * (NS.BOX_D + 3 + (k % 3) * 1.5), 0, -14 + (k * 2.6) % 28);
         k++;
@@ -1160,6 +1276,7 @@
             gkHands: false, diveCd: 0, diveHigh: false, mood: 0, celX: 0, celZ: 0, slid: false,
             fouls: 0, card: 0,
             throwIn: false, throwT: 0, shoulderT: 0, shoulderDir: 1, shCd: 0, offside: false, bumpT: 0, bumpK: 1,
+            blockT: 0, blockCd: 0, blockSide: 1,
             mark: null, icX: 0, icZ: 0, drX: 0, drZ: 0, runT: 0, runCd: 0, runX: 0, runZ: 0,
             aiT: 0, tgtX: 0, tgtZ: 0, tgtS: 8, gkRT: 0,
             st: null, mSpd: 1, drain: 1,
@@ -1180,7 +1297,7 @@
       ref = {
         mesh: rm, pos: rm.root.position, vel: new THREE.Vector3(), facing: 0, index: 0, animPhase: 0, mood: 0, stun: 0,
         kickT: 0, kickHard: false, lungeT: 0, slideT: 0, fallT: 0, diveT: 0, diveRoll: 0, diveHigh: false, headT: 0, catchT: 0, ftT: 0,
-        gkHands: false, throwIn: false, throwT: 0, shoulderT: 0, shoulderDir: 1
+        gkHands: false, throwIn: false, throwT: 0, shoulderT: 0, shoulderDir: 1, blockT: 0, blockSide: 1
       };
     },
 
@@ -1212,7 +1329,7 @@
         p.facing = NS.attack(p.team) * Math.PI / 2;
         p.stun = 0; p.tackleT = 0; p.tackleCd = 0; p.runToT = 0; p.returnTo = null; p.dribbling = false;
         p.kickT = 0; p.lungeT = 0; p.slideT = 0; p.fallT = 0; p.diveT = 0; p.headT = 0; p.catchT = 0; p.gkHands = false;
-        p.smotherT = 0; p.spreadT = 0; p.oneT = 0;
+        p.smotherT = 0; p.spreadT = 0; p.oneT = 0; p.blockT = 0; p.blockCd = 0;
         p.mood = 0; p.slid = false; p.throwIn = false; p.throwT = 0; p.shoulderT = 0; p.offside = false; p.bumpT = 0;
         animate(p, 0);
         p.mark = null; p.drX = 0; p.drZ = 0; p.runT = 0; p.runCd = 0; p.aiT = 0; p.gkRT = 0; p.stamina = Math.min(100, p.stamina + 30); p.gkHold = 0;
@@ -1275,6 +1392,7 @@
       m.score[0] = 0; m.score[1] = 0;
       m.timeSeconds = 0;
       m.half = 1;
+      m.so = null; m.pens = null;
       m.extra = 0;
       m.warned[0] = false; m.warned[1] = false;
       m.firstKick = Math.random() < 0.5 ? 0 : 1;
@@ -1319,7 +1437,7 @@
       if (NS.Aima && finished !== true) NS.Aima.matchEnd(false);
       if (NS.Replay && NS.Replay.active()) NS.Replay.stop();
       var inComp = NS.Comp && NS.Comp.active();
-      if (inComp && finished === true) NS.Comp.recordUserMatch(m.score[0], m.score[1]);
+      if (inComp && finished === true) NS.Comp.recordUserMatch(m.score[0], m.score[1], m.pens ? m.pens[0] : -1, m.pens ? m.pens[1] : -1);
       if (finished === true) NS.UI.show('RESULT');
       else NS.UI.show(inComp ? 'COMPHUB' : 'MAIN');
     },
@@ -1415,29 +1533,24 @@
       }
 
       // ----- clock -----
-      if (!m.restart && !(m.penalty && ball.owner === m.setTaker)) m.timeSeconds += dt * (90 / settings.durationMins);
+      if (m.so) { soStep(dt); if (!m.so) return; } // a shoot-out: the clock stands (over: full time is on)
+      else if (!m.restart && !(m.penalty && ball.owner === m.setTaker)) m.timeSeconds += dt * (90 / settings.durationMins);
       var mins = Math.floor(m.timeSeconds / 60);
       var whole = Math.floor(m.timeSeconds);
       if (whole !== lastSecond) { lastSecond = whole; NS.HUD.setClock(mins, whole % 60); }
-      var over = mins >= (m.half === 1 ? 45 : 90);
+      // halves end at 45 and 90; a cup knockout still level at 90: extra time, 2 x 15 (105, 120), then penalties
+      var over = !m.so && mins >= HALF_END[m.half];
       if (over && attackOn() && m.extra < EXTRA_MAX) { m.extra += dt; over = false; }
       if (over) m.extra = 0;
-      if (over && m.half === 2) { finish(); return; }
-      if (over && m.half === 1) {
-        m.half = 2;
-        m.dir[0] = -m.dir[0]; m.dir[1] = -m.dir[1];
-        swapHomes();
-        World.kickoffTeam = 1 - m.firstKick;
-        m.celebrationTimer = 3.4;
-        breakKind = 2;
-        breakClock = 0;
-        scorer = null;
-        setMoods(2, -1);
-        NS.Audio.whistle(1);
-        NS.HUD.banner(NS.I18n.t('hud.halftime'), m.score[0] + ' - ' + m.score[1], 0);
-        say('HALFTIME', 0);
+      if (over && (m.half === 2 || m.half === 4)) {
+        if (m.score[0] === m.score[1] && NS.Comp && NS.Comp.active() && NS.Comp.knockout()) {
+          if (m.half === 2) halfBreak('hud.extratime'); else startShootout();
+          return;
+        }
+        finish();
         return;
       }
+      if (over && (m.half === 1 || m.half === 3)) { halfBreak(m.half === 1 ? 'hud.halftime' : 'hud.ethalf'); return; }
 
       // ----- timers, distances, ranks -----
       for (i = 0; i < n; i++) {
@@ -1445,6 +1558,8 @@
         if (p.stun > 0) p.stun -= dt;
         if (p.tackleCd > 0) p.tackleCd -= dt;
         if (p.diveCd > 0) p.diveCd -= dt;
+        if (p.blockT > 0) p.blockT -= dt;
+        if (p.blockCd > 0) p.blockCd -= dt;
         var dx = p.pos.x - ball.pos.x;
         var dz = p.pos.z - ball.pos.z;
         p.dBall = dx * dx + dz * dz;
@@ -1505,7 +1620,11 @@
         } else if (p.stun > 0) {
           p.vel.x *= stunDrag;
           p.vel.z *= stunDrag;
-        } else if (m.penalty && p !== ball.owner && p.role !== 'GK') {
+        } else if (p.blockT > 0 && !p.isCtl) {
+          // a block (Actions.blockReact): planted, his leg out in the ball's way, until he gets his balance back
+          p.vel.x *= stunDrag;
+          p.vel.z *= stunDrag;
+        } else if ((m.penalty || m.so) && p !== ball.owner && p.role !== 'GK') {
           p.vel.x = 0; p.vel.z = 0;
         } else if (!p.isCtl) {
           AI.step(p, dt, p.rank, prof, World.pressT[p.team] > 0);
@@ -1593,7 +1712,8 @@
             var gkReach = p.diveT > 0 ? 7.3 : 3.8;
             var rv = -(ddx * ball.vel.x + ddz * ball.vel.z);
             var passing = d2 < 2.2 || rv <= bs2 * dt * 1.5;
-            if (d2 < gkReach && passing && ball.pos.y < (p.diveT > 0 ? 3.8 : 3.3) && !(ball.gkTried & (1 << p.team)) && ball.gkCd <= 0) {
+            // how high his hands get: a dive or a jump reaches the top corner (2.7 m), standing with arms up 2.25 m
+            if (d2 < gkReach && passing && ball.pos.y < (p.diveT > 0 ? 2.7 * NS.M : 2.25 * NS.M) && !(ball.gkTried & (1 << p.team)) && ball.gkCd <= 0) {
               ball.gkTried |= 1 << p.team;
               ball.gkCd = 0.28;
               gkActed = true;
@@ -1652,6 +1772,10 @@
               takerD = d2;
               taker = p;
             }
+          } else if (p.blockT > 0 && p.team !== ball.lastTouchTeam && ball.pos.y < 1.2 && d2 < Math.max(takerD, BLOCK_REACH2)) {
+            // a blocking leg reaches further than a standing player (about 1 m): the shot / pass hits it
+            takerD = d2;
+            taker = p;
           } else if ((ball.pickupCooldown <= 0 || p === ball.receiver) && (ball.pos.y < (p === ball.receiver ? 2.3 : 1.9) ? d2 < takerD :
               (ball.pos.y < 2.6 && d2 < Math.min(takerD, 0.6)))) {
             takerD = d2;

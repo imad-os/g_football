@@ -156,6 +156,40 @@
       NS.Audio.kick(false);
     },
 
+    // A fake shot (a shot being charged, then the pass button): he swings over the ball without touching it, and with
+    // the stick held he steps it about a metre that way (past a defender who bit), then plays on. (ax, az): the stick
+    fakeShot: function (p, ax, az) {
+      if (ax * ax + az * az > 0.09) {
+        this.knockOn(p, ax, az);
+        var ball = World.ball, sp = Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z) + 3.5;
+        var bl = Math.sqrt(ball.vel.x * ball.vel.x + ball.vel.z * ball.vel.z) || 1;
+        ball.vel.x *= sp / bl; ball.vel.z *= sp / bl; ball.vel.y = 0; // a step, not a push into space
+      }
+      p.kickT = 0.24; p.kickHard = true; // the swing over the ball
+      if (NS.dbg) NS.dbg('fake_shot', p.team);
+    },
+
+    // A shot is being shaped (a human charging it): the CPU defenders close to the shooter and goal-side of him throw a
+    // leg out to block it (a passive move: they stand, leg out, for BLOCK_T; it reaches ~1 m, js/game/match.js). A real
+    // shot then hits them more often; a fake leaves them planted while the attacker goes past. A human's team-mates do
+    // not (they only press, see ai.js humanMate).
+    blockReact: function (p) {
+      var players = World.players, attack = NS.attack(p.team), M = NS.M, s = World.slots;
+      for (var i = 0; i < players.length; i++) {
+        var o = players[i];
+        if (o.team === p.team || o.role === 'GK' || o.isCtl || o.stun > 0 || o.tackleT > 0 || o.blockCd > 0) continue;
+        if ((s[0].active && s[0].team === o.team) || (s[1].active && s[1].team === o.team)) continue;
+        var dx = o.pos.x - p.pos.x, dz = o.pos.z - p.pos.z;
+        if (dx * dx + dz * dz > 6 * M * 6 * M || dx * attack < -0.5 * M) continue; // close, and between him and the goal
+        if (Math.random() > 0.45 + 0.4 * (o.st ? o.st.def / 99 : 0.6)) continue;   // a good defender bites less late
+        o.blockT = 0.55; o.blockCd = 1.3;
+        o.blockSide = (dz * Math.cos(o.facing) - dx * Math.sin(o.facing)) > 0 ? -1 : 1;
+        o.facing = Math.atan2(-dx, -dz);
+        o.vel.x *= 0.3; o.vel.z *= 0.3;
+        if (NS.dbg) NS.dbg('block_leg', o.team);
+      }
+    },
+
     // type: ACT.PASS | THROUGH | LONG | SHOOT, power 0..1, (ax, az) aim input.
     // The ball leaves the player's foot (shared by every kick).
     release: function (p, type) {
@@ -704,7 +738,7 @@
       ball.headed = true;
       p.kickT = 0;
       p.headT = 0.55;
-      var tx, tz, speed, mate = null, ty = R0;
+      var tx, tz, speed, mate = null, ty = R0, thru = false;
       if (shot) {
         var aimed = az > 0.1 || az < -0.1;
         tx = attack * (HALF_W + 1);
@@ -712,7 +746,12 @@
         ty = 0.85; // downwards header towards the turf/low corner
       } else {
         mate = this.pickTarget(p, ax, az, type === ACT.PASS ? ACT.PASS : ACT.THROUGH);
-        if (mate) {
+        if (mate && type === ACT.THROUGH) {
+          // a headed through ball: flicked on into the space ahead of the runner (the same spot a kicked one goes to),
+          // and he runs on to it (ball.thru), as for a kicked through ball
+          var ts = this.throughSpot(p, mate, ax, az, -1);
+          tx = ts[0]; tz = ts[1]; thru = true;
+        } else if (mate) {
           tx = mate.pos.x + mate.vel.x * 0.5;
           tz = mate.pos.z + mate.vel.z * 0.5;
         } else {
@@ -733,7 +772,8 @@
       var T = d / speed;
       ball.vel.set(Math.sin(angle) * speed, (ty - y0) / T + 0.5 * G * T, Math.cos(angle) * speed);
       ball.spinY = 0;
-      if (mate) { ball.receiver = mate; ball.thru = false; mate.runToT = 0; }
+      if (mate) { ball.receiver = mate; ball.thru = thru; mate.runToT = 0; }
+      ball.thruX = tx; ball.thruZ = tz;
       this.pickContester(p.team);
       this.lastTarget = mate;
     },

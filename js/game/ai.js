@@ -745,7 +745,14 @@
     var gkZ = gk ? gk.pos.z : 0;
     var gkOff = gk ? Math.abs(gk.pos.x - goalX) : 0;
 
-    if (gk && gkOff > 5 && dist < 30 && Math.random() < 0.7) { Actions.kick(p, ACT.CHIP, 0.6, 0, gkZ > 0 ? -0.5 : 0.5, 0.4); return; }
+    // a chip is rare, as in real football: only over a keeper who has come well off his line (5 m+) and is close to
+    // the shooter (3-10 m: he can't get back), a third of those times. (Was: any keeper 3 m off his line, 70%:
+    // a chip on most shots near the box, a sixth of all goals.)
+    var M = NS.M, gkd = gk ? Math.sqrt((gk.pos.x - p.pos.x) * (gk.pos.x - p.pos.x) + (gk.pos.z - p.pos.z) * (gk.pos.z - p.pos.z)) : 99;
+    if (gk && gkOff > 5 * M && gkd > 3 * M && gkd < 10 * M && dist < 25 * M && Math.random() < 0.33) {
+      Actions.kick(p, ACT.CHIP, 0.6, 0, gkZ > 0 ? -0.5 : 0.5, 0.4);
+      return;
+    }
     if (Math.abs(p.pos.z) > 8 && dist < 28 && Math.random() < 0.3) {
       Actions.kick(p, ACT.CURVE, clamp(0.45 + dist / 60, 0.45, 0.9), 0, p.pos.z > 0 ? 1 : -1, 0.4);
       return;
@@ -1307,6 +1314,15 @@
 
   /* ------------------------------------------------------------------ defence */
 
+  // RULE: on a team a human plays, only the player he controls makes ball actions. His unselected team-mates (the
+  // keeper excepted) may NOT tackle, slide tackle, pass or shoot on their own: off the ball they only move, mark and
+  // press shoulder to shoulder (Actions.shoulder). Every tackle / kick of the CPU code below checks humanMate() first.
+  function humanMate(p) {
+    if (p.role === 'GK' || p.isCtl) return false;
+    var s = World.slots;
+    return (s[0].active && s[0].team === p.team) || (s[1].active && s[1].team === p.team);
+  }
+
   function defend(p, T, prof, dt, pressing) {
     var ball = World.ball;
     var c = ball.owner;
@@ -1340,7 +1356,7 @@
         var lat2 = (-cdx * rx - cdz * rz) >= 0 ? 1 : -1;
         moveToward(p, c.pos.x + c.vel.x * 0.3 + rx * lat2 * 1.1, c.pos.z + c.vel.z * 0.3 + rz * lat2 * 1.1, 11.6 * prof.speedMul, dt);
         // a slide from the side when he is level
-        if (d < 2.4 && side > -0.5 && p.tackleCd <= 0 && Math.random() < prof.tackleRate * 0.3 * dt) Actions.startTackle(p, c, false, true);
+        if (d < 2.4 && side > -0.5 && p.tackleCd <= 0 && !humanMate(p) && Math.random() < prof.tackleRate * 0.3 * dt) Actions.startTackle(p, c, false, true);
         return;
       }
       if (side < -0.3 && d < 4.5) {
@@ -1357,7 +1373,7 @@
         moveToward(p, c.pos.x + gx * 7.5, c.pos.z + gz * 7.5, 9 * prof.speedMul, dt);
         return;
       }
-      if (d < 2.0 && p.tackleCd <= 0 && side > -0.45 && !c.gkHands) {
+      if (d < 2.0 && p.tackleCd <= 0 && side > -0.45 && !c.gkHands && !humanMate(p)) { // (a human's team-mate: no tackle, see humanMate)
         // carrier running at us (facing our goal) is easier to time than one shielding the ball
         var facing = Math.sin(c.facing) * gx + Math.cos(c.facing) * gz;
         var rate = prof.tackleRate * (0.8 + 0.5 * Math.max(0, facing)) * (c.dribbling ? 0.8 : 1.15);
@@ -1592,7 +1608,13 @@
     step: function (p, dt, rank, prof, pressing) {
       var ball = World.ball;
       if (p.role === 'GK') { aiGoalkeeper(p, dt, prof); return; }
-      if (ball.owner === p) { aiCarrier(p, dt, prof); return; }
+      if (ball.owner === p) {
+        // a human's unselected team-mate with the ball (only for a moment, the control switches to him): he shields it,
+        // never passes or shoots by himself (see humanMate). A dead ball he must take is still played (restart rules)
+        if (humanMate(p) && !((World.match.restart || World.match.penalty) && p === World.match.setTaker)) { p.vel.x *= 0.7; p.vel.z *= 0.7; p.dribbling = true; return; }
+        aiCarrier(p, dt, prof);
+        return;
+      }
       if (World.match.restart === 4) {
         // a corner: everybody holds his place in the box until it is struck
         p.vel.x *= 0.8; p.vel.z *= 0.8;

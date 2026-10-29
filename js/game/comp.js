@@ -114,10 +114,11 @@
     return r;
   }
 
-  function settle(m, ga, gb) {
+  // pa / pb: the player's own shoot-out (played in the match); else a level CPU match is settled by a simulated one
+  function settle(m, ga, gb, pa, pb) {
     m.ga = ga; m.gb = gb;
     if (ga !== gb) { m.w = ga > gb ? m.a : m.b; return; }
-    var p = shootout(m.a, m.b);
+    var p = pa >= 0 && pb >= 0 && pa !== pb ? [pa, pb] : shootout(m.a, m.b);
     m.pa = p[0]; m.pb = p[1];
     m.w = p[0] > p[1] ? m.a : m.b;
   }
@@ -242,7 +243,8 @@
     },
 
     // The player's match ended gF - gA (full time). Plays the rest of the round, moves the competition on.
-    recordUserMatch: function (gF, gA) {
+    // pF / pA: the shoot-out's penalties when it went to one (else -1)
+    recordUserMatch: function (gF, gA, pF, pA) {
       if (!state || state.done) return;
       var nm = this.nextMatch();
       if (!nm) return;
@@ -279,7 +281,7 @@
         var cur = state.ko[state.ko.length - 1];
         for (i = 0; i < cur.length; i++) {
           m = cur[i];
-          if (m.a === nm.home && m.b === nm.away) settle(m, gh, ga);
+          if (m.a === nm.home && m.b === nm.away) settle(m, gh, ga, userHome ? pF : pA, userHome ? pA : pF);
           else { sc = simScore(m.a, m.b); settle(m, sc[0], sc[1]); }
           last.push(resultLine(m.a, m.b, m.ga, m.gb, m.pa, m.pb));
         }
@@ -304,6 +306,12 @@
         state.msg = T('comp.over');
       }
       save();
+    },
+
+    // the player's next match is a knockout one (a draw goes to extra time and penalties, js/game/match.js)
+    knockout: function () {
+      if (!state || state.done || !this.nextMatch()) return false;
+      return !(state.type === 'LEAGUE' || (state.type === 'WORLDCUP' && state.stage === 'G'));
     },
 
     state: function () { return state; },

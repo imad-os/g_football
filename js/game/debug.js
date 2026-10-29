@@ -37,7 +37,7 @@
     ticker.postMessage([tickSeq, ms]);
   }
 
-  function minute() { return Math.min(90, Math.floor(World.match.timeSeconds / 60) + 1); }
+  function minute() { return Math.min(World.match.half > 2 ? 120 : 90, Math.floor(World.match.timeSeconds / 60) + 1); }
   function add(key, team, n) {
     var c = run.C[key];
     if (!c) { c = run.C[key] = [0, 0]; run.order.push(key); }
@@ -105,7 +105,7 @@
       var r = orig.release.apply(this, arguments);
       if (type >= ACT.SHOOT) {
         var dx = goalX(t) - p.pos.x, dz = p.pos.z;
-        var d = Math.sqrt(dx * dx + dz * dz);
+        var d = Math.sqrt(dx * dx + dz * dz) / NS.M; // metres (the game's units are NS.M a metre)
         var b = bucket(d);
         add('shots', t);
         add('shots_' + b, t);
@@ -326,7 +326,7 @@
     run.res.push([g0, g1]);
     add('matches_won', 0, g0 > g1 ? 1 : 0); add('matches_won', 1, g1 > g0 ? 1 : 0);
     add('matches_drawn', 0, g0 === g1 ? 1 : 0); add('matches_drawn', 1, g0 === g1 ? 1 : 0);
-    var line = '#' + c.n + ' ' + c.names[0] + ' ' + g0 + '-' + g1 + ' ' + c.names[1];
+    var line = '#' + c.n + ' ' + c.names[0] + ' ' + g0 + '-' + g1 + ' ' + c.names[1] + (m.pens ? ' (pens ' + m.pens[0] + '-' + m.pens[1] + ')' : '');
     if (c.goals.length) line += ' | goals: ' + c.goals.join(', ');
     if (c.cards.length) line += ' | cards: ' + c.cards.join(', ');
     if (c.anoms.length) line += ' | ISSUES: ' + c.anoms.join('; ');
