@@ -80,6 +80,7 @@
       fwdPass: 0, tackles: 0, won: 0, lost: 0, fouls: 0, pressN: 0, pressSame: 0, pressOdds: 0, claps: 0, clapSum: 0, punish: 0, reward: 0, decisions: 0, modelDec: 0,
       rl: 0, im: 0, humanSamples: 0, cpuSamples: 0, carryT: 0, sprintT: 0, playT: 0, xSum: 0, xN: 0, trainMatches: 0,
       lessons: 0, // lessons kept (claps, punishments, the trainer's moves)
+      optPick: [0, 0, 0, 0, 0, 0, 0, 0, 0], optSame: 0, // OPT: its choices per kind of option, and how many were Legend's
       opsP: 0, opsL: 0, opsT: 0, // arithmetic operations, and the seconds of play they were counted over: playing (its decisions) and learning (the same count on every device)
       btn: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], hist: []
     };
@@ -89,9 +90,14 @@
 
   function newId() { return Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36); }
 
-  function Brain(id, name, size) {
+  // algo: 'AC' (AIMA-AC 1.2: the stick-and-buttons network below, every outfield player) or 'OPT' (AIMA-OPT 2.0,
+  // js/game/aimaopt.js: the ball carrier chooses among Legend's options). A brain keeps the algorithm it was made with.
+  var ALGOS = { AC: ALG, OPT: 'AIMA-OPT 2.0 (Legend options + learned correction)' };
+  function Brain(id, name, size, algo) {
     this.id = id;
     this.name = name;
+    this.algo = algo === 'OPT' ? 'OPT' : 'AC';
+    if (this.algo === 'OPT' && NS.AimaOpt) this.opt = NS.AimaOpt.create();
     this.created = Date.now();
     this.saved = 0;
     this.parent = '';
@@ -839,7 +845,7 @@
   // own: the result of his own move (in a Legend spell only those still reach his last decisions). why: a W_ reason
   function addReward(team, r, own, p, why) {
     var s = World.aiSlots[team];
-    if (!s || !s.active || !s.brain) return;
+    if (!s || !s.active || !s.brain || s.brain.algo === 'OPT') return;
     s.brain.st.reward += r;
     matchReward[team] += r;
     if (why !== undefined) tally(team, why, r);
@@ -1085,7 +1091,8 @@
         else { kx = p.vel.x; kz = p.vel.z; }
       }
       var pw = type >= ACT.SHOOT ? (bsp < 18 ? 0 : (bsp < 25 ? 1 : 2)) : (bsp < 13 ? 0 : (bsp < 20 ? 1 : 2));
-      copyMove(sc, p, KICK_MOVE[type], pw, 1.4, kickXs, kx, kz, preSp);
+      // (a long through pass, lofted over the line: its own move since v1.51)
+      copyMove(sc, p, type === ACT.THROUGH && Actions.lob ? B.index('lobthrough') : KICK_MOVE[type], pw, 1.4, kickXs, kx, kz, preSp);
       sc.c.tBtn = 1;
     }
     if (!World.match.running) return;
@@ -1392,12 +1399,14 @@
   }
 
   function toDoc(b) {
-    return { v: 2, alg: ALG, id: b.id, name: b.name, created: b.created, saved: b.saved, parent: b.parent, from: b.from,
-      cfg: b.cfg, st: b.st, hist: b.hist, data: b.data, m: packWeights(b), les: packLessons(b) };
+    return { v: 2, alg: ALGOS[b.algo], algo: b.algo, id: b.id, name: b.name, created: b.created, saved: b.saved, parent: b.parent,
+      from: b.from, cfg: b.cfg, st: b.st, hist: b.hist, data: b.data, m: packWeights(b), les: packLessons(b),
+      opt: b.algo === 'OPT' && NS.AimaOpt ? NS.AimaOpt.pack(b) : undefined };
   }
   function fromDoc(d) {
     if (!d || d.v !== 2 || !d.m) return null;
-    var b = new Brain(d.id, d.name || 'checkoAI', (d.cfg && d.cfg.size) || 'MEDIUM');
+    var b = new Brain(d.id, d.name || 'checkoAI', (d.cfg && d.cfg.size) || 'MEDIUM', d.algo);
+    if (b.algo === 'OPT' && NS.AimaOpt) NS.AimaOpt.unpack(b, d.opt);
     if (!unpackWeights(b, d.m)) return null;
     b.created = d.created || Date.now(); b.saved = d.saved || 0; b.parent = d.parent || ''; b.from = d.from || 'save';
     var k;
@@ -1412,7 +1421,7 @@
     return b;
   }
   function entry(b) {
-    return { id: b.id, name: b.name, size: b.cfg.size, matches: b.st.matches, updated: b.saved || b.created, parent: b.parent };
+    return { id: b.id, name: b.name, size: b.cfg.size, algo: b.algo, matches: b.st.matches, updated: b.saved || b.created, parent: b.parent };
   }
   function syncEntry(b) {
     for (var i = 0; i < index.brains.length; i++) if (index.brains[i].id === b.id) { index.brains[i] = entry(b); return; }
@@ -1498,7 +1507,7 @@
 
   // saves one brain (cloud) and the list; the active brain also goes to My PC's save when small enough (works offline)
   function saveBrain(b) {
-    if (!trainer || !b) return;
+    if (!trainer || !b || b.temp) return;
     b.saved = Date.now();
     b.dirty = false;
     syncEntry(b);
@@ -1509,7 +1518,8 @@
   }
   function saveIndex() {
     if (!trainer) return;
-    cloudPut('index', { v: 2, brains: index.brains, active: index.active, updated: Date.now() });
+    var keepB = index.brains.filter(function (e) { return !(loaded[e.id] && loaded[e.id].temp); }); // (never the stand-in)
+    cloudPut('index', { v: 2, brains: keepB, active: index.active, updated: Date.now() });
     saveSelected();
     lastSave = performance.now();
   }
@@ -1525,9 +1535,9 @@
     });
   }
 
-  function newBrain(name) {
-    var b = new Brain(newId(), name, 'MEDIUM'); // a new brain: the default settings
-    b.log('created');
+  function newBrain(name, algo) {
+    var b = new Brain(newId(), name, algo === 'OPT' ? 'TINY' : 'MEDIUM', algo); // a new brain: the default settings
+    b.log('created', { algo: b.algo });
     loaded[b.id] = b;
     syncEntry(b);
     return b;
@@ -1552,8 +1562,10 @@
       picked = obj.v === 3 ? String(obj.id || '') : (obj.index && obj.index.active ? String(obj.index.active) : '');
       if (obj.v !== 3) { try { MyPC.save(SAVE_KEY, { v: 3, id: picked, name: '' }); } catch (e) {} } // removes the old model data
     }
-    // a first brain (or, for everyone else, until the cloud answers)
+    // a first brain (or, for everyone else, until the cloud answers). Only a stand-in: it is never saved (it used to be
+    // saved after the first match: a new "checkoAI" brain every time the game was opened), unless the store is empty
     var nb = newBrain('checkoAI');
+    nb.temp = true; nb.dirty = false;
     index.active = nb.id;
     setActive(nb);
   }
@@ -1566,7 +1578,7 @@
     cloudGet('index').then(function (ix) {
       if (!ix || !ix.brains || !ix.brains.length) {
         // a new store: the trainer publishes his first brain
-        if (canWrite()) saveBrain(active);
+        if (canWrite()) { active.temp = false; saveBrain(active); }
         Aima.cloud = 'ok';
         return null;
       }
@@ -1626,13 +1638,13 @@
 
   /* ------------------------------------------------------------------ claps (the trainer only) */
 
-  var clapDown = 0, clapOn = false, clapSign = 1, clapAt = [0, 0]; // (clapAt: each slot's clock when the button went down)
+  var clapDown = 0, clapOn = false, clapSign = 1, clapAt = [0, 0], optAt = 0; // (clapAt: each slot's clock when the button went down)
 
   // the trainer's clap (sign 1) or punishment (sign -1): held = stronger; credited to what he did just before the press
   function coach(down, sign) {
     if (!trainer || !World.match.running || World.match.paused || !anyAi()) { clapOn = false; return; }
     if (down) {
-      if (!clapOn) { clapOn = true; clapSign = sign; clapDown = performance.now(); clapAt[0] = teamClock[0]; clapAt[1] = teamClock[1]; }
+      if (!clapOn) { clapOn = true; clapSign = sign; clapDown = performance.now(); clapAt[0] = teamClock[0]; clapAt[1] = teamClock[1]; optAt = NS.AimaOpt ? NS.AimaOpt.clock() : 0; }
       return;
     }
     if (!clapOn || clapSign !== sign) return;
@@ -1643,6 +1655,12 @@
       var s = World.aiSlots[t];
       if (!s.active || !s.brain) continue;
       var w = CLAP_W[s.brain.cfg.clap] || 1;
+      if (s.brain.algo === 'OPT') {
+        if (NS.AimaOpt && NS.AimaOpt.coach(t, optAt, sign, Math.min(1, strength * w))) {
+          if (sign > 0) { s.brain.st.claps++; s.brain.st.clapSum += strength; } else s.brain.st.punish++;
+        }
+        continue;
+      }
       var v = clapSlot(t, clapAt[t]);
       if (!v) continue;
       clapCredit(v, clapAt[t], sign > 0 ? 1.5 * strength * w : -PUNISH * strength * w, strength);
@@ -1715,6 +1733,9 @@
     S.curDone = false;
     S.mins = 0;
     var c2 = S.cfg;
+    // a benchmark (cfg.bench): the brains only play (step F: how good it is now, nothing learnt)
+    var frz = [];
+    if (c2.bench) for (var fk in S.runs) { frz.push([S.runs[fk].b, S.runs[fk].b.frozen]); S.runs[fk].b.frozen = true; }
     NS.Debug.start({ matches: 1, levels: ['AIMA', S.ob ? 'AIMA' : c2.opp], teams: 'RANDOM', teamSize: c2.teamSize, stadium: c2.stadium,
       duration: c2.duration }, function (done, total, mins) {
       S.mins = mins;
@@ -1722,6 +1743,7 @@
     }, function (report) {
       training = null;
       teamBrains[0] = teamBrains[1] = null;
+      for (var fi = 0; fi < frz.length; fi++) frz[fi][0].frozen = frz[fi][1];
       if (S.curDone) {
         S.done++;
         // its line of the match log ("#1 ..." of this one-match run)
@@ -2469,7 +2491,10 @@
       saveIndex();
       return true;
     },
-    create: function (name) { var b = newBrain(name || 'checkoAI'); saveBrain(b); return b; },
+    // algo: 'AC' (AIMA-AC 1.2) or 'OPT' (AIMA-OPT 2.0); the brain keeps it for good
+    create: function (name, algo) { var b = newBrain(name || 'checkoAI', algo); saveBrain(b); return b; },
+    ALGOS: ALGOS,
+    algoName: function (b) { b = b || active; return b ? ALGOS[b.algo] : ''; },
 
     // ---- settings of a brain (b: a loaded brain, default the active one)
     setCfg: function (k, v, b) {
@@ -2483,7 +2508,7 @@
     // a new brain size: a new network (it starts again from zero, its settings and history stay)
     setSize: function (size, b) {
       b = b || active;
-      if (!SIZES[size] || (!LOCAL_SIZES[size] && !cloudCfg()) || Aima.inUse(b.id)) return false;
+      if (!SIZES[size] || b.algo === 'OPT' || (!LOCAL_SIZES[size] && !cloudCfg()) || Aima.inUse(b.id)) return false;
       b.build(size);
       b.data = {};
       b.st = freshStats();
@@ -2496,6 +2521,8 @@
       b = b || active;
       if (Aima.inUse(b.id)) return;
       b.init();
+      if (b.algo === 'OPT' && NS.AimaOpt) b.opt = NS.AimaOpt.create();
+      b.les = null;
       b.data = {};
       b.st = freshStats();
       b.memN = 0; b.memI = 0;
@@ -2524,12 +2551,16 @@
       matchSnap[0] = matchSnap[1] = null;
       pendShot = null; lastSetPiece = 0; tackleT[0] = tackleT[1] = 0;
       pastReset();
+      if (NS.AimaOpt) NS.AimaOpt.matchStart();
     },
+    // an OPT brain's reward (aimaopt.js): in this match's total
+    optReward: function (t, r) { matchReward[t] += r; },
 
     // full time (finished) or abandoned: results, the last rewards, history, save
     matchEnd: function (finished) {
       var m = World.match, done = {};
       if (recording) { if (finished) recording.curDone = true; recMatchEnd(recording, finished); }
+      if (NS.AimaOpt) NS.AimaOpt.matchEnd();
       for (var k0 = 0; k0 < vlist.length; k0++) if (!vlist[k0].watch) flush(vlist[k0]);
       for (var t = 0; t < 2; t++) {
         var s = World.aiSlots[t];
@@ -2567,6 +2598,7 @@
 
     poll: function (dt) {
       pastStep(dt);
+      if (NS.AimaOpt) NS.AimaOpt.poll(dt);
       if (recording && rb) {
         // a recording: the clock, possession (an input) and the goals (for the 10-second outcome)
         recT += dt;
@@ -2602,6 +2634,12 @@
         }
         teamClock[t] += dt;
         b.st.playT += dt; b.st.opsT += dt;
+        if (b.algo === 'OPT') {
+          // an options brain: everybody runs on Legend's rules, the carrier's choices are its own (ai.js -> aimaopt.js)
+          var ow = World.ball.owner;
+          if (ow && ow.team === t && ow.role !== 'GK') as.player = ow;
+          return;
+        }
         // a real-time match on "1 player": the brain plays only the team's selected player (the marker, switched like a
         // human's cursor), Legend the others; a training plays all of them (with distant off-ball players down-weighted)
         var solo = b.cfg.ctl !== '11P' && !training, one = solo ? as.player : null;
@@ -2646,7 +2684,7 @@
     // the trainer's own play teaches the active brain ("learn from my play"): a sample every 0.1 s
     observe: function (slot, dt) {
       var b = active;
-      if (!trainer || !b || !b.cfg.mine || !b.learns() || !slot.player) return;
+      if (!trainer || !b || b.algo === 'OPT' || !b.cfg.mine || !b.learns() || !slot.player) return;
       slot.obsT = (slot.obsT || 0) - dt;
       if (slot.obsT > 0) return;
       slot.obsT = TICKS[b.cfg.tick] || TICKS[1];
@@ -2670,6 +2708,7 @@
       var full = World.settings.gaugeTime > 0 ? World.settings.gaugeTime : 0.5;
       var f = mv.kind === 2 ? holdT / 1.5 : holdT / full;
       var p = slot.player, pad = NS.Input.pads[slot.idx];
+      if (b.algo === 'OPT') { if (NS.AimaOpt) NS.AimaOpt.human(b, p, mv.id, pad.x, pad.y); return; }
       features(p, xs, b);
       remember(b, xs, stickClass(pad.x, pad.y, NS.attack(p.team)), B.sprintDown(pad.cur) ? 1 : 0, mi + 1, f < 0.3 ? 0 : (f < 0.75 ? 1 : 2), mv.ctx, MINEW[b.cfg.mineW] || 3);
       // and a lesson: in a situation like this one, this is the move (a third of a clap each time he plays it)

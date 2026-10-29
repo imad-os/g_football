@@ -1839,8 +1839,13 @@
       again('as:settings');
     }));
     act.appendChild(btn('', T('aima.newbrain'), 'ai:new', function () {
-      var b = A.create(nm() || 'checkoAI ' + (A.brains().length + 1));
-      selectBrain(b.id); aimaMsg = T('aima.created') + ' ' + b.name; again('ai:new');
+      var b = A.create(nm() || 'checkoAI ' + (A.brains().length + 1), 'AC');
+      selectBrain(b.id); aimaMsg = T('aima.created') + ' ' + b.name + ' (' + A.algoName(b) + ')'; again('ai:new');
+    }));
+    // a brain of the "options" algorithm (AIMA-OPT 2.0: it keeps that algorithm for good)
+    act.appendChild(btn('', T('aima.newopt'), 'ai:newopt', function () {
+      var b = A.create(nm() || 'checkoAI ' + (A.brains().length + 1), 'OPT');
+      selectBrain(b.id); aimaMsg = T('aima.created') + ' ' + b.name + ' (' + A.algoName(b) + ')'; again('ai:newopt');
     }));
     list.appendChild(act);
     var ac = aimaCard(T('aima.c.all') + ' (' + A.brains().length + ')');
@@ -1848,7 +1853,7 @@
       var id = e.id, isAct = id === A.activeId(), used = A.inUse(id);
       var row = el('div', 'aima-brow' + (id === brainSel ? ' sel' : ''));
       row.appendChild(el('div', 'aima-bname', (isAct ? '★ ' : '') + e.name));
-      row.appendChild(el('div', 'aima-bsub', e.size + '  ·  ' + (e.matches || 0) + ' ' + T('aima.tr.matches') + (used ? '  ·  ' + T('aima.inuse') : '')));
+      row.appendChild(el('div', 'aima-bsub', (e.algo === 'OPT' ? 'OPT 2.0' : 'AC 1.2  ·  ' + e.size) + '  ·  ' + (e.matches || 0) + ' ' + T('aima.tr.matches') + (used ? '  ·  ' + T('aima.inuse') : '')));
       var bt = el('div', 'row aima-bbtns');
       bt.appendChild(btn('', T('aima.sel'), 'ai:s:' + id, function () { selectBrain(id); again('ai:s:' + id); }));
       if (!isAct) bt.appendChild(btn('primary', T('aima.use'), 'ai:u:' + id, function () {
@@ -1942,6 +1947,13 @@
         stadium: TR_OPTS[2][1][trSel.stadium], duration: TR_OPTS[3][1][trSel.length], hours: TR_OPTS[4][1][trSel.hours] });
       trMsg = S ? '' : T('aima.tr.busy');
       again('tr:start');
+    }));
+    // a benchmark: the same matches without learning (how good the brain is now)
+    row.appendChild(btn('', T('aima.tr.bench'), 'tr:bench', function () {
+      var S = A.startSession({ brain: me.id, opp: trSel.opp, matches: TR_OPTS[0][1][trSel.matches], teamSize: TR_OPTS[1][1][trSel.size],
+        stadium: TR_OPTS[2][1][trSel.stadium], duration: TR_OPTS[3][1][trSel.length], hours: TR_OPTS[4][1][trSel.hours], bench: true });
+      trMsg = S ? '' : T('aima.tr.busy');
+      again('tr:bench');
     }));
     if (A.training()) row.appendChild(btn('danger', T('aima.ss.stopall'), 'tr:stopall', function () { A.stopTraining(); again('tr:start'); }));
     form.appendChild(row);

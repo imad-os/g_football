@@ -4,6 +4,21 @@ Written for v1.51.0 (October 2026). Goal: a checkoAI brain that wins 10 matches 
 using every move a human has (low / through / long / lofted through pass, one-two, shots, curl, chip, knock-on,
 tackles, press).
 
+## 0. Status (v1.52.0)
+
+| Step | State |
+|---|---|
+| A. options instead of sticks | **Done** as algorithm **AIMA-OPT 2.0** (js/game/aimaopt.js), chosen when a brain is created. Carrier only. |
+| B. copy Legend | **Done, built in**: an OPT brain's score is Legend's score + a learned correction that starts at 0, so it starts *as* Legend (655/655 choices identical with learning off); it also keeps learning from every Legend decision in its matches and from the trainer's moves. |
+| C. beat Legend with rewards | **Done (first version)**: 10-second discounted rewards per choice, policy gradient with a value baseline, pull towards Legend, 30% exploration in trainings. Whether it beats Legend has to be shown by long training + benchmarks (see 6). |
+| D. defence / off-ball options | Not yet (the OPT team defends and runs with Legend's rules). |
+| E. fast training | Partly: a headless match takes ~2.5 s (trainer.html / gfb.js), so 1,000 matches is ~45 min on one browser page. No parallel workers yet. |
+| F. benchmark gate | **Done**: Benchmark button (in-game Training page, trainer.html) and `node gfb.js bench`. |
+| Coaching (claps, punishments, your moves) | **Done** for both algorithms (lessons). |
+
+The old algorithm stays as **AIMA-AC 1.2** for the brains made with it (and for new ones when chosen), so both can be
+compared with the benchmark.
+
 ## 1. Why the current brains stay bad
 
 | Problem | What happens now | Effect |

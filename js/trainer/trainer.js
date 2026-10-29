@@ -94,7 +94,7 @@
       var row = el('div', 'brow' + (id === sel ? ' sel' : ''));
       var head = el('div', 'bhead');
       head.appendChild(el('b', null, (act ? '★ ' : '') + e.name));
-      head.appendChild(el('span', 'muted small', e.size + ' · ' + (e.matches || 0) + ' matches' + (used ? ' · in use' : '')));
+      head.appendChild(el('span', 'muted small', (e.algo === 'OPT' ? 'OPT 2.0' : 'AC 1.2 · ' + e.size) + ' · ' + (e.matches || 0) + ' matches' + (used ? ' · in use' : '')));
       head.onclick = function () { sel = id; confirmKey = ''; dirty = true; };
       row.appendChild(head);
       if (id === sel) {
@@ -248,7 +248,10 @@
     if (!b) return;
     var s = b.st, w = A.work(b), f = A.fmtOps, sy = A.style(b);
     var rows = [
-      ['network', b.cfg.size + '  ' + A.F + '-' + b.H1 + '-' + b.H2 + '-' + A.NOUT + '  (' + b.NP.toLocaleString() + ' parameters)'],
+      ['algorithm', A.algoName(b)],
+      b.algo === 'OPT' ? ['network', 'options scorer 30-32-16-1 + value 12-16-1  (' + NS.AimaOpt.NP.toLocaleString() + ' parameters)']
+        : ['network', b.cfg.size + '  ' + A.F + '-' + b.H1 + '-' + b.H2 + '-' + A.NOUT + '  (' + b.NP.toLocaleString() + ' parameters)'],
+      b.algo === 'OPT' ? ['choices', optPicks(s)] : null,
       ['matches', s.matches + '  (' + s.w + '-' + s.d + '-' + s.l + ')  trained ' + (s.trainMatches || 0)],
       ['goals', s.goals + '  (team ' + s.gf + '-' + s.ga + ')'],
       ['passes', s.passes + '  (' + (s.passes ? pct(Math.min(1, s.passOk / s.passes)) : '-') + ')'],
@@ -262,6 +265,7 @@
       ['created', when(b.created)],
       ['saved', when(b.saved)]
     ];
+    rows = rows.filter(function (r) { return !!r; });
     var data = b.data || {};
     Object.keys(data).forEach(function (k) {
       var d = data[k];
@@ -307,6 +311,14 @@
     $('busy').textContent = A.busy() ? '● working' : '';
   }
 
+  // an OPT brain's choices per kind of option, and the share that were Legend's own
+  function optPicks(s) {
+    var names = ['dribble', 'clear', 'shot', 'pass', 'one-two', 'through', 'lofted through', 'cross', 'long'], p = s.optPick || [], n = 0, out = [];
+    for (var i = 0; i < names.length; i++) n += p[i] || 0;
+    for (i = 0; i < names.length; i++) if (p[i]) out.push(names[i] + ' ' + Math.round(p[i] * 100 / n) + '%');
+    return n ? out.join(' · ') + '  (same as Legend ' + Math.round((s.optSame || 0) * 100 / n) + '%)' : '-';
+  }
+
   // ---- actions
   function wire() {
     fill($('dPasses'), A.DT_PASSES.map(function (v) { return [v, String(v)]; }), 1);
@@ -321,7 +333,10 @@
     fill($('tLength'), opt('length').map(function (v) { return [v, String(v)]; }), 3);
     $('rSet').onchange = function () { $('rName').style.display = $('rSet').value ? 'none' : ''; };
 
-    $('bNew').onclick = function () { var b = A.create(name() || 'checkoAI ' + (A.brains().length + 1)); sel = b.id; msg('Created ' + b.name); dirty = true; };
+    $('bNew').onclick = function () {
+      var b = A.create(name() || 'checkoAI ' + (A.brains().length + 1), $('brainAlgo').value);
+      sel = b.id; msg('Created ' + b.name + ' (' + A.algoName(b) + ')'); dirty = true;
+    };
     $('bSave').onclick = function () { var b = A.loadedBrain(sel); if (b) { A.saveBrain(b); msg('Saved ' + b.name + ' (cloud: ' + A.cloud + ')'); } };
     $('bReset').onclick = function () {
       var b = A.loadedBrain(sel);
@@ -352,14 +367,16 @@
       if (J) { setSel = J.set; msg(''); } else msg('Cannot record now.', true);
       dirty = true;
     };
-    $('bTrain').onclick = function () {
+    function startTrain(bench) {
       var b = A.loadedBrain(sel);
       if (!b) return;
       var S = A.startSession({ brain: b.id, opp: $('tOpp').value, matches: num('tMatches'), teamSize: num('tSize'), stadium: $('tStadium').value,
-        duration: num('tLength'), hours: num('tHours') });
-      msg(S ? '' : 'Cannot start a training now.', !S);
+        duration: num('tLength'), hours: num('tHours'), bench: !!bench });
+      msg(S ? (bench ? 'Benchmark: ' + b.name + ' plays without learning' : '') : 'Cannot start a training now.', !S);
       dirty = true;
-    };
+    }
+    $('bTrain').onclick = function () { startTrain(false); };
+    $('bBench').onclick = function () { startTrain(true); };
     $('bStopAll').onclick = function () {
       A.stopTraining();
       A.dataJobs().forEach(function (J) { if (live(J)) A.stopJob(J.id); });

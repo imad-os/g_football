@@ -775,8 +775,20 @@
 
   function gauss() { return (Math.random() + Math.random() + Math.random() - 1.5) * 2; } // ~N(0, 1)
 
-  // Scores every option and plays the best one.
-  function decide(p, prof) {
+  // Every option decide() weighs, with Legend's score: a checkoAI "options" brain (js/game/aimaopt.js) chooses among
+  // them, and learns from the ones Legend chooses. code: C_* below; (x, z): where it goes; risk: of losing it on the way.
+  var C_DRIB = 0, C_CLEAR = 1, C_SHOT = 2, C_PASS = 3, C_ONETWO = 4, C_THRU = 5, C_LOB = 6, C_CROSS = 7, C_LONG = 8;
+  var CANDS = [], nC = 0;
+  for (var ci = 0; ci < 160; ci++) CANDS.push({ code: 0, sc: 0, mt: null, x: 0, z: 0, risk: 0, dx: 0, dz: 0, kind: '' });
+  function cand(code, sc, mt, x, z, risk, dx, dz, kind) {
+    if (nC >= CANDS.length) return;
+    var c = CANDS[nC++];
+    c.code = code; c.sc = sc; c.mt = mt; c.x = x; c.z = z; c.risk = risk; c.dx = dx || 0; c.dz = dz || 0; c.kind = kind || '';
+  }
+
+  // Scores every option and plays the best one (dry: only lists them in CANDS, nothing is played).
+  function decide(p, prof, dry) {
+    nC = 0;
     var T = TEAMS[p.team];
     var O = TEAMS[1 - p.team];
     var a = attackOf(p);
@@ -815,12 +827,14 @@
       if (p.drX * dx + p.drZ * dz > 0.9) sc += 0.05; // keep a direction once chosen
       sc += (Math.random() - 0.5) * noise;
       if (sc > best) { best = sc; bType = -1; bx = dx; bz = dz; }
+      cand(C_DRIB, sc, null, px + dx * 7, pz + dz * 7, 1 - space, dx, dz);
     }
 
     // --- clearance: pressed near our own goal, the safe thing is to kick it long towards the touchline
     if ((px - -a * HALF_W) * a < 30 && pressure < 3.2 && p.role !== 'FWD') {
       sc = 0.32 + (pressure < 2 ? 0.28 : 0.12) + ((px - -a * HALF_W) * a < 18 ? 0.12 : 0) + (Math.random() - 0.5) * noise;
       if (sc > best) { best = sc; bType = -2; }
+      cand(C_CLEAR, sc, null, px + a * 30, pz >= 0 ? HALF_H : -HALF_H, 0);
     }
 
     // --- shot
@@ -842,6 +856,7 @@
       sc -= (1 - face) * (pressure < 1.6 ? 0.3 : 0.7);
       sc += (Math.random() - 0.5) * noise;
       if (sc > best) { best = sc; bType = ACT.SHOOT; }
+      cand(C_SHOT, sc, null, a * HALF_W, 0, 0);
     }
 
     // --- passes
@@ -867,6 +882,9 @@
         if (cutback && Math.abs(mt.pos.z) < 10 && Math.abs(a * HALF_W - mt.pos.x) > 6 && Math.abs(a * HALF_W - mt.pos.x) < 17) val += 0.22;
         sc = (1 - risk) * val - risk * loss * 1.5 + (Math.random() - 0.5) * noise;
         if (sc > best) { best = sc; bType = ACT.PASS; bMate = mt; bx = sx; bz = sz; }
+        cand(C_PASS, sc, mt, sx, sz, risk);
+        // the same ball as a one-two (he runs on for the return): a team-mate close by
+        if (md > 5 && md < 16 && (HALF_W - px * a) > 14) cand(C_ONETWO, sc - 0.04, mt, sx, sz, risk);
       }
 
       // through ball into the space ahead of a forward-moving team-mate
@@ -901,6 +919,7 @@
             (mt.runT > 0.9 ? 0.15 : 0) + cnt * (mt.cntRun ? 0.2 : 0.08); // (a counter: into the runner's path)
           sc = (1 - trisk) * tval - trisk * loss * 1.5 + (Math.random() - 0.5) * noise;
           if (sc > best) { best = sc; bType = ACT.THROUGH; bMate = mt; bx = lx; bz = lz; }
+          cand(C_THRU, sc, mt, lx, lz, trisk);
         }
       }
 
@@ -917,6 +936,7 @@
         var rval = 0.42 + 0.5 * (rx2 - px) * a / 35 + 0.8 * shotQuality(rx2, rz2, p.team);
         sc = (1 - rrisk) * rval - rrisk * loss * 1.2 + (Math.random() - 0.5) * noise;
         if (sc > best) { best = sc; bType = gr <= lr ? ACT.THROUGH : ACT.LONG; bMate = mt; bx = rx2; bz = rz2; bKind = 'chip_to_runner'; }
+        cand(gr <= lr ? C_THRU : C_LOB, sc, mt, rx2, rz2, rrisk, 0, 0, 'chip_to_runner');
       }
 
       // a cross from a wide position near the box to a team-mate in it (he attacks it with his head or his foot)
@@ -927,6 +947,7 @@
           var cval = 0.38 + 0.9 * shotQuality(mt.pos.x, mt.pos.z, p.team) + mt.st.hdr / 99 * 0.15;
           sc = (1 - crisk) * cval - crisk * loss + (Math.random() - 0.5) * noise;
           if (sc > best) { best = sc; bType = ACT.LONG; bMate = mt; bx = mt.pos.x - a * 0.5; bz = mt.pos.z; bKind = 'cross'; }
+          cand(C_CROSS, sc, mt, mt.pos.x - a * 0.5, mt.pos.z, crisk, 0, 0, 'cross');
         }
       }
 
@@ -948,9 +969,23 @@
         } else if (prof.iq >= 1 && pressure > 4 && gspace < 0.85) gval -= 0.14; // nobody on him: keep it on the ground
         sc = (1 - lrisk) * gval - lrisk * loss * 1.5 - 0.16 + (Math.random() - 0.5) * noise;
         if (sc > best) { best = sc; bType = ACT.LONG; bMate = mt; bx = gx; bz = gz; bKind = (gz - pz) * pz < 0 && Math.abs(gz - pz) > 25 ? 'switch' : 'over_the_top'; }
+        cand(C_LONG, sc, mt, gx, gz, lrisk, 0, 0, (gz - pz) * pz < 0 && Math.abs(gz - pz) > 25 ? 'switch' : 'over_the_top');
       }
     }
 
+    if (dry) return;
+    // a checkoAI "options" brain plays this team's carrier: its choice instead of Legend's (and Legend's choices teach it)
+    var forced = -1;
+    if (NS.AimaOpt) {
+      var ch = NS.AimaOpt.decide(p, prof, CANDS, nC);
+      if (ch >= 0) {
+        var cc = CANDS[ch];
+        forced = cc.code; bMate = cc.mt; bx = cc.x; bz = cc.z; bKind = cc.kind;
+        bType = [-1, -2, ACT.SHOOT, ACT.PASS, ACT.PASS, ACT.THROUGH, ACT.LONG, ACT.LONG, ACT.LONG][cc.code];
+        if (cc.code === C_DRIB) { bx = cc.dx; bz = cc.dz; }
+        if (cc.code === C_LOB) bKind = 'chip_to_runner';
+      }
+    }
     if (bKind === 'switch' && bType === ACT.LONG) T.switchT = 15;
     if (NS.dbg) {
       NS.dbg('cpu_decision', p.team, bType);
@@ -975,8 +1010,8 @@
       shootNow(p, prof);
     } else {
       var bdx = bMate ? bMate.pos.x - px : 0, bdz = bMate ? bMate.pos.z - pz : 0, bmd = Math.sqrt(bdx * bdx + bdz * bdz);
-      if (bType === ACT.PASS && prof.iq >= 2 && bmd > 5 && bmd < 16 && pressure < 4.5 && (HALF_W - px * a) > 14 &&
-          oppDist(px + a * 12, pz, p.team) > 6 && Math.random() < 0.45) {
+      if (forced === C_ONETWO || (forced < 0 && bType === ACT.PASS && prof.iq >= 2 && bmd > 5 && bmd < 16 && pressure < 4.5 &&
+          (HALF_W - px * a) > 14 && oppDist(px + a * 12, pz, p.team) > 6 && Math.random() < 0.45)) {
         // Hard / Legend: a man on him, a team-mate close by and space behind the defender: a one-two (he runs on
         // for the return, as a human's LB + A)
         if (NS.dbg) NS.dbg('cpu_one_two', p.team);
@@ -1538,6 +1573,11 @@
 
   NS.AI = {
     profiles: PROFILES,
+    C: { DRIB: C_DRIB, CLEAR: C_CLEAR, SHOT: C_SHOT, PASS: C_PASS, ONETWO: C_ONETWO, THRU: C_THRU, LOB: C_LOB, CROSS: C_CROSS, LONG: C_LONG, N: 9 },
+    // the options a player with the ball has right now, with Legend's scores (nothing is played): [CANDS, count]
+    options: function (p, prof) { decide(p, prof || PROFILES.LEGEND, true); return [CANDS, nC]; },
+    shotQuality: function (x, z, team) { return shotQuality(x, z, team); },
+    oppDist: function (x, z, team) { return oppDist(x, z, team); },
     // AI.MA's team-mates are the Legend CPU (only its selected player is the learning model)
     profile: function (name) { return PROFILES[name === 'AIMA' ? 'LEGEND' : name] || PROFILES.NORMAL; },
     teams: TEAMS,

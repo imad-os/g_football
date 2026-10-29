@@ -183,6 +183,24 @@ top, cross, chip to a runner). A checkoAI side is named with its brain and its L
 
 ## checkoAI (CPU level "checkoAI")
 
+**v1.52: two algorithms.** A new brain is made with one of them and keeps it (the brain list shows which: "AC 1.2" or
+"OPT 2.0"), so the two can be compared:
+* **AIMA-AC 1.2** (everything below): one network plays every outfield player through a virtual controller (stick,
+  sprint, buttons, every 0.1 s), copying Legend and learning from rewards, claps and lessons.
+* **AIMA-OPT 2.0** (js/game/aimaopt.js, docs/checkoai-plan.md): it plays the **ball carrier**; the other players keep
+  Legend's rules. Legend's decide() lists every option it weighs (dribble directions, clearance, shot, and per team-mate
+  a pass, a one-two, through balls, a ball to a runner, a cross, a long ball) with its score; the brain plays the option
+  with the best `Legend score / 0.04 + r`, where r is a small network (30-32-16-1) that starts at 0, so a new OPT brain
+  plays exactly like Legend (measured: 655 of 655 choices the same). It learns from Legend's choices in its matches,
+  the trainer's moves (x3), the rewards of the 10 seconds after each of its choices (goals, shots by chance quality,
+  forward passes, ball lost; policy gradient against a value network) with a pull back towards Legend, and claps /
+  punishments (lessons per option, as in AC). In a training 30% of its choices are drawn from its odds to try
+  alternatives. Settings > checkoAI > New brain (options 2.0); trainer.html: the algorithm list next to New brain.
+* **Benchmark** (in-game Training page, trainer.html, `node gfb.js bench`): the same training matches without learning,
+  for a brain's W / D / L as it is now.
+* Fixed: opening the game no longer saves a new "checkoAI" brain (the stand-in brain used until the cloud answers was
+  saved after the first match).
+
 **v1.51: lessons, and the plan to beat Legend** (docs/checkoai-plan.md). Every clap, punishment and move of the trainer is
 kept as a lesson (the situation, the move, a score) and every decision looks them up: one punishment cuts that move's odds
 in situations like it at once and by the 5th it is gone there; 5 claps make a move his first choice there; each of the
