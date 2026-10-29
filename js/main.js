@@ -14,6 +14,9 @@
 
   var World = NS.World;
   var STEP_MS = 1000 / 60;
+  // At most this many game steps in one frame: after a slow frame the game catches up a little and lets the rest go
+  // (the game slows for a moment) instead of running more steps, which would make the next frame slow too.
+  var MAX_STEPS = 2;
 
   var raf = 0;
   var last = 0;
@@ -22,6 +25,48 @@
   var sceneReady = false;
   var destroyed = false;
   var lastMenuJson = '';
+
+  // ---- Dev mode > Performance: per second, the frame rate and where a frame's time goes (js/game ... js/render)
+  var perf = { on: false, box: null, n: 0, t0: 0, worst: 0, slow: 0, step: 0, ai: 0, draw: 0, steps: 0, dropped: 0 };
+  function perfNow() { return performance.now(); }
+  function perfFrame(ms) {
+    var f = perf;
+    f.n++;
+    if (ms > f.worst) f.worst = ms;
+    if (ms > 20) f.slow++;
+    var now = perfNow();
+    if (!f.t0) f.t0 = now;
+    if (now - f.t0 < 1000) return;
+    var n = f.n || 1, s = (now - f.t0) / 1000;
+    // text built once a second only
+    f.box.textContent = 'FPS ' + Math.round(n / s) + '   worst frame ' + Math.round(f.worst) + ' ms   slow frames ' + f.slow +
+      '\ngame ' + (f.step / n).toFixed(2) + ' ms (checkoAI ' + (f.ai / n).toFixed(2) + ')   draw ' + (f.draw / n).toFixed(2) +
+      ' ms   steps/frame ' + (f.steps / n).toFixed(2) + (f.dropped ? '   dropped ' + f.dropped : '') +
+      '\n' + NS.Quality.label() + ' ' + (NS.stadiumId || '') + ' ' + (World.settings.playerModel || '');
+    f.n = 0; f.t0 = now; f.worst = 0; f.slow = 0; f.step = 0; f.ai = 0; f.draw = 0; f.steps = 0; f.dropped = 0;
+  }
+  function perfSync() {
+    var on = !!World.settings && !!World.settings.perfHud;
+    if (on === perf.on) return;
+    perf.on = on;
+    if (on && !perf.box) {
+      perf.box = document.createElement('div');
+      perf.box.className = 'perf-hud';
+      document.body.appendChild(perf.box);
+      // checkoAI's share of a game step
+      if (NS.Aima && NS.Aima.driveTeam) {
+        var dt0 = NS.Aima.driveTeam;
+        NS.Aima.driveTeam = function (t, dt) {
+          if (!perf.on) return dt0.call(this, t, dt);
+          var a = perfNow(), r = dt0.call(this, t, dt);
+          perf.ai += perfNow() - a;
+          return r;
+        };
+      }
+    }
+    if (perf.box) perf.box.style.display = on ? '' : 'none';
+    perf.n = 0; perf.t0 = 0;
+  }
 
   function frame(ts) {
     raf = requestAnimationFrame(frame);
@@ -38,20 +83,25 @@
       NS.Quality.frame(elapsed / 1000);
       NS.Scene.render();
     } else if (m.running) {
+      var pt = perf.on ? perfNow() : 0;
       if (!m.paused) {
         acc += elapsed;
-        var dt = NS.STEP * World.settings.gameSpeed;
-        while (acc >= STEP_MS && !m.paused && !NS.Replay.active()) {
+        var dt = NS.STEP * World.settings.gameSpeed, k = 0;
+        while (acc >= STEP_MS && k < MAX_STEPS && !m.paused && !NS.Replay.active()) {
           NS.Match.update(dt);
           NS.Replay.step(dt);
           acc -= STEP_MS;
+          k++;
         }
+        if (acc >= STEP_MS) { if (perf.on) perf.dropped += Math.floor(acc / STEP_MS); acc %= STEP_MS; } // (the rest is let go)
+        if (perf.on) perf.steps += k;
       } else {
         acc = 0;
       }
       NS.Quality.frame(elapsed / 1000);
       NS.Match.drawHud(elapsed / 1000);
-      NS.Scene.render();
+      if (perf.on) { var pd = perfNow(); perf.step += pd - pt; NS.Scene.render(); perf.draw += perfNow() - pd; perfFrame(elapsed); }
+      else NS.Scene.render();
     } else {
       // Menus cover the pitch: repaint the background at a low rate to spare the TV.
       acc = 0;
@@ -99,6 +149,7 @@
       NS.Scene.setBallSkin(s.ballSkin);
       NS.Scene.setBallSize(s.ballSize);
       NS.Match.restyle(); // player models / polygons (at once, also during a match)
+      perfSync();
       NS.Commentary.setup(s); // on / off (off: dropped at once), voice, language, how talkative...
       // 7 or 11 a side: the squads are rebuilt for the next match (a running match keeps its own)
       if (!World.match.running && NS.TEAM_SIZE !== s.teamSize) NS.Match.syncRosters();
@@ -129,6 +180,7 @@
         NS.Gamepad.init();
         var settings = NS.Storage.load();
         World.settings = settings;
+        perfSync();
         try { NS.Aima.init(info); } catch (e) { MyPC.report && MyPC.report(e, { where: 'checkoAI init' }); } // never blocks the game
         NS.Comp.load(); // a saved league / cup to continue
         NS.Audio.setEnabled(settings.soundEnabled);

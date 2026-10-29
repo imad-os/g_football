@@ -1202,6 +1202,7 @@
     'set.assist': 'Pass assist', 'set.assist.h': '0: the ball goes exactly where you aim, with the power you give it; 100: always to the best team-mate that way',
     'set.thrulift': 'Through ball lift', 'set.thrulift.h': 'A long through ball (receiver 20 m or more away) skims this high off the grass',
     'set.bounce': 'Ball bounce', 'set.bounce.h': 'How much of its speed the ball keeps when it bounces on the grass',
+    'set.perf': 'Performance', 'set.perf.h': 'Frame rate, slowest frame, and the time of the game, checkoAI and the drawing per frame',
     'aima.lessons': 'Lessons', 'learn.w.lesson': 'Lesson', 'aima.newopt': 'New brain (options 2.0)', 'aima.tr.bench': 'Benchmark (no learning)' });
   Object.assign(D.fr, { 'set.g.dev': 'MODE DEV',
     'set.devarrow': 'Fleche de visee', 'set.devarrow.h': 'Une fleche au sol montre ou va la passe / le tir (direction et puissance) pendant la visee, et ou il est vraiment alle',
@@ -1209,6 +1210,7 @@
     'set.pow.h': 'Vitesse de cette frappe, x la vitesse normale',
     'set.assist': 'Assistance de passe', 'set.assist.h': '0 : la balle va exactement ou vous visez ; 100 : toujours au meilleur coequipier dans cette direction',
     'set.thrulift': 'Hauteur de la passe en profondeur', 'set.thrulift.h': 'Une longue passe en profondeur (receveur a 20 m ou plus) decolle a cette hauteur',
+    'set.perf': 'Performances', 'set.perf.h': 'Images par seconde, image la plus lente, temps du jeu, de checkoAI et du dessin par image',
     'set.bounce': 'Rebond du ballon', 'set.bounce.h': 'Part de sa vitesse que le ballon garde en rebondissant sur la pelouse',
     'aima.lessons': 'Lecons', 'learn.w.lesson': 'Lecon', 'aima.newopt': 'Nouveau cerveau (options 2.0)', 'aima.tr.bench': 'Test (sans apprendre)' });
   Object.assign(D.es, { 'set.g.dev': 'MODO DEV',
@@ -1217,6 +1219,7 @@
     'set.pow.h': 'Velocidad de ese golpeo, x la velocidad normal',
     'set.assist': 'Asistencia de pase', 'set.assist.h': '0: el balon va exactamente adonde apuntas; 100: siempre al mejor companero en esa direccion',
     'set.thrulift': 'Altura del pase al hueco', 'set.thrulift.h': 'Un pase al hueco largo (receptor a 20 m o mas) se eleva hasta esta altura',
+    'set.perf': 'Rendimiento', 'set.perf.h': 'Imagenes por segundo, imagen mas lenta, tiempo del juego, de checkoAI y del dibujo por imagen',
     'set.bounce': 'Bote del balon', 'set.bounce.h': 'Cuanta velocidad conserva el balon al botar en el cesped',
     'aima.lessons': 'Lecciones', 'learn.w.lesson': 'Leccion', 'aima.newopt': 'Nuevo cerebro (opciones 2.0)', 'aima.tr.bench': 'Prueba (sin aprender)' });
   Object.assign(D.ar, { 'set.g.dev': 'وضع المطور',
@@ -1225,6 +1228,7 @@
     'set.pow.h': 'سرعة هذه الضربة مضروبة في السرعة العادية',
     'set.assist': 'مساعدة التمرير', 'set.assist.h': '0: الكرة تذهب حيث تصوب تماماً؛ 100: دائماً إلى أفضل زميل في ذلك الاتجاه',
     'set.thrulift': 'ارتفاع التمريرة البينية', 'set.thrulift.h': 'التمريرة البينية الطويلة (المستقبل على بعد 20 م أو أكثر) ترتفع إلى هذا الحد',
+    'set.perf': 'الأداء', 'set.perf.h': 'عدد الإطارات في الثانية، أبطأ إطار، ووقت اللعبة وcheckoAI والرسم في كل إطار',
     'set.bounce': 'ارتداد الكرة', 'set.bounce.h': 'مقدار السرعة التي تحتفظ بها الكرة عند ارتدادها على العشب',
     'aima.lessons': 'الدروس', 'learn.w.lesson': 'درس', 'aima.newopt': 'دماغ جديد (خيارات 2.0)', 'aima.tr.bench': 'اختبار (بدون تعلم)' });
 

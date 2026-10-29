@@ -187,7 +187,8 @@
   // strip of grass outside them for throw-ins and corners: the plane is PITCH_MARGIN bigger on every side.
   var PITCH_MARGIN = 4;
   function buildPitchTexture(withStripes) {
-    var big = NS.PITCH_HALF_W > 70;
+    // (a big pitch gets a sharper 2048 x 1024 grass, 4x the pixels: not on LOW, which has no stripes)
+    var big = NS.PITCH_HALF_W > 70 && withStripes;
     var W = big ? 2048 : 1024, H = big ? 1024 : 512;
     var HW = NS.PITCH_HALF_W, HH = NS.PITCH_HALF_H, M = PITCH_MARGIN;
     var sx = W / (2 * (HW + M)), sy = H / (2 * (HH + M));

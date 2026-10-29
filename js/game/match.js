@@ -1162,7 +1162,11 @@
             throwIn: false, throwT: 0, shoulderT: 0, shoulderDir: 1, shCd: 0, offside: false, bumpT: 0, bumpK: 1,
             mark: null, icX: 0, icZ: 0, drX: 0, drZ: 0, runT: 0, runCd: 0, runX: 0, runZ: 0,
             aiT: 0, tgtX: 0, tgtZ: 0, tgtS: 8, gkRT: 0,
-            st: null, mSpd: 1, drain: 1
+            st: null, mSpd: 1, drain: 1,
+            // (fields the AI, the keeper and checkoAI fill in later: declared here so every player has the same hidden
+            // shape and the hot code stays optimized; a player whose fields arrive in another order is a new shape)
+            wX: 0, wZ: 0, wF: 0, slOn: false, slX: 0, slZ: 0, slRest: 0, slPick: false, cntRun: 0, ahead: 0, tmRecv: null, knockCd: 0,
+            smotherT: 0, spreadT: 0, oneT: 0, aiv: null
           });
           rate(World.players[World.players.length - 1], t === 0 ? homeT : awayT);
         }

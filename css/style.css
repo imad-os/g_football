@@ -698,3 +698,7 @@ h1, h2, p { margin: 0; }
   .res-body.view-full .res-line { grid-template-columns: 4rem 1fr 4rem; }
   .res-body.view-full .res-k { font-size: 0.8rem; }
 }
+
+/* Dev mode > Performance (js/main.js) */
+.perf-hud { position: fixed; right: 8px; top: 64px; z-index: 50; pointer-events: none; white-space: pre; padding: 6px 10px;
+  border-radius: 8px; background: rgba(0, 0, 0, .72); color: #a7f3d0; font: 13px/1.4 ui-monospace, Consolas, monospace; }

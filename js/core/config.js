@@ -2,7 +2,7 @@
 (function (NS) {
   'use strict';
 
-  NS.VERSION = '1.53.0';
+  NS.VERSION = '1.53.1';
 
   // Pitch geometry (world units; x = length, z = width, y = up). NS.M: world units per metre, from the players: an
   // average footballer (1.81 m) is 2.9 units tall. Everything is at real size at that scale: the ball, the players,
@@ -91,6 +91,7 @@
     commFallback: 'EN',
     commDuck: true,
     // Dev mode (Settings > Dev mode): tuning of the kicks and the ball, and the aim arrow
+    perfHud: false,     // Dev mode: frame rate and frame time overlay
     devArrow: true,
     powLow: 1.0,
     powThru: 1.0,
@@ -177,6 +178,8 @@
     { key: 'commDuck', group: 'comm', label: 'set.commduck', hint: 'set.commduck.h',
       options: [[true, 'opt.on'], [false, 'opt.off']] },
     // Dev mode: the aim arrow (where a pass / shot is going, by its direction and power), kick powers, pass assist, ball
+    { key: 'perfHud', group: 'dev', label: 'set.perf', hint: 'set.perf.h',
+      options: [[false, 'opt.hide'], [true, 'opt.show']] },
     { key: 'devArrow', group: 'dev', label: 'set.devarrow', hint: 'set.devarrow.h',
       options: [[true, 'opt.show'], [false, 'opt.hide']] },
     { key: 'powLow', group: 'dev', label: 'set.powlow', hint: 'set.pow.h', options: POW },

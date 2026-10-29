@@ -590,6 +590,7 @@
     for (j = 0; j < SH_R.length; j++) {
       p = SH_R[j];
       var k = SH_R.length;
+      p.slOn = true;
       p.slX = a * backA;
       p.slZ = (k === 1 ? 0 : -wb + 2 * wb * j / (k - 1)) + bz * 0.15;
     }
@@ -597,6 +598,7 @@
     for (j = 0; j < pivs.length; j++) {
       p = pivs[j];
       var kp = pivs.length;
+      p.slOn = true;
       p.slX = a * (backA + (M === M_BUILD ? 8 : 10));
       p.slZ = (kp === 1 ? 0 : (-0.3 + 0.6 * j / (kp - 1)) * HALF_H) + bz * 0.3;
     }
@@ -629,6 +631,7 @@
         // following the counter just behind the ball: a pass back, a cut-back, the second ball
         xa = Math.min(bxA + 5, lim - 4);
         z = (k2 > 1 ? (j < k2 / 2 ? -1 : 1) * HALF_H * 0.28 : 0) + bz * 0.3;
+        p.slOn = true;
         p.slX = a * clamp(xa, -HALF_W + 10, HALF_W - 6);
         p.slZ = clamp(z, -HALF_H + 3, HALF_H - 3);
         continue;
@@ -640,6 +643,7 @@
       else xa = wide ? Math.min(Math.max(bxA + 8, mid), lim) : (high ? lim : mid);
       // the ball side is overloaded a little; the far winger stays wide
       if (!wide) z += bz * 0.18;
+      p.slOn = true;
       p.slX = a * clamp(xa, -HALF_W + 10, HALF_W - 6);
       p.slZ = clamp(z, -HALF_H + 3, HALF_H - 3);
     }
@@ -664,6 +668,7 @@
       p = SH_C[i];
       p.cntRun = 1;
       var z = nr === 3 ? [-0.45, side * 0.08, 0.45][i] : (nr === 2 ? (i ? 0.3 : -0.3) : side * 0.1);
+      p.slOn = true;
       p.slX = a * clamp(lim, -HALF_W + 10, HALF_W - 6);
       p.slZ = clamp(z * HALF_H, -HALF_H + 3, HALF_H - 3);
     }
@@ -1270,7 +1275,7 @@
         }
         if ((sx - offLine(p.team, ball)) * a > -0.5) sx = offLine(p.team, ball) - a * 0.5;
         p.tgtX = sx; p.tgtZ = sz; p.tgtS = 10;
-      } else if (T.has && p.slX !== undefined) {
+      } else if (T.has && p.slOn) {
         // the team's shape for this moment (lanes, staggering, rest defence)
         shapeTarget(p, T, carrier);
         var sdx = p.tgtX - p.pos.x, sdz = p.tgtZ - p.pos.z;
@@ -1655,7 +1660,7 @@
         }
         // loose ball: keep the shape around it (the team that played it: its in-possession places; on a counter the
         // runners keep sprinting); the team caught open sprints back
-        if (T.has && T.iq >= 1 && p.slX !== undefined) {
+        if (T.has && T.iq >= 1 && p.slOn) {
           moveToward(p, p.slX, p.slZ, (T.moment === M_COUNTER && p.cntRun ? 11.8 : 9) * prof.speedMul, dt);
           return;
         }
