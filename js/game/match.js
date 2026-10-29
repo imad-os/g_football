@@ -353,13 +353,19 @@
     if (World.levels) return World.levels[team];
     var s = World.session;
     if (s.sideMode === 'CUSTOM' && s.cpuLevels && s.cpuLevels[team] && s.pads[0] < 0 && s.pads[1] < 0) return s.cpuLevels[team];
-    return World.settings.difficulty;
+    return NS.cpuLevel(World.settings.cpuType, World.settings.difficulty);
   }
+  NS.levelOf = levelOf;
+  // a checkoAI team's level ('EASY'..'LEGEND'; null: not a checkoAI team). Below Legend the brain only plays (read only)
+  NS.brainLevel = function (team) {
+    var l = levelOf(team);
+    return NS.isAimaLv(l) ? NS.baseLv(l) : null;
+  };
 
   function syncAiSlots() {
     for (var t = 0; t < 2; t++) {
       var s = World.aiSlots[t];
-      var on = !!NS.Aima && !humanTeam(t) && levelOf(t) === 'AIMA';
+      var on = !!NS.Aima && !humanTeam(t) && NS.isAimaLv(levelOf(t));
       if (on !== s.active) {
         s.active = on; s.player = null; s.evActive = false; s.lockT = 0; s.manual = false;
         if (s.pad) { s.pad.cur = 0; s.pad.x = 0; s.pad.y = 0; }

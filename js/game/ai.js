@@ -1579,7 +1579,7 @@
     shotQuality: function (x, z, team) { return shotQuality(x, z, team); },
     oppDist: function (x, z, team) { return oppDist(x, z, team); },
     // AI.MA's team-mates are the Legend CPU (only its selected player is the learning model)
-    profile: function (name) { return PROFILES[name === 'AIMA' ? 'LEGEND' : name] || PROFILES.NORMAL; },
+    profile: function (name) { return PROFILES[NS.baseLv(name)] || PROFILES.NORMAL; }, // (checkoAI: its level's)
     teams: TEAMS,
     teamUpdate: teamUpdate,
     shotQuality: shotQuality,

@@ -1,14 +1,19 @@
 /* trainer.html: checkoAI's training without the game around it. Everything here goes through the game's own NS.Aima
  * (brains, cloud, learning from data, recording, training matches through NS.Debug), so the page follows the game's
- * updates by itself; it only draws the controls. The page keeps training in a background tab (NS.Debug's worker beat). */
+ * updates by itself; it only draws the controls, in tabs: Brains, Training, Data sets, Jobs, Stats. The brain picked at
+ * the top is the one every tab works on. The page keeps working in a background tab (NS.Debug's worker beat), at the
+ * CPU load picked at the top (NS.Debug.setLoad). */
 (function (NS) {
   'use strict';
 
   var A = NS.Aima, World = NS.World, T = NS.I18n.t;
   var $ = function (id) { return document.getElementById(id); };
-  var sel = '';           // the brain shown and trained (default: the active one)
+  var TABS = ['brains', 'train', 'data', 'jobs', 'stats'];
+  var LOADS = [10, 25, 50, 75, 100];
+  var tab = 'brains';
+  var sel = '';           // the brain every tab works on (default: the active one)
   var setSel = '';        // the data set
-  var confirmKey = '', open = {}, shape = '', dirty = true;
+  var confirmKey = '', open = {}, shape = '', dirty = true, loading = '', failed = '', newName = '';
 
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -27,31 +32,52 @@
     m.textContent = text || '';
     m.className = 'msg' + (text ? '' : ' hidden') + (bad ? ' bad' : '');
   }
+  // a select's options; keeps its value when it is still one of them
   function fill(select, items, value) {
-    select.innerHTML = '';
-    items.forEach(function (it) {
-      var o = el('option', null, it[1]);
-      o.value = String(it[0]);
-      select.appendChild(o);
-    });
-    if (value !== undefined) select.value = String(value);
+    var keep = value !== undefined ? String(value) : select.value;
+    var sig = JSON.stringify(items);
+    if (select._sig !== sig) {
+      select._sig = sig;
+      select.innerHTML = '';
+      items.forEach(function (it) {
+        var o = el('option', null, it[1]);
+        o.value = String(it[0]);
+        select.appendChild(o);
+      });
+    }
+    if (items.some(function (it) { return String(it[0]) === keep; })) select.value = keep;
   }
   function opt(key) { for (var i = 0; i < A.TR_OPTS.length; i++) if (A.TR_OPTS[i][0] === key) return A.TR_OPTS[i][1]; return []; }
   function num(id) { return +$(id).value; }
   function when(t) { return t ? new Date(t).toLocaleString() : '-'; }
   function pct(v) { return Math.round(v * 100) + '%'; }
   function live(x) { return x.state === 'running' || x.state === 'loading'; }
+  function store(k, v) { try { localStorage.setItem('rs6trainer_' + k, v); } catch (e) {} }
+  function stored(k) { try { return localStorage.getItem('rs6trainer_' + k); } catch (e) { return null; } }
+  function entry(id) { var l = A.brains(); for (var i = 0; i < l.length; i++) if (l[i].id === id) return l[i]; return null; }
 
-  // ---- the brain shown (loaded from the cloud when needed)
-  var loading = '';
+  // ---- the selected brain (loaded from the cloud when needed; a brain that failed is not asked for again and again)
   function brain() {
-    var list = A.brains();
-    if (!sel || !list.some(function (e) { return e.id === sel; })) sel = A.activeId();
+    if (!sel || !entry(sel)) sel = A.activeId();
     var b = A.loadedBrain(sel);
-    if (b || loading === sel) return b;
+    if (b || loading === sel || failed === sel) return b;
     loading = sel;
-    A.getBrain(sel).then(function () { loading = ''; dirty = true; }, function () { loading = ''; msg('Could not load that brain.', true); });
+    A.getBrain(sel).then(function () { loading = ''; dirty = true; }, function () {
+      failed = loading; loading = ''; msg('Could not load that brain.', true); dirty = true;
+    });
     return null;
+  }
+  function pick(id) { sel = id; failed = ''; confirmKey = ''; dirty = true; }
+
+  // ---- tabs
+  function showTab(t) {
+    if (TABS.indexOf(t) < 0) t = 'brains';
+    tab = t;
+    store('tab', t);
+    var bs = $('tabs').querySelectorAll('[data-tab]');
+    for (var i = 0; i < bs.length; i++) bs[i].classList.toggle('sel', bs[i].getAttribute('data-tab') === t);
+    TABS.forEach(function (k) { $('tab-' + k).classList.toggle('hidden', k !== t); });
+    dirty = true;
   }
 
   // ---- header: cloud and the Google sign-in (the same account as the game's trainer profile)
@@ -84,49 +110,61 @@
     box.appendChild(a);
   }
 
-  // ---- the brains
-  function name() { return $('brainName').value.trim().slice(0, 24); }
+  function algoShort(e) { return e.algo === 'OPT' ? 'OPT 2.0' : 'AC 1.2 · ' + e.size; }
+  function drawPicker() {
+    fill($('brainSel'), A.brains().map(function (e) {
+      return [e.id, (e.id === A.activeId() ? '★ ' : '') + e.name + '  (' + algoShort(e) + ')'];
+    }), sel);
+  }
+
+  // ---- BRAINS tab
   function drawBrains() {
     var box = $('brains');
     box.innerHTML = '';
     A.brains().forEach(function (e) {
-      var id = e.id, act = id === A.activeId(), used = A.inUse(id);
-      var row = el('div', 'brow' + (id === sel ? ' sel' : ''));
-      var head = el('div', 'bhead');
-      head.appendChild(el('b', null, (act ? '★ ' : '') + e.name));
-      head.appendChild(el('span', 'muted small', (e.algo === 'OPT' ? 'OPT 2.0' : 'AC 1.2 · ' + e.size) + ' · ' + (e.matches || 0) + ' matches' + (used ? ' · in use' : '')));
-      head.onclick = function () { sel = id; confirmKey = ''; dirty = true; };
-      row.appendChild(head);
-      if (id === sel) {
-        var bt = el('div', 'row');
-        if (!act) bt.appendChild(button('Use in the game', 'primary', function () {
-          A.use(id).then(function (b) { msg(b.name + ' is now the active brain.'); dirty = true; }, function () { msg('Could not load it.', true); });
-        }));
-        bt.appendChild(button('Clone', '', function () {
-          A.clone(id, name() || e.name + ' 2').then(function (b) { sel = b.id; msg('Cloned: ' + b.name); dirty = true; });
-        }));
-        bt.appendChild(button('Rename', '', function () {
-          if (!name()) { msg('Type the new name first.', true); return; }
-          A.rename(id, name()).then(function () { msg('Renamed.'); dirty = true; });
-        }));
-        if (!act && !used && A.brains().length > 1) bt.appendChild(button(confirmKey === 'del' + id ? 'Press again to delete' : 'Delete', 'danger', function () {
-          if (confirmKey !== 'del' + id) { confirmKey = 'del' + id; dirty = true; return; }
-          confirmKey = '';
-          if (A.remove(id)) { sel = A.activeId(); msg('Deleted.'); } else msg('It is in use.', true);
-          dirty = true;
-        }));
-        row.appendChild(bt);
-      }
+      var row = el('div', 'brow' + (e.id === sel ? ' sel' : ''));
+      row.appendChild(el('b', null, (e.id === A.activeId() ? '★ ' : '') + e.name));
+      row.appendChild(el('span', 'muted small', algoShort(e) + ' · ' + (e.matches || 0) + ' matches' + (A.inUse(e.id) ? ' · in use' : '')));
+      row.onclick = function () { pick(e.id); };
       box.appendChild(row);
     });
   }
-
+  function drawSelected(b) {
+    var e = entry(sel), acts = $('selActs');
+    acts.innerHTML = '';
+    $('selTitle').textContent = e ? (e.id === A.activeId() ? '★ ' : '') + e.name : 'Brain';
+    $('selInfo').textContent = b ? A.algoName(b) + (e.id === A.activeId() ? ' · the brain the game plays with' : '') : (loading ? 'loading...' : '');
+    if (!e) return;
+    var id = e.id, act = id === A.activeId(), used = A.inUse(id);
+    if (!act) acts.appendChild(button('Use in the game', 'primary', function () {
+      A.use(id).then(function (x) { msg(x.name + ' is now the active brain.'); dirty = true; }, function () { msg('Could not load it.', true); });
+    }));
+    // clone / rename: one name box, used by whichever is pressed
+    var nm = el('input');
+    nm.type = 'text'; nm.maxLength = 24; nm.spellcheck = false; nm.placeholder = 'new name (clone / rename)';
+    nm.value = newName;
+    nm.oninput = function () { newName = nm.value; };
+    acts.appendChild(nm);
+    acts.appendChild(button('Clone', '', function () {
+      A.clone(id, newName.trim().slice(0, 24) || e.name + ' 2').then(function (x) { newName = ''; pick(x.id); msg('Cloned: ' + x.name); });
+    }));
+    acts.appendChild(button('Rename', '', function () {
+      if (!newName.trim()) { msg('Type the new name first.', true); nm.focus(); return; }
+      A.rename(id, newName.trim().slice(0, 24)).then(function () { newName = ''; msg('Renamed.'); dirty = true; });
+    }));
+    if (!act && !used && A.brains().length > 1) acts.appendChild(button(confirmKey === 'del' + id ? 'Press again to delete' : 'Delete', 'danger', function () {
+      if (confirmKey !== 'del' + id) { confirmKey = 'del' + id; dirty = true; return; }
+      confirmKey = '';
+      if (A.remove(id)) { pick(A.activeId()); msg('Deleted.'); } else msg('It is in use.', true);
+      dirty = true;
+    }));
+  }
   function drawOpts(b) {
     var box = $('brainOpts');
     box.innerHTML = '';
-    $('setName').textContent = b ? b.name : '';
     if (!b) { box.appendChild(el('div', 'muted', 'loading...')); return; }
-    A.OPTS.forEach(function (o) {
+    // (an OPT brain shows only the settings it uses: learning, and learning from the trainer's play)
+    A.optsFor(b).forEach(function (o) {
       var lab = el('label', null, T(o[1]));
       lab.title = T(o[1] + '.h');
       var s = el('select');
@@ -146,14 +184,24 @@
     });
   }
 
-  // ---- data sets
+  // ---- TRAINING tab
+  function drawTrain(b) {
+    $('trainFor').textContent = b ? 'for ' + b.name : '';
+    fill($('tOpp'), [['EASY', 'CPU Easy'], ['NORMAL', 'CPU Normal'], ['HARD', 'CPU Pro'], ['LEGEND', 'CPU Legend']].concat(
+      A.brains().map(function (e) { return ['B:' + e.id, 'checkoAI ' + e.name + (e.id === sel ? ' (itself)' : '')]; })));
+    $('bTrain').disabled = $('bBench').disabled = !b;
+  }
+
+  // ---- DATA SETS tab
   function drawSets(b) {
     var box = $('sets');
     box.innerHTML = '';
     var sets = A.dataSets();
     if (!sets.some(function (x) { return x.id === setSel; })) setSel = sets.length ? sets[0].id : '';
     if (!sets.length) box.appendChild(el('div', 'muted', A.hasCloud() ? 'no data set yet (' + A.dataState() + ')' : 'no cloud configured'));
+    var cur = null;
     sets.forEach(function (x) {
+      if (x.id === setSel) cur = x;
       var row = el('label', 'set' + (x.id === setSel ? ' sel' : ''));
       var r = el('input');
       r.type = 'radio'; r.name = 'set'; r.checked = x.id === setSel;
@@ -164,40 +212,38 @@
         x.teamSize + ' a side · ' + when(x.updated) + (x.F !== A.F ? ' · other inputs: record again' : '')));
       box.appendChild(row);
     });
-    var cur = null;
-    sets.forEach(function (x) { if (x.id === setSel) cur = x; });
-    var lr = cur && b ? A.learnt(b, cur.id) : null;
-    $('learnt').textContent = cur && b ? b.name + ': ' + (lr ? lr.passes.toFixed(3) + ' passes · ' + lr.chunks + ' / ' + cur.chunks + ' chunks learnt' +
-      (lr.next ? ' · goes on from chunk ' + (lr.next + 1) : '') : 'nothing learnt from this set yet') : '';
     var miss = cur ? A.dataMissing(cur.id) : 0;
     var rs = $('bResend');
     rs.className = miss ? '' : 'hidden';
     rs.textContent = 'Resend unsaved chunks (' + miss + ')';
     $('bDelSet').textContent = confirmKey === 'dset' ? 'Press again to delete' : 'Delete set';
+    $('bDelSet').disabled = !cur;
     // the record target: a new set or one of these
-    var rv = $('rSet').value;
-    fill($('rSet'), [['', 'new data set']].concat(sets.map(function (x) { return [x.id, 'add to: ' + x.name]; })), rv);
+    fill($('rSet'), [['', 'new data set']].concat(sets.map(function (x) { return [x.id, 'add to: ' + x.name]; })));
     $('rName').style.display = $('rSet').value ? 'none' : '';
+    // learning: for the selected brain (AIMA-AC 1.2 only)
+    var isOpt = !!b && b.algo === 'OPT';
+    $('learnFor').textContent = cur && b ? b.name + ' <- "' + cur.name + '"' : '';
+    $('learnOpt').classList.toggle('hidden', !isOpt);
+    $('bLearn').disabled = !b || !cur || isOpt;
+    var lr = cur && b && !isOpt ? A.learnt(b, cur.id) : null;
+    $('learnt').textContent = cur && b && !isOpt ? (lr ? lr.passes.toFixed(3) + ' passes · ' + lr.chunks + ' / ' + cur.chunks + ' chunks learnt' +
+      (lr.next ? ' · goes on from chunk ' + (lr.next + 1) : '') : 'nothing learnt from this set yet') : '';
   }
 
-  // ---- jobs: training sessions and data jobs, newest first
+  // ---- JOBS tab: training sessions and data jobs, newest first
   function jobCard(kind, x) {
     var c = el('div', 'job ' + x.state);
     var head = el('div', 'jhead');
-    head.appendChild(el('b', null, kind === 'ses' ? '#' + x.id + ' training ' + (x.b ? x.b.name : '?') + ' v ' + (x.oppLabel || x.cfg.opp) :
+    head.appendChild(el('b', null, kind === 'ses' ? '#' + x.id + ' ' + (x.cfg.bench ? 'benchmark ' : 'training ') + (x.b ? x.b.name : '?') + ' v ' + (x.oppLabel || x.cfg.opp) :
       (x.kind === 'rec' ? 'Record "' + x.setName + '"' : 'Learn ' + (x.b ? x.b.name : '') + ' <- "' + x.setName + '"')));
     head.appendChild(el('span', 'pill ' + x.state, x.state));
     c.appendChild(head);
-    if (kind === 'ses') {
+    if (kind === 'ses' || x.kind === 'learn') {
       var bar = el('div', 'bar'), f = el('i');
       bar.appendChild(f);
       c.appendChild(bar);
       c._bar = f;
-    } else if (x.kind === 'learn') {
-      var bar2 = el('div', 'bar'), f2 = el('i');
-      bar2.appendChild(f2);
-      c.appendChild(bar2);
-      c._bar = f2;
     }
     var pre = el('pre', 'jtext');
     c.appendChild(pre);
@@ -228,89 +274,66 @@
   function copy(text) {
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { msg('Copied.'); }, function () {});
   }
-  function drawJobs() {
-    var box = $('jobs');
-    box.innerHTML = '';
+  function allJobs() {
     var all = [];
     A.sessions().forEach(function (S) { all.push(['ses', S, S.started || 0]); });
     A.dataJobs().forEach(function (J) { all.push(['job', J, J.started || 0]); });
     all.sort(function (a, b) { return b[2] - a[2]; });
-    if (!all.length) box.appendChild(el('div', 'muted', 'nothing running'));
+    return all;
+  }
+  function drawJobs() {
+    var box = $('jobs');
+    box.innerHTML = '';
+    var all = allJobs();
+    if (!all.length) box.appendChild(el('div', 'muted', 'nothing yet: start a training (Training tab) or a recording / learning run (Data sets tab)'));
     all.forEach(function (j) { box.appendChild(jobCard(j[0], j[1])); });
-    $('busy').textContent = A.busy() ? '● working' : '';
+    $('bStopAll').disabled = !all.some(function (j) { return live(j[1]); });
+  }
+  function drawBusy() {
+    var n = allJobs().filter(function (j) { return live(j[1]); }).length;
+    $('jobCount').textContent = n ? String(n) : '';
+    $('busy').textContent = A.busy() ? '● working' + (NS.Debug.load() < 1 ? ' at ' + Math.round(NS.Debug.load() * 100) + '% CPU' : '') : '';
   }
 
-  // ---- the brain's numbers and history
+  // ---- STATS tab: the brain's numbers and history
   function drawStats(b) {
     var box = $('stats'), ul = $('hist');
     box.innerHTML = ''; ul.innerHTML = '';
     $('statName').textContent = b ? b.name : '';
     if (!b) return;
-    var s = b.st, w = A.work(b), f = A.fmtOps, sy = A.style(b);
+    var s = b.st, w = A.work(b), f = A.fmtOps, opt2 = b.algo === 'OPT', sy = opt2 ? null : A.style(b);
     var rows = [
       ['algorithm', A.algoName(b)],
-      b.algo === 'OPT' ? ['network', 'options scorer 30-32-16-1 + value 12-16-1  (' + NS.AimaOpt.NP.toLocaleString() + ' parameters)']
+      opt2 ? ['network', 'options scorer 30-32-16-1 + value 12-16-1  (' + NS.AimaOpt.NP.toLocaleString() + ' parameters)']
         : ['network', b.cfg.size + '  ' + A.F + '-' + b.H1 + '-' + b.H2 + '-' + A.NOUT + '  (' + b.NP.toLocaleString() + ' parameters)'],
-      b.algo === 'OPT' ? ['choices', optPicks(s)] : null,
+      opt2 ? ['choices', optPicks(s)] : null,
+      opt2 ? ['lessons', String(NS.AimaOpt.lessons(b))] : null,
       ['matches', s.matches + '  (' + s.w + '-' + s.d + '-' + s.l + ')  trained ' + (s.trainMatches || 0)],
       ['goals', s.goals + '  (team ' + s.gf + '-' + s.ga + ')'],
       ['passes', s.passes + '  (' + (s.passes ? pct(Math.min(1, s.passOk / s.passes)) : '-') + ')'],
       ['shots', s.shots + '  (on target ' + s.onTarget + ')'],
       ['updates', 'RL ' + s.rl + '  /  copy ' + s.im],
       ['decisions', s.decisions + '  (own ' + (s.decisions ? pct(s.modelDec / s.decisions) : '-') + ')'],
-      ['Legend help', pct(b.help())],
-      ['style', 'pass ' + pct(sy.pass) + ' · shoot ' + pct(sy.shoot) + ' · sprint ' + pct(sy.sprint) + ' · carry ' + pct(sy.carry)],
+      opt2 ? null : ['Legend help', pct(b.help())],
+      opt2 ? null : ['style', 'pass ' + pct(sy.pass) + ' · shoot ' + pct(sy.shoot) + ' · sprint ' + pct(sy.sprint) + ' · carry ' + pct(sy.carry)],
       ['work', w.measured ? f(w.perSec) + ' /s' : '-'],
       ['memory', (Math.round(w.memBytes / 104857.6) / 10) + ' MB'],
       ['created', when(b.created)],
       ['saved', when(b.saved)]
-    ];
-    rows = rows.filter(function (r) { return !!r; });
+    ].filter(function (r) { return !!r; });
     var data = b.data || {};
     Object.keys(data).forEach(function (k) {
       var d = data[k];
       rows.push(['data "' + d.name + '"', d.passes.toFixed(3) + ' passes · ' + d.chunks + ' chunks · ' + d.steps + ' steps' + (d.next ? ' · next chunk ' + (d.next + 1) : '')]);
     });
     rows.forEach(function (r) { box.appendChild(el('span', 'k', r[0])); box.appendChild(el('span', 'v', r[1])); });
-    b.hist.slice(-30).reverse().forEach(function (h) {
+    b.hist.slice(-60).reverse().forEach(function (h) {
       var li = el('li');
       li.appendChild(el('span', 'muted', new Date(h.t).toLocaleString() + '  '));
       li.appendChild(document.createTextNode(h.k + (h.d ? ' ' + JSON.stringify(h.d) : '')));
       ul.appendChild(li);
     });
   }
-
-  // ---- drawing: the whole page when something changed shape, else only the live texts
-  function shapeKey() {
-    var k = [sel, setSel, confirmKey, A.cloud, A.account(), A.dataState(), A.activeId(), loading, JSON.stringify(open)];
-    A.brains().forEach(function (e) { k.push(e.id + e.name + e.size + e.matches + A.inUse(e.id)); });
-    A.dataSets().forEach(function (x) { k.push(x.id + x.chunks + x.name + A.dataMissing(x.id)); });
-    A.sessions().forEach(function (S) { k.push('s' + S.id + S.state); });
-    A.dataJobs().forEach(function (J) { k.push('j' + J.id + J.state); });
-    var b = A.loadedBrain(sel);
-    if (b) k.push(b.saved, JSON.stringify(b.cfg));
-    return k.join('|');
-  }
-  function draw() {
-    var b = brain();
-    drawAccount();
-    drawBrains();
-    drawOpts(b);
-    drawSets(b);
-    drawJobs();
-    drawStats(b);
-    var ov = $('tOpp').value;
-    fill($('tOpp'), [['EASY', 'CPU Easy'], ['NORMAL', 'CPU Normal'], ['HARD', 'CPU Hard'], ['LEGEND', 'CPU Legend']].concat(
-      A.brains().map(function (e) { return ['B:' + e.id, 'checkoAI ' + e.name]; })), ov || 'NORMAL');
-  }
-  function tick() {
-    var k = shapeKey();
-    if (dirty || k !== shape) { dirty = false; shape = k; draw(); return; }
-    var cards = $('jobs').children;
-    for (var i = 0; i < cards.length; i++) if (cards[i]._x) liveText(cards[i]);
-    $('busy').textContent = A.busy() ? '● working' : '';
-  }
-
   // an OPT brain's choices per kind of option, and the share that were Legend's own
   function optPicks(s) {
     var names = ['dribble', 'clear', 'shot', 'pass', 'one-two', 'through', 'lofted through', 'cross', 'long'], p = s.optPick || [], n = 0, out = [];
@@ -319,23 +342,80 @@
     return n ? out.join(' · ') + '  (same as Legend ' + Math.round((s.optSame || 0) * 100 / n) + '%)' : '-';
   }
 
+  // ---- drawing: the shown tab when something changed shape, else only the live texts. A select or box being used
+  // is never redrawn under the mouse (it waits until it loses focus)
+  function shapeKey() {
+    var k = [tab, sel, setSel, confirmKey, A.cloud, A.account(), A.dataState(), A.activeId(), loading, JSON.stringify(open)];
+    A.brains().forEach(function (e) { k.push(e.id + e.name + e.size + e.matches + A.inUse(e.id)); });
+    if (tab === 'data') A.dataSets().forEach(function (x) { k.push(x.id + x.chunks + x.name + A.dataMissing(x.id)); });
+    if (tab === 'jobs') allJobs().forEach(function (j) { k.push(j[0] + j[1].id + j[1].state); });
+    var b = A.loadedBrain(sel);
+    if (b && (tab === 'brains' || tab === 'stats')) k.push(b.saved, JSON.stringify(b.cfg));
+    return k.join('|');
+  }
+  function busyField() {
+    var a = document.activeElement;
+    return !!a && (a.tagName === 'SELECT' || a.tagName === 'INPUT') && !!a.closest && !!a.closest('#brainOpts, #selActs, #account');
+  }
+  function draw() {
+    var b = brain();
+    drawAccount();
+    drawPicker();
+    if (tab === 'brains') { drawBrains(); drawSelected(b); drawOpts(b); }
+    else if (tab === 'train') drawTrain(b);
+    else if (tab === 'data') drawSets(b);
+    else if (tab === 'jobs') drawJobs();
+    else drawStats(b);
+    drawBusy();
+  }
+  function tick() {
+    var k = shapeKey();
+    if ((dirty || k !== shape) && !busyField()) { dirty = false; shape = k; draw(); return; }
+    if (tab === 'jobs') {
+      var cards = $('jobs').children;
+      for (var i = 0; i < cards.length; i++) if (cards[i]._x) liveText(cards[i]);
+    }
+    drawBusy();
+  }
+
   // ---- actions
   function wire() {
+    var bs = $('tabs').querySelectorAll('[data-tab]');
+    for (var i = 0; i < bs.length; i++) bs[i].onclick = function () { showTab(this.getAttribute('data-tab')); tick(); };
+    $('brainSel').onchange = function () { pick(this.value); tick(); };
+
+    // CPU load (kept in this browser)
+    var ld = +stored('load') || 100;
+    if (LOADS.indexOf(ld) < 0) ld = 100;
+    fill($('cpuLoad'), LOADS.map(function (v) { return [v, v + '%' + (v === 100 ? ' (no limit)' : '')]; }), ld);
+    NS.Debug.setLoad(ld / 100);
+    $('cpuLoad').onchange = function () { NS.Debug.setLoad(+this.value / 100); store('load', this.value); dirty = true; };
+
+    // the match options (training, recording) and the data options
+    var hours = opt('hours').map(function (v) { return [v, v ? String(v) : 'no limit']; });
+    var matches = opt('matches').map(function (v) { return [v, v ? String(v) : '∞ (until stopped)']; });
+    var sizes = opt('size').map(function (v) { return [v, String(v)]; });
+    var stadiums = opt('stadium').map(function (v) { return [v, v]; });
+    var lengths = opt('length').map(function (v) { return [v, String(v)]; });
+    [['t', 10], ['r', 10]].forEach(function (p) {
+      fill($(p[0] + 'Matches'), matches, p[1]);
+      fill($(p[0] + 'Size'), sizes, 11);
+      fill($(p[0] + 'Stadium'), stadiums, 'SMALL');
+      fill($(p[0] + 'Length'), lengths, 3);
+      fill($(p[0] + 'Hours'), hours, 0);
+    });
+    fill($('tOpp'), [['LEGEND', 'CPU Legend']], 'LEGEND');
     fill($('dPasses'), A.DT_PASSES.map(function (v) { return [v, String(v)]; }), 1);
     fill($('dWin'), A.DT_WIN.map(function (v) { return [v, String(v)]; }), 100);
     fill($('dRounds'), A.DT_ROUNDS.map(function (v) { return [v, v ? String(v) : '∞ (until stopped)']; }), 1);
-    var hours = opt('hours').map(function (v) { return [v, v ? String(v) : 'no limit']; });
     fill($('dHours'), hours, 0);
-    fill($('tHours'), hours, 0);
-    fill($('tMatches'), opt('matches').map(function (v) { return [v, v ? String(v) : '∞ (until stopped)']; }), 10);
-    fill($('tSize'), opt('size').map(function (v) { return [v, String(v)]; }), 11);
-    fill($('tStadium'), opt('stadium').map(function (v) { return [v, v]; }), 'SMALL');
-    fill($('tLength'), opt('length').map(function (v) { return [v, String(v)]; }), 3);
-    $('rSet').onchange = function () { $('rName').style.display = $('rSet').value ? 'none' : ''; };
+    $('rSet').onchange = function () { $('rName').style.display = this.value ? 'none' : ''; };
 
     $('bNew').onclick = function () {
-      var b = A.create(name() || 'checkoAI ' + (A.brains().length + 1), $('brainAlgo').value);
-      sel = b.id; msg('Created ' + b.name + ' (' + A.algoName(b) + ')'); dirty = true;
+      var b = A.create($('newName').value.trim().slice(0, 24) || 'checkoAI ' + (A.brains().length + 1), $('newAlgo').value);
+      $('newName').value = '';
+      pick(b.id);
+      msg('Created ' + b.name + ' (' + A.algoName(b) + ')');
     };
     $('bSave').onclick = function () { var b = A.loadedBrain(sel); if (b) { A.saveBrain(b); msg('Saved ' + b.name + ' (cloud: ' + A.cloud + ')'); } };
     $('bReset').onclick = function () {
@@ -347,9 +427,9 @@
       var b = A.loadedBrain(sel);
       if (!b || !setSel) { msg('Pick a brain and a data set first.', true); return; }
       // recorded sets hold sticks and buttons (AIMA-AC); an OPT brain learns Legend's choices during its training matches
-      if (b.algo === 'OPT') { msg('An OPT 2.0 brain does not use data sets: it copies Legend inside its training matches. Use Start training.', true); return; }
+      if (b.algo === 'OPT') { msg('An OPT 2.0 brain does not use data sets: it copies Legend inside its training matches. Use the Training tab.', true); return; }
       var J = A.startLearn({ brain: b.id, sets: [setSel], passes: num('dPasses'), win: num('dWin'), rounds: num('dRounds'), hours: num('dHours') });
-      msg(J ? '' : 'Cannot start: the brain is busy, the set has other inputs, or you are not signed in as the trainer.', !J);
+      if (J) { msg('Learning started (Jobs tab).'); showTab('jobs'); } else msg('Cannot start: the brain is busy, the set has other inputs, or you are not signed in as the trainer.', true);
       dirty = true;
     };
     $('bResend').onclick = function () { msg(A.resendSet(setSel) ? 'Sending again...' : 'Nothing to send (sign in first).'); dirty = true; };
@@ -363,18 +443,19 @@
     $('bReloadSets').onclick = function () { A.loadDataIndex(); dirty = true; };
     $('bRecord').onclick = function () {
       var target = $('rSet').value;
-      if (!target && !$('rName').value.trim()) { msg('Give the new data set a name.', true); return; }
-      var J = A.startRecord({ set: target, name: $('rName').value.trim(), matches: num('tMatches'), teamSize: num('tSize'), stadium: $('tStadium').value,
-        duration: num('tLength'), hours: num('tHours') });
-      if (J) { setSel = J.set; msg(''); } else msg('Cannot record now.', true);
+      if (!target && !$('rName').value.trim()) { msg('Give the new data set a name.', true); $('rName').focus(); return; }
+      var J = A.startRecord({ set: target, name: $('rName').value.trim(), matches: num('rMatches'), teamSize: num('rSize'), stadium: $('rStadium').value,
+        duration: num('rLength'), hours: num('rHours') });
+      if (J) { setSel = J.set; $('rName').value = ''; msg('Recording started (Jobs tab).'); showTab('jobs'); } else msg('Cannot record now.', true);
       dirty = true;
     };
     function startTrain(bench) {
       var b = A.loadedBrain(sel);
-      if (!b) return;
+      if (!b) { msg('The brain is still loading.', true); return; }
       var S = A.startSession({ brain: b.id, opp: $('tOpp').value, matches: num('tMatches'), teamSize: num('tSize'), stadium: $('tStadium').value,
         duration: num('tLength'), hours: num('tHours'), bench: !!bench });
-      msg(S ? (bench ? 'Benchmark: ' + b.name + ' plays without learning' : '') : 'Cannot start a training now.', !S);
+      if (S) { msg(bench ? 'Benchmark: ' + b.name + ' plays without learning.' : 'Training ' + b.name + '.'); showTab('jobs'); }
+      else msg('Cannot start a training now.', true);
       dirty = true;
     }
     $('bTrain').onclick = function () { startTrain(false); };
@@ -423,6 +504,7 @@
     A.onData = null;
     $('ver').textContent = 'v' + NS.VERSION;
     wire();
+    showTab(stored('tab') || 'brains');
     draw();
     setInterval(tick, 500);
   }

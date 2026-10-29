@@ -4,7 +4,7 @@ Written for v1.51.0 (October 2026). Goal: a checkoAI brain that wins 10 matches 
 using every move a human has (low / through / long / lofted through pass, one-two, shots, curl, chip, knock-on,
 tackles, press).
 
-## 0. Status (v1.52.0)
+## 0. Status (v1.53.0)
 
 | Step | State |
 |---|---|
@@ -15,6 +15,7 @@ tackles, press).
 | E. fast training | Partly: a headless match takes ~2.5 s (trainer.html / gfb.js), so 1,000 matches is ~45 min on one browser page. No parallel workers yet. |
 | F. benchmark gate | **Done**: Benchmark button (in-game Training page, trainer.html) and `node gfb.js bench`. |
 | Coaching (claps, punishments, your moves) | **Done** for both algorithms (lessons). |
+| Levels (v1.53) | **Done**: Settings > CPU opponent (Classic / checkoAI) + CPU level (Easy / Normal / Pro / Legend). One brain plays every level: below Legend its team uses that level's rules (ai.js PROFILES) and an OPT brain sometimes plays its 2nd / 3rd best option (aimaopt.js SHARP). Read only below Legend: only Legend-level matches teach it (claps still add lessons). |
 
 The old algorithm stays as **AIMA-AC 1.2** for the brains made with it (and for new ones when chosen), so both can be
 compared with the benchmark.

@@ -5,71 +5,66 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
 <title>checkoAI Trainer</title>
-<link rel="icon" type="image/svg+xml" href="icon.svg?v=1.52.1">
-<link rel="stylesheet" href="css/trainer.css?v=1.52.1">
+<link rel="icon" type="image/svg+xml" href="icon.svg?v=1.53.0">
+<link rel="stylesheet" href="css/trainer.css?v=1.53.0">
 </head>
 <body>
 <header class="top">
   <div class="brand"><b>checkoAI</b> Trainer <span id="ver" class="muted"></span></div>
+  <label class="load" title="Share of one CPU core the jobs may use (the browser runs them on one core). 100% = no limit.">
+    CPU load <select id="cpuLoad"></select>
+  </label>
   <div id="account" class="account"></div>
 </header>
-<main class="layout">
-  <aside class="col side">
-    <section class="card">
-      <h2>Brains</h2>
-      <div id="brains"></div>
-      <div class="row">
-        <input id="brainName" type="text" maxlength="24" placeholder="name (new / clone / rename)" spellcheck="false">
+
+<nav class="tabbar">
+  <div class="tabs" id="tabs">
+    <button type="button" data-tab="brains">Brains</button>
+    <button type="button" data-tab="train">Training</button>
+    <button type="button" data-tab="data">Data sets</button>
+    <button type="button" data-tab="jobs">Jobs <span id="jobCount" class="count"></span></button>
+    <button type="button" data-tab="stats">Stats</button>
+  </div>
+  <label class="pick">Brain <select id="brainSel"></select></label>
+</nav>
+
+<div id="msg" class="msg hidden"></div>
+
+<main>
+  <!-- BRAINS: the list, a new brain, and the selected brain's actions and settings -->
+  <section class="tab" id="tab-brains">
+    <div class="split">
+      <div class="card">
+        <h2>All brains</h2>
+        <div id="brains"></div>
+        <h3>New brain</h3>
+        <div class="row">
+          <input id="newName" type="text" maxlength="24" placeholder="name" spellcheck="false">
+          <select id="newAlgo">
+            <option value="OPT">AIMA-OPT 2.0: Legend's options + learned correction</option>
+            <option value="AC">AIMA-AC 1.2: stick + buttons, every player</option>
+          </select>
+          <button id="bNew" type="button" class="primary">Create</button>
+        </div>
       </div>
-      <div class="row">
-        <select id="brainAlgo">
-          <option value="AC">AIMA-AC 1.2: stick + buttons, every player</option>
-          <option value="OPT">AIMA-OPT 2.0: Legend's options + learned correction (carrier)</option>
-        </select>
-        <button id="bNew" type="button">New brain</button>
+      <div class="card">
+        <h2 id="selTitle">Brain</h2>
+        <div id="selInfo" class="muted small"></div>
+        <div class="row" id="selActs"></div>
+        <h3>Settings</h3>
+        <div id="brainOpts" class="opts"></div>
+        <div class="row">
+          <button id="bSave" type="button">Save now</button>
+          <button id="bReset" type="button" class="danger">Reset brain</button>
+        </div>
       </div>
-    </section>
-    <section class="card">
-      <h2>Brain settings <span id="setName" class="muted"></span></h2>
-      <div id="brainOpts" class="opts"></div>
-      <div class="row">
-        <button id="bSave" type="button">Save now</button>
-        <button id="bReset" type="button" class="danger">Reset brain</button>
-      </div>
-    </section>
-  </aside>
-  <div class="col mainc">
-    <div id="msg" class="msg hidden"></div>
-    <section class="card">
-      <h2>Learn from data <span class="muted">(recorded Legend v Legend)</span></h2>
-      <div id="sets" class="sets"></div>
-      <div id="learnt" class="muted small"></div>
-      <div class="grid4">
-        <label>Passes<select id="dPasses"></select></label>
-        <label>Chunks per window<select id="dWin"></select></label>
-        <label>Rounds<select id="dRounds"></select></label>
-        <label>Stop after (hours)<select id="dHours"></select></label>
-      </div>
-      <div class="row">
-        <button id="bLearn" type="button" class="primary">Learn</button>
-        <button id="bResend" type="button" class="hidden"></button>
-        <button id="bDelSet" type="button" class="danger">Delete set</button>
-        <button id="bReloadSets" type="button">Reload sets</button>
-      </div>
-      <p class="muted small">Training starts with the first chunk while the rest of the window (and the next one) loads.
-        Each window gets its passes, leaves memory, then the next; after the last window a new round starts. The brain is saved
-        every minute, and a stopped run goes on from its window next time.</p>
-    </section>
-    <section class="card">
-      <h2>Record data <span class="muted">(Legend v Legend, uses the match options below)</span></h2>
-      <div class="row">
-        <select id="rSet"></select>
-        <input id="rName" type="text" maxlength="24" placeholder="name of the new data set" spellcheck="false">
-        <button id="bRecord" type="button" class="primary">Record</button>
-      </div>
-    </section>
-    <section class="card">
-      <h2>Training matches</h2>
+    </div>
+  </section>
+
+  <!-- TRAINING: matches against a CPU level or a brain (learning, or a benchmark without learning) -->
+  <section class="tab" id="tab-train">
+    <div class="card">
+      <h2>Training matches <span id="trainFor" class="muted"></span></h2>
       <div class="grid4">
         <label>Opponent<select id="tOpp"></select></label>
         <label>Matches<select id="tMatches"></select></label>
@@ -80,48 +75,104 @@
       </div>
       <div class="row">
         <button id="bTrain" type="button" class="primary">Start training</button>
-        <button id="bBench" type="button" title="plays the matches without learning: wins / draws / losses as it is now">Benchmark (no learning)</button>
-        <button id="bStopAll" type="button" class="danger">Stop all</button>
+        <button id="bBench" type="button">Benchmark (no learning)</button>
       </div>
-    </section>
-    <section class="card">
-      <h2>Jobs <span id="busy" class="muted"></span></h2>
+      <p class="muted small">Training always plays at Legend level (the only level that teaches a brain). Benchmark plays the same
+        matches without learning: wins / draws / losses of the brain as it is now. Progress is in the Jobs tab.</p>
+    </div>
+  </section>
+
+  <!-- DATA SETS: recorded Legend v Legend matches, and learning from them (AIMA-AC 1.2 brains) -->
+  <section class="tab" id="tab-data">
+    <div class="split">
+      <div class="card">
+        <h2>Data sets <button id="bReloadSets" type="button" class="mini">Reload</button></h2>
+        <div id="sets" class="sets"></div>
+        <div class="row">
+          <button id="bResend" type="button" class="hidden"></button>
+          <button id="bDelSet" type="button" class="danger">Delete set</button>
+        </div>
+        <h3>Record (Legend v Legend)</h3>
+        <div class="row">
+          <select id="rSet"></select>
+          <input id="rName" type="text" maxlength="24" placeholder="name of the new data set" spellcheck="false">
+        </div>
+        <div class="grid4">
+          <label>Matches<select id="rMatches"></select></label>
+          <label>Players a side<select id="rSize"></select></label>
+          <label>Stadium<select id="rStadium"></select></label>
+          <label>Match length (min)<select id="rLength"></select></label>
+          <label>Stop after (hours)<select id="rHours"></select></label>
+        </div>
+        <div class="row"><button id="bRecord" type="button" class="primary">Record</button></div>
+      </div>
+      <div class="card">
+        <h2>Learn from the set <span id="learnFor" class="muted"></span></h2>
+        <div id="learnt" class="muted small"></div>
+        <div id="learnOpt" class="note hidden">An AIMA-OPT 2.0 brain does not use data sets: it copies Legend inside its
+          training matches (Training tab).</div>
+        <div class="grid4">
+          <label>Passes<select id="dPasses"></select></label>
+          <label>Chunks per window<select id="dWin"></select></label>
+          <label>Rounds<select id="dRounds"></select></label>
+          <label>Stop after (hours)<select id="dHours"></select></label>
+        </div>
+        <div class="row"><button id="bLearn" type="button" class="primary">Learn</button></div>
+        <p class="muted small">Training starts with the first chunk while the rest of the window (and the next one) loads.
+          Each window gets its passes, leaves memory, then the next; after the last window a new round starts. The brain is
+          saved every minute, and a stopped run goes on from its window next time.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- JOBS: trainings, benchmarks, recordings and learning runs, newest first -->
+  <section class="tab" id="tab-jobs">
+    <div class="card">
+      <h2>Jobs <span id="busy" class="muted"></span> <button id="bStopAll" type="button" class="danger mini">Stop all</button></h2>
       <div id="jobs"></div>
-    </section>
-    <section class="card">
-      <h2>Brain <span id="statName" class="muted"></span></h2>
-      <div id="stats" class="kv"></div>
-      <h3>History</h3>
-      <ul id="hist" class="hist"></ul>
-    </section>
-  </div>
+    </div>
+  </section>
+
+  <!-- STATS: the selected brain's numbers and history -->
+  <section class="tab" id="tab-stats">
+    <div class="split">
+      <div class="card">
+        <h2>Numbers <span id="statName" class="muted"></span></h2>
+        <div id="stats" class="kv"></div>
+      </div>
+      <div class="card">
+        <h2>History</h2>
+        <ul id="hist" class="hist"></ul>
+      </div>
+    </div>
+  </section>
 </main>
 
 <!-- The game's own files (shared: an update of the game is an update of the trainer); no My PC, no 3D view, no menus -->
-<script src="vendor/three.min.js?v=1.52.1"></script>
-<script src="js/core/config.js?v=1.52.1"></script>
-<script src="js/core/i18n.js?v=1.52.1"></script>
-<script src="js/core/bindings.js?v=1.52.1"></script>
-<script src="js/trainer/host.js?v=1.52.1"></script>
-<script src="js/core/storage.js?v=1.52.1"></script>
-<script src="js/core/input.js?v=1.52.1"></script>
-<script src="js/core/quality.js?v=1.52.1"></script>
-<script src="js/data/teams.js?v=1.52.1"></script>
-<script src="js/data/players.js?v=1.52.1"></script>
-<script src="js/data/formations.js?v=1.52.1"></script>
-<script src="js/render/assets.js?v=1.52.1"></script>
-<script src="js/game/world.js?v=1.52.1"></script>
-<script src="js/game/actions.js?v=1.52.1"></script>
-<script src="js/game/ai.js?v=1.52.1"></script>
-<script src="js/game/keeper.js?v=1.52.1"></script>
-<script src="js/game/controls.js?v=1.52.1"></script>
-<script src="js/data/aima-cloud.js?v=1.52.1"></script>
-<script src="js/game/aimaopt.js?v=1.52.1"></script>
-<script src="js/game/aima.js?v=1.52.1"></script>
-<script src="js/game/match.js?v=1.52.1"></script>
-<script src="js/game/comp.js?v=1.52.1"></script>
-<script src="js/game/debug.js?v=1.52.1"></script>
-<script src="js/game/stats.js?v=1.52.1"></script>
-<script src="js/trainer/trainer.js?v=1.52.1"></script>
+<script src="vendor/three.min.js?v=1.53.0"></script>
+<script src="js/core/config.js?v=1.53.0"></script>
+<script src="js/core/i18n.js?v=1.53.0"></script>
+<script src="js/core/bindings.js?v=1.53.0"></script>
+<script src="js/trainer/host.js?v=1.53.0"></script>
+<script src="js/core/storage.js?v=1.53.0"></script>
+<script src="js/core/input.js?v=1.53.0"></script>
+<script src="js/core/quality.js?v=1.53.0"></script>
+<script src="js/data/teams.js?v=1.53.0"></script>
+<script src="js/data/players.js?v=1.53.0"></script>
+<script src="js/data/formations.js?v=1.53.0"></script>
+<script src="js/render/assets.js?v=1.53.0"></script>
+<script src="js/game/world.js?v=1.53.0"></script>
+<script src="js/game/actions.js?v=1.53.0"></script>
+<script src="js/game/ai.js?v=1.53.0"></script>
+<script src="js/game/keeper.js?v=1.53.0"></script>
+<script src="js/game/controls.js?v=1.53.0"></script>
+<script src="js/data/aima-cloud.js?v=1.53.0"></script>
+<script src="js/game/aimaopt.js?v=1.53.0"></script>
+<script src="js/game/aima.js?v=1.53.0"></script>
+<script src="js/game/match.js?v=1.53.0"></script>
+<script src="js/game/comp.js?v=1.53.0"></script>
+<script src="js/game/debug.js?v=1.53.0"></script>
+<script src="js/game/stats.js?v=1.53.0"></script>
+<script src="js/trainer/trainer.js?v=1.53.0"></script>
 </body>
 </html>

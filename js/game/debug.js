@@ -25,10 +25,16 @@
       ['onmessage=function(e){setTimeout(function(){postMessage(e.data[0])},e.data[1])}'], { type: 'text/javascript' })));
     ticker.onmessage = function (e) { var f = tickFns[e.data]; delete tickFns[e.data]; if (f) f(); };
   } catch (e) { ticker = null; }
+  // CPU load (trainer.html): the share of the time the jobs may work. A slice that worked w ms is followed by a rest of
+  // w x (1 - load) / load ms (load 1: no rest). Every job (matches, recording, learning from data) runs through here.
+  var load = 1, sliceT0 = 0;
   function later(fn, ms) {
-    if (!ticker) { setTimeout(fn, ms || 0); return; }
-    tickFns[++tickSeq] = fn;
-    ticker.postMessage([tickSeq, ms || 0]);
+    ms = ms || 0;
+    if (load < 1 && sliceT0) ms = Math.max(ms, Math.min(30000, (performance.now() - sliceT0) * (1 - load) / load));
+    var run1 = function () { sliceT0 = performance.now(); try { fn(); } finally { sliceT0 = 0; } };
+    if (!ticker) { setTimeout(run1, ms); return; }
+    tickFns[++tickSeq] = run1;
+    ticker.postMessage([tickSeq, ms]);
   }
 
   function minute() { return Math.min(90, Math.floor(World.match.timeSeconds / 60) + 1); }
@@ -363,10 +369,11 @@
 
   // a level's name; checkoAI with its brain and its Legend help
   function lvName(l, t) {
-    if (l !== 'AIMA' || !NS.Aima) return l;
-    var b = NS.Aima.teamBrain(t);
+    if (!NS.isAimaLv(l) || !NS.Aima) return l;
+    var b = NS.Aima.teamBrain(t), lv = NS.baseLv(l) === 'HARD' ? 'PRO' : NS.baseLv(l);
     if (!b) return l;
-    return 'checkoAI "' + b.name + '" (' + b.cfg.size + ', Legend help ' + Math.round(b.help() * 100) + '%)';
+    if (b.algo === 'OPT') return 'checkoAI "' + b.name + '" (OPT 2.0, ' + lv + (lv === 'LEGEND' ? '' : ', read only') + ')';
+    return 'checkoAI "' + b.name + '" (' + b.cfg.size + ', ' + lv + ', Legend help ' + Math.round(b.help() * 100) + '%)';
   }
   function pct(a, b) { return b > 0 ? (100 * a / b).toFixed(0) + '%' : '-'; }
   function pad(s, n) { s = String(s); while (s.length < n) s += ' '; return s; }
@@ -493,6 +500,8 @@
       later(slice);
     },
     stop: function () { if (run) run.stop = true; },
-    later: later
+    later: later,
+    setLoad: function (v) { load = Math.max(0.05, Math.min(1, +v || 1)); },
+    load: function () { return load; }
   };
 })(window.RS6 = window.RS6 || {});

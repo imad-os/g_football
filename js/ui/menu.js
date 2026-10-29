@@ -721,9 +721,13 @@
 
   // CPU v CPU (nobody on either team): each side's level, and for a checkoAI side the brain that plays it. Up / down
   // walk these buttons (left / right move the controller icons on this screen)
-  var CVC_LV = ['EASY', 'NORMAL', 'HARD', 'LEGEND', 'AIMA'];
+  var CVC_LV = ['EASY', 'NORMAL', 'HARD', 'LEGEND', 'AIMA_EASY', 'AIMA_NORMAL', 'AIMA_HARD', 'AIMA'];
   function cvcOn() { var s = World.session; return s.sideMode === 'CUSTOM' && s.pads[0] < 0 && s.pads[1] < 0; }
-  function lvName(lv) { return T('opt.' + lv.toLowerCase()); }
+  // 'PRO', 'checkoAI · EASY'...
+  function lvName(lv) {
+    var b = T('opt.' + NS.baseLv(lv).toLowerCase());
+    return NS.isAimaLv(lv) ? T('opt.aima') + ' · ' + b : b;
+  }
   function cvcBrainName(t) {
     var s = World.session, id = s.cpuBrains[t], list = NS.Aima.brains();
     for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i].name;
@@ -737,15 +741,15 @@
     box.classList.toggle('hidden', !on);
     if (!on) return;
     var keep = focused && box.contains(focused) ? focused.getAttribute('data-k') : '';
-    if (!s.cpuLevels) s.cpuLevels = [World.settings.difficulty, World.settings.difficulty];
+    if (!s.cpuLevels) s.cpuLevels = [0, 0].map(function () { return NS.cpuLevel(World.settings.cpuType, World.settings.difficulty); });
     clear(box);
     box.appendChild(el('div', 'tag amber', T('cvc.title')));
     [0, 1].forEach(function (t) {
       box.appendChild(btn('opt cvc-opt', T(t ? 'sides.away' : 'sides.home') + ':  ' + lvName(s.cpuLevels[t]), 'cvc:lv' + t, function () {
-        s.cpuLevels[t] = CVC_LV[(CVC_LV.indexOf(s.cpuLevels[t]) + 1) % CVC_LV.length];
+        s.cpuLevels[t] = CVC_LV[(CVC_LV.indexOf(s.cpuLevels[t]) + 1) % CVC_LV.length]; // (an unknown one -> EASY)
         renderCvc();
       }));
-      if (s.cpuLevels[t] === 'AIMA' && NS.Aima) {
+      if (NS.isAimaLv(s.cpuLevels[t]) && NS.Aima) {
         box.appendChild(btn('opt cvc-opt sub', T('dbg.brain') + ':  ' + cvcBrainName(t), 'cvc:br' + t, function () {
           var ids = [''].concat(NS.Aima.brains().map(function (e) { return e.id; }));
           s.cpuBrains[t] = ids[(ids.indexOf(s.cpuBrains[t]) + 1) % ids.length];
@@ -759,7 +763,7 @@
   function cvcBrains(then) {
     var s = World.session;
     if (!NS.Aima) { then(); return; }
-    var want = [0, 1].map(function (t) { return cvcOn() && s.cpuLevels && s.cpuLevels[t] === 'AIMA' ? s.cpuBrains[t] : ''; });
+    var want = [0, 1].map(function (t) { return cvcOn() && s.cpuLevels && NS.isAimaLv(s.cpuLevels[t]) ? s.cpuBrains[t] : ''; });
     if (!want[0] && !want[1]) { NS.Aima.setDebugBrains(null); then(); return; }
     Promise.all(want.map(function (id) { return id ? NS.Aima.getBrain(id).catch(function () { return null; }) : null; })).then(function (bs) {
       NS.Aima.setDebugBrains(bs); // (a brain that failed to load: the active one plays that side)
@@ -1449,8 +1453,8 @@
   // CPU v CPU matches at full speed with every move counted (js/game/debug.js); the report goes into a text box to copy.
   var DBG_OPTS = [
     ['matches', [5, 10, 20, 50, 100]],
-    ['home', ['EASY', 'NORMAL', 'HARD', 'LEGEND', 'AIMA']],
-    ['away', ['EASY', 'NORMAL', 'HARD', 'LEGEND', 'AIMA']],
+    ['home', CVC_LV],
+    ['away', CVC_LV],
     ['teams', ['SELECTED', 'RANDOM']],
     ['size', [11, 7]],
     ['stadium', ['COMPACT', 'SMALL', 'STANDARD', 'GRAND', 'ULTRA']],
@@ -1504,8 +1508,8 @@
     clear(refs.dbgOpts);
     var busy = NS.Debug.running();
     DBG_OPTS.forEach(function (o) {
-      var shown = o[1][dbgSel[o[0]]] === 'AIMA' ? 'checkoAI' : o[1][dbgSel[o[0]]];
-      var b = btn('opt dbg-opt', T('dbg.' + o[0]) + ': ' + shown, 'dbg:' + o[0], function () {
+      var v = o[1][dbgSel[o[0]]], isLv = o[0] === 'home' || o[0] === 'away';
+      var b = btn('opt dbg-opt', T('dbg.' + o[0]) + ': ' + (isLv ? lvName(v) : v), 'dbg:' + o[0], function () {
         if (NS.Debug.running()) return;
         dbgSel[o[0]] = (dbgSel[o[0]] + 1) % o[1].length;
         renderDebug('dbg:' + o[0]);
@@ -1514,7 +1518,7 @@
       refs.dbgOpts.appendChild(b);
       // a checkoAI side: which brain plays it (default: the active one)
       var side = o[0] === 'home' ? 0 : (o[0] === 'away' ? 1 : -1);
-      if (side >= 0 && shown === 'checkoAI' && NS.Aima) {
+      if (side >= 0 && NS.isAimaLv(v) && NS.Aima) {
         var bb = btn('opt dbg-opt', T('dbg.brain') + ': ' + dbgBrainName(side), 'dbg:brain' + side, function () {
           if (NS.Debug.running()) return;
           var ids = [''].concat(NS.Aima.brains().map(function (e) { return e.id; }));
@@ -1540,7 +1544,7 @@
       teamSize: dbgVal('size'), stadium: dbgVal('stadium'), duration: dbgVal('length')
     };
     // the picked brains are loaded first (from the cloud when not in memory)
-    var want = [0, 1].map(function (t) { return cfg.levels[t] === 'AIMA' && NS.Aima ? dbgBrain[t] : ''; });
+    var want = [0, 1].map(function (t) { return NS.isAimaLv(cfg.levels[t]) && NS.Aima ? dbgBrain[t] : ''; });
     if (want[0] || want[1]) {
       refs.dbgStatus.textContent = T('dbg.loading');
       Promise.all(want.map(function (id) { return id ? NS.Aima.getBrain(id) : null; })).then(function (bs) {
@@ -1582,7 +1586,6 @@
   var AIMA_SUBS = ['stats', 'settings', 'brains', 'train'];
   var aimaSub = 'stats';
   // option rows of a brain, training and data options: shared with trainer.html (js/game/aima.js)
-  var AIMA_OPTS = NS.Aima.OPTS;
   var aimaSel = '';       // the brain every sub-tab shows (default: the active one)
   var selLoading = '';
   var aimaConfirm = '';   // a size change / reset / delete waits for a second press
@@ -1733,7 +1736,7 @@
     if (trainer) {
       var grid = el('div', 'aima-opts');
       list.appendChild(grid);
-      AIMA_OPTS.forEach(function (o) {
+      A.optsFor(b).forEach(function (o) {
         var r = el('div', 'set-row');
         var lab = el('div', 'set-label');
         lab.appendChild(el('div', 'set-name', T(o[1])));
@@ -2174,7 +2177,7 @@
           NS.Storage.setSetting(def.key, o[0]);
           NS.App.applySettings();
           syncSettings();
-          if (def.key === 'difficulty') renderSettings('set:' + def.key + ':' + o[0]); // (the model row below shows for checkoAI)
+          if (def.key === 'cpuType') renderSettings('set:' + def.key + ':' + o[0]); // (the model row below shows for checkoAI)
         });
         b.setAttribute('data-set', def.key);
         b.setAttribute('data-val', String(o[0]));
@@ -2182,7 +2185,7 @@
       });
       row.appendChild(opts);
       refs.setList.appendChild(row);
-      if (def.key === 'difficulty' && World.settings.difficulty === 'AIMA' && NS.Aima) refs.setList.appendChild(aimaModelRow());
+      if (def.key === 'difficulty' && World.settings.cpuType === 'AIMA' && NS.Aima) refs.setList.appendChild(aimaModelRow());
     });
     var tabs = refs.setTabs.querySelectorAll('[data-group]');
     for (var i = 0; i < tabs.length; i++) tabs[i].classList.toggle('sel', tabs[i].getAttribute('data-group') === settingsGroup);
@@ -2203,7 +2206,7 @@
     if (!list.length) opts.appendChild(el('div', 'set-hint', T('aima.loading')));
     list.forEach(function (e) {
       var on = e.id === A.activeId();
-      opts.appendChild(btn('opt' + (on ? ' sel' : ''), e.name + '  ·  ' + e.size, 'set:aimamodel:' + e.id, function () {
+      opts.appendChild(btn('opt' + (on ? ' sel' : ''), e.name + '  ·  ' + (e.algo === 'OPT' ? 'OPT 2.0' : e.size), 'set:aimamodel:' + e.id, function () {
         A.use(e.id).then(function () { if (current === 'SETTINGS' && settingsGroup !== 'aima') renderSettings('set:aimamodel:' + e.id); }, function () {});
       }));
     });

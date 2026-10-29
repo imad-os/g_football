@@ -143,7 +143,8 @@
     this.P[this.OB3 + LOB_ROW] = -1;  // the long through pass: rarer than the others to start with
     this.AM.fill(0); this.AV.fill(0); this.G.fill(0); this.adamT = 0; this.gN = 0;
   };
-  Brain.prototype.learns = function () { return trainer && this.cfg.learn && !this.frozen; };
+  // (ro: it plays at Easy, Normal or Pro in this match: read only, only Legend level teaches it; lessons are still kept)
+  Brain.prototype.learns = function () { return trainer && this.cfg.learn && !this.frozen && !(this.ro && World.match.running); };
   Brain.prototype.help = function () {
     var h = HELP[this.cfg.help];
     if (h === undefined || h < 0) h = clamp(1 - this.st.decisions / 1500000, 0.35, 1); // (10 players decide)
@@ -2397,6 +2398,9 @@
       ['ctl', 'aima.o.ctl', [['1P', 'aima.ctl.1p'], ['11P', 'aima.ctl.11p']]],
       ['size', 'aima.o.size', [['TINY', 'aima.sz.TINY'], ['MEDIUM', 'aima.sz.MEDIUM'], ['LARGE', 'aima.sz.LARGE'], ['HUGE', 'aima.sz.HUGE']]]
     ],
+    // the settings an AIMA-OPT 2.0 brain uses (the others belong to AIMA-AC 1.2: it starts from Legend, no size, no help)
+    OPT_KEYS: ['learn', 'mine'],
+    optsFor: function (b) { return b && b.algo === 'OPT' ? Aima.OPTS.filter(function (o) { return Aima.OPT_KEYS.indexOf(o[0]) >= 0; }) : Aima.OPTS; },
     TR_OPTS: [
       ['matches', [5, 10, 20, 30, 50, 100, 200, 500, 1000, 0]], // 0 = continuous
       ['size', [11, 7]],
@@ -2626,6 +2630,9 @@
       if (as.active) {
         b = as.brain = teamBrains[t] || active;
         if (!b) return;
+        // below Legend the brain only plays (its level's handicaps must not teach it)
+        var o2 = World.aiSlots[1 - t];
+        b.ro = NS.brainLevel(t) !== 'LEGEND' || (o2.active && o2.brain === b && NS.brainLevel(1 - t) !== 'LEGEND');
         var help = b.help();
         if (!matchSnap[t] || matchSnap[t].b !== b) { // (once a match: this brain's counters at kick-off)
           var sn = { b: b };

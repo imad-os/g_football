@@ -16,6 +16,8 @@
  *   - the trainer's claps and punishments: lessons (as in AIMA-AC 1.2: the situation and the option, a score; 5 claps
  *     make an option his first choice in situations like it, a punishment cuts it at once) plus 24 learning steps.
  * In a training 30% of its choices are drawn from its odds (it tries close alternatives); otherwise it plays its best.
+ * Levels: one brain plays at Easy / Normal / Pro / Legend. Below Legend its team uses that level's rules (speed,
+ * reactions, accuracy, keeper) and some of its choices are its 2nd / 3rd best (SHARP); it does not learn there.
  * Saved with the brain (b.opt). No allocation in the play loop. */
 (function (NS) {
   'use strict';
@@ -38,6 +40,9 @@
   var BC_W = 1, HUMAN_W = 3;
   var CLAP_BACK = 3.5;
   var RING = 64;
+  // its level (Settings > CPU level; the rest of the team plays with that level's rules): [share of its choices drawn
+  // from its odds instead of its best, how flat those odds are (x TAU)]. Legend: always its best
+  var SHARP = { EASY: [0.55, 3], NORMAL: [0.3, 2], HARD: [0.12, 1.4], LEGEND: [0, 1] };
 
   // parameter layout (one Float32Array)
   var OW1 = 0, OB1 = OW1 + H1 * NIN, OW2 = OB1 + H1, OB2 = OW2 + H2 * H1, OW3 = OB2 + H2, OB3 = OW3 + H2;
@@ -326,11 +331,20 @@
       return -1;
     }
     score(b, n, true);
-    var pick = 0;
+    var pick = 0, r, j;
+    var sh = SHARP[NS.brainLevel ? NS.brainLevel(p.team) : 'LEGEND'] || SHARP.LEGEND;
     if (b.learns() && NS.Debug && NS.Debug.running() && Math.random() < EXPLORE) {
       // a training: drawn from his odds (close alternatives get tried)
-      var r = Math.random(), j;
+      r = Math.random();
       for (j = 0; j < n - 1; j++) { r -= PR[j]; if (r <= 0) break; }
+      pick = j;
+    } else if (sh[0] > 0 && Math.random() < sh[0]) {
+      // a lower level: drawn from flatter odds (a worse option now and then)
+      var mx = -1e9, s2 = 0;
+      for (i = 0; i < n; i++) if (LG[i] > mx) mx = LG[i];
+      for (i = 0; i < n; i++) s2 += Math.exp((LG[i] - mx) / sh[1]);
+      r = Math.random() * s2;
+      for (j = 0; j < n - 1; j++) { r -= Math.exp((LG[j] - mx) / sh[1]); if (r <= 0) break; }
       pick = j;
     } else {
       for (i = 1; i < n; i++) if (LG[i] > LG[pick]) pick = i;

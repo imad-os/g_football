@@ -2,7 +2,7 @@
 (function (NS) {
   'use strict';
 
-  NS.VERSION = '1.52.1';
+  NS.VERSION = '1.53.0';
 
   // Pitch geometry (world units; x = length, z = width, y = up). NS.M: world units per metre, from the players: an
   // average footballer (1.81 m) is 2.9 units tall. Everything is at real size at that scale: the ball, the players,
@@ -62,6 +62,7 @@
   // Defaults. Owner can override them without code in mypc-app.json "config" (MyPC.app_config).
   NS.DEFAULT_SETTINGS = {
     quality: 'AUTO',
+    cpuType: 'RULES',   // who the CPU is: the classic rules (ai.js) or a checkoAI brain
     difficulty: 'NORMAL',
     teamSize: 11,
     stadium: 'SMALL',
@@ -108,8 +109,10 @@
 
   // Settings schema: drives the Settings screen, validation and the app_config merge.
   NS.SETTING_DEFS = [
+    { key: 'cpuType', group: 'game', label: 'set.cputype', hint: 'set.cputype.h',
+      options: [['RULES', 'opt.cpu.rules'], ['AIMA', 'opt.aima']] },
     { key: 'difficulty', group: 'game', label: 'set.difficulty', hint: 'set.difficulty.h',
-      options: [['EASY', 'opt.easy'], ['NORMAL', 'opt.normal'], ['HARD', 'opt.hard'], ['LEGEND', 'opt.legend'], ['AIMA', 'opt.aima']] },
+      options: [['EASY', 'opt.easy'], ['NORMAL', 'opt.normal'], ['HARD', 'opt.hard'], ['LEGEND', 'opt.legend']] },
     // players per team (applies from the next match)
     { key: 'teamSize', group: 'game', label: 'set.teamsize', hint: 'set.teamsize.h',
       options: [[11, 'opt.t11'], [7, 'opt.t7']] },
@@ -213,10 +216,22 @@
     for (var i = 0; i < layers.length; i++) {
       var src = layers[i];
       if (!src || typeof src !== 'object') continue;
+      // (up to v1.52 checkoAI was a 5th difficulty, "AIMA": now it is the CPU type, at Legend level)
+      if (src.difficulty === 'AIMA') { out.cpuType = 'AIMA'; out.difficulty = 'LEGEND'; }
       for (k in NS.DEFAULT_SETTINGS) {
         if (Object.prototype.hasOwnProperty.call(src, k) && NS.validSetting(k, src[k]) !== undefined) out[k] = src[k];
       }
     }
     return out;
   };
+
+  // A CPU level: 'EASY' / 'NORMAL' / 'HARD' (shown as Pro) / 'LEGEND' for the classic rules; for a checkoAI brain
+  // 'AIMA_EASY' / 'AIMA_NORMAL' / 'AIMA_HARD' / 'AIMA' (Legend: the brain at full strength, the only one that learns).
+  NS.cpuLevel = function (type, diff) {
+    if (type !== 'AIMA') return diff;
+    return diff === 'LEGEND' ? 'AIMA' : 'AIMA_' + diff;
+  };
+  NS.isAimaLv = function (l) { return typeof l === 'string' && l.indexOf('AIMA') === 0; };
+  // the rules level of a level (checkoAI at Easy plays with Easy's speed, reactions, accuracy and keeper)
+  NS.baseLv = function (l) { return l === 'AIMA' ? 'LEGEND' : (NS.isAimaLv(l) ? l.slice(5) : l); };
 })(window.RS6 = window.RS6 || {});

@@ -43,7 +43,7 @@
     'pause.controls': 'Controls', 'pause.controls.d': 'How to pass, shoot, tackle and press',
     'pause.restart': 'Restart kickoff', 'pause.restart.d': 'Reset score and clock',
     'pause.quit': 'Abandon match', 'pause.quit.d': 'Back to the main menu',
-    'set.difficulty': 'AI difficulty', 'set.difficulty.h': 'CPU speed, tackling and goalkeeper',
+    'set.difficulty': 'CPU level', 'set.difficulty.h': 'Speed, reactions, accuracy and goalkeeper (checkoAI learns only at Legend)',
     'set.duration': 'Match length', 'set.duration.h': 'Real minutes per match',
     'set.pace': 'Game pace', 'set.pace.h': 'Overall speed of play',
     'set.switch': 'Player switch', 'set.switch.h': 'AUTO picks the player nearest the ball, MANUAL only with the switch button',
@@ -127,7 +127,7 @@
     'pause.controls': 'Commandes', 'pause.controls.d': 'Passer, tirer, tacler et presser',
     'pause.restart': 'Recommencer', 'pause.restart.d': 'Score et chrono a zero',
     'pause.quit': 'Abandonner', 'pause.quit.d': 'Retour au menu principal',
-    'set.difficulty': 'Difficulte de l’IA', 'set.difficulty.h': 'Vitesse du CPU, tacles et gardien',
+    'set.difficulty': 'Niveau du CPU', 'set.difficulty.h': 'Vitesse, reactions, precision et gardien (checkoAI apprend seulement en Legende)',
     'set.duration': 'Duree du match', 'set.duration.h': 'Minutes reelles par match',
     'set.pace': 'Rythme de jeu', 'set.pace.h': 'Vitesse generale du jeu',
     'set.switch': 'Changement de joueur', 'set.switch.h': 'AUTO choisit le joueur le plus proche du ballon, MANUEL uniquement avec le bouton',
@@ -211,7 +211,7 @@
     'pause.controls': 'Controles', 'pause.controls.d': 'Pasar, tirar, entrar y presionar',
     'pause.restart': 'Reiniciar saque', 'pause.restart.d': 'Marcador y reloj a cero',
     'pause.quit': 'Abandonar', 'pause.quit.d': 'Volver al menu principal',
-    'set.difficulty': 'Dificultad de la IA', 'set.difficulty.h': 'Velocidad de la CPU, entradas y portero',
+    'set.difficulty': 'Nivel de la CPU', 'set.difficulty.h': 'Velocidad, reflejos, precision y portero (checkoAI solo aprende en Leyenda)',
     'set.duration': 'Duracion del partido', 'set.duration.h': 'Minutos reales por partido',
     'set.pace': 'Ritmo de juego', 'set.pace.h': 'Velocidad general',
     'set.switch': 'Cambio de jugador', 'set.switch.h': 'AUTO elige al mas cercano al balon, MANUAL solo con el boton',
@@ -295,7 +295,7 @@
     'pause.controls': 'التحكم', 'pause.controls.d': 'التمرير والتسديد والتدخل والضغط',
     'pause.restart': 'إعادة البداية', 'pause.restart.d': 'تصفير النتيجة والوقت',
     'pause.quit': 'انسحاب', 'pause.quit.d': 'العودة إلى القائمة الرئيسية',
-    'set.difficulty': 'صعوبة الذكاء', 'set.difficulty.h': 'سرعة الكمبيوتر والتدخل والحارس',
+    'set.difficulty': 'مستوى الكمبيوتر', 'set.difficulty.h': 'السرعة وردة الفعل والدقة والحارس (checkoAI يتعلم فقط في مستوى أسطورة)',
     'set.duration': 'مدة المباراة', 'set.duration.h': 'دقائق حقيقية لكل مباراة',
     'set.pace': 'إيقاع اللعب', 'set.pace.h': 'السرعة العامة',
     'set.switch': 'تبديل اللاعب', 'set.switch.h': 'تلقائي يختار الأقرب للكرة، يدوي بالزر فقط',
@@ -745,6 +745,7 @@
   // checkoAI (the learning player, js/game/aima.js)
   Object.assign(D.en, {
     'opt.aima': 'checkoAI', 'set.g.aima': 'checkoAI', 'mv.clap': 'Clap checkoAI: that was good (hold = stronger)',
+    'set.cputype': 'CPU opponent', 'set.cputype.h': 'Classic: the built-in rules. checkoAI: a trained brain (its model below)', 'opt.cpu.rules': 'CLASSIC',
     'map.clapbusy': 'That button already plays a move: pick a free one for the clap.',
     'aima.t.watch': 'Watching Legend play', 'aima.t.happy': 'Thanks coach!', 'aima.t.shoot': 'Going for goal!', 'aima.t.through': 'Through ball!',
     'aima.t.long': 'Switching play', 'aima.t.pass': 'Keeping the ball', 'aima.t.switch': 'Changing player', 'aima.t.win': 'Win it back!',
@@ -787,6 +788,7 @@
   });
   Object.assign(D.fr, {
     'opt.aima': 'checkoAI', 'set.g.aima': 'checkoAI', 'mv.clap': 'Applaudir checkoAI (maintenir = plus fort)',
+    'set.cputype': 'Adversaire CPU', 'set.cputype.h': 'Classique : les regles du jeu. checkoAI : un cerveau entraine (son modele en dessous)', 'opt.cpu.rules': 'CLASSIQUE',
     'map.clapbusy': 'Ce bouton joue deja une action : choisissez un bouton libre.',
     'aima.t.watch': 'Regarde jouer Legend', 'aima.t.happy': 'Merci coach !', 'aima.t.shoot': 'Il va tirer !', 'aima.t.through': 'Passe en profondeur !',
     'aima.t.long': 'Change de cote', 'aima.t.pass': 'Garde le ballon', 'aima.t.switch': 'Change de joueur', 'aima.t.win': 'Recuperer le ballon !',
@@ -802,6 +804,7 @@
   });
   Object.assign(D.es, {
     'opt.aima': 'checkoAI', 'set.g.aima': 'checkoAI', 'mv.clap': 'Aplaudir a checkoAI (mantener = mas fuerte)',
+    'set.cputype': 'Rival CPU', 'set.cputype.h': 'Clasico: las reglas del juego. checkoAI: un cerebro entrenado (su modelo abajo)', 'opt.cpu.rules': 'CLASICO',
     'map.clapbusy': 'Ese boton ya hace una jugada: elige uno libre.',
     'aima.t.watch': 'Mira jugar a Legend', 'aima.t.happy': 'Gracias, mister!', 'aima.t.shoot': 'Va a tirar!', 'aima.t.through': 'Pase al hueco!',
     'aima.t.long': 'Cambia de banda', 'aima.t.pass': 'Mantiene el balon', 'aima.t.switch': 'Cambia de jugador', 'aima.t.win': 'A recuperarla!',
@@ -817,6 +820,7 @@
   });
   Object.assign(D.ar, {
     'opt.aima': 'checkoAI', 'set.g.aima': 'checkoAI', 'mv.clap': 'تصفيق لـ checkoAI (الضغط المطول = أقوى)',
+    'set.cputype': 'خصم الكمبيوتر', 'set.cputype.h': 'كلاسيكي: قواعد اللعبة. checkoAI: عقل مدرَّب (نموذجه في الأسفل)', 'opt.cpu.rules': 'كلاسيكي',
     'map.clapbusy': 'هذا الزر مستخدم لحركة أخرى: اختر زرا حرا.',
     'aima.t.watch': 'يشاهد Legend يلعب', 'aima.t.happy': 'شكرا يا مدرب!', 'aima.t.shoot': 'سيسدد!', 'aima.t.through': 'تمريرة بينية!',
     'aima.t.long': 'يغير اللعب', 'aima.t.pass': 'يحتفظ بالكرة', 'aima.t.switch': 'يغير اللاعب', 'aima.t.win': 'استرجع الكرة!',
