@@ -866,6 +866,8 @@
       // (unless a man is on him and it is now or never)
       var face = (1 + (Math.sin(p.facing) * gdx - Math.cos(p.facing) * pz) / (gdist || 1)) / 2;
       sc -= (1 - face) * (pressure < 1.6 ? 0.3 : 0.7);
+      // on his strong foot it is the moment; on his weak one he would rather shift it first (unless pressed)
+      sc += (Actions.footFor(p, gdx, -pz) > 0) === (p.foot !== 'L') ? 0.04 : (pressure < 1.6 ? -0.12 : -0.04);
       sc += (Math.random() - 0.5) * noise;
       if (sc > best) { best = sc; bType = ACT.SHOOT; }
       cand(C_SHOT, sc, null, a * HALF_W, 0, 0);

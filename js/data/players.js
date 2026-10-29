@@ -212,7 +212,8 @@
     // Ratings of the player called `name` in team `t` (a NS.Teams entry).
     statsFor: function (t, name) {
       var d = DB[t.id + ':' + name] || DB[name], s;
-      if (d) { s = make(d[0], d.slice(1)); s.ht = t.ht ? t.ht[name] || 0 : 0; return s; }
+      var left = NS.Squads && NS.Squads.LEFT;
+      if (d) { s = make(d[0], d.slice(1)); s.ht = t.ht ? t.ht[name] || 0 : 0; s.foot = left && left[name] ? 'L' : 'R'; return s; }
       var idx = t.players.indexOf(name);
       // his position: given by the squad (a substitute, a new signing: js/data/squads.js), else from the squad order
       var pos = (t.pos && t.pos[name]) || ORDER[idx >= 0 && idx < ORDER.length ? idx : 8];
@@ -227,6 +228,7 @@
       if (idx >= 11) for (k = 0; k < 6; k++) v[k] -= 2; // a substitute: a little below the starters
       s = make(pos, v);
       s.ht = t.ht ? t.ht[name] || 0 : 0; // height in cm (0: not known)
+      s.foot = (left && left[name]) || (h % 100) < 22 ? 'L' : 'R'; // his strong foot (a fixed one for an unknown player)
       return s;
     },
 

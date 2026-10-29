@@ -33,6 +33,11 @@
   var DEPTH1 = [0, 44, 42, 52];
 
   // Human reaction: the seconds a player needs between a ball being played and a controlled header / first touch
+  // strong / weak foot (Actions.footFor): a shot's error and power multipliers
+  var STRONG_ERR = 0.85, WEAK_ERR = 1.6, WEAK_POW = 0.9;
+  // a curler (ACT.CURVE): the share of its spin's whole turn it is struck wide by; world.js's MAGNUS
+  var CURVE_LEAD = 0.55, CURVE_MAGNUS = 0.042;
+  function wrapA(a) { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; }
   var REACT_HEAD = 0.45;
   var HEAD_SHOT_MAX = 22;   // metres from the goal a header at goal can come from
   var REACT_TOUCH = 0.34;
@@ -217,6 +222,7 @@
       p.gkHands = false;
       p.kickT = p.throwT > 0 ? 0 : (type >= ACT.SHOOT ? 0.36 : 0.28);
       p.kickHard = type >= ACT.SHOOT || type === ACT.LONG || (type === ACT.THROUGH && this.lob);
+      p.kickFoot = this.footFor(p, Math.sin(p.facing), Math.cos(p.facing)); // (a shot sets it again in shotForm)
       this.lastTarget = null;
       NS.Audio.kick(type >= ACT.SHOOT);
       if (NS.Stats) NS.Stats.kick(p, type >= ACT.SHOOT);
@@ -236,20 +242,50 @@
         var goalX = attack * HALF_W;
         var aimed = az > 0.1 || az < -0.1;
         if (type === ACT.CURVE) {
-          // Aim outside the post on the far side and curl back in with Magnus spin
-          var side = aimed ? (az > 0 ? 1 : -1) : (p.pos.z > 0 ? -1 : 1);
-          var curveZ = -side * (GOAL_HALF_W + 1.8);
-          angle = Math.atan2(goalX - p.pos.x, curveZ - p.pos.z);
-          this.shotForm(p, goalX, 0);
-          angle += (Math.random() - 0.5) * (1.05 - power) * 0.09 * (accuracy || 1) * (p.bumpT > 0 ? BUMP_ACC : 1) * this.shotErr;
+          // A curler: aimed at a corner, it starts out wide of that post (away from the goal) and bends back in to it.
+          // The spin turns the flight by TH over the whole flight (Magnus, decaying as in world.js integrate); a curving
+          // path leaves about half of that turn away from the straight line, so it is struck that much wide.
+          var side = aimed ? (az > 0 ? 1 : -1) : (p.pos.z > 0 ? -1 : 1); // the corner: +z / -z
+          var tz = side * (GOAL_HALF_W - 0.55);
+          var cvx = goalX - ball.pos.x, cvz = tz - ball.pos.z;
+          var cd0 = Math.sqrt(cvx * cvx + cvz * cvz) || 1;
+          this.shotForm(p, goalX, tz);
           speed = (24 + power * 10) * (0.88 + p.st.sht / 99 * 0.16) * this.shotPow * (p.bumpT > 0 ? BUMP_POW : 1) * this.powMul(ACT.SHOOT);
-          var cvx = goalX - p.pos.x, cvz = curveZ - p.pos.z;
-          var cd0 = Math.sqrt(cvx * cvx + cvz * cvz);
           var kd = cd0 * AIR_K / speed;
           var cT = kd < 0.85 ? -Math.log(1 - kd) / AIR_K : cd0 / speed * 1.4;
-          vy = Math.min(8.5, (1.25 + power * 0.85 - ball.pos.y) / cT + 0.5 * G * cT);
+          var chord = Math.atan2(cvx, cvz);
+          var ty = NS.GOAL_HEIGHT * (0.32 + 0.33 * power); // the height it should cross the line at
+          // which way to start: towards the outside of the corner (its side of the goal), then the spin brings it in
+          // (turning the heading up moves the ball along z by -sin(chord): that sign times the corner's side is outward)
+          var out = -Math.sin(chord) * side > 0 ? 1 : -1;
+          var TH = (0.32 + 0.22 * power) * (0.75 + p.st.sht / 99 * 0.35) * clamp(cd0 / 22, 0.55, 1.25); // rad
+          angle = chord + out * TH * CURVE_LEAD;
+          angle += gaussR() * 0.035 * (1.05 - power * 0.4) * (accuracy || 1) * (p.bumpT > 0 ? BUMP_ACC : 1) * this.shotErr;
+          // the spin that turns it by TH in its flight time: heading change rate = spin * MAGNUS, spin decaying at 1.4/s
+          var decay = 1 - Math.exp(-1.4 * cT);
+          var spin = TH * 1.4 / (CURVE_MAGNUS * Math.max(0.2, decay));
+          vy = Math.min(13, (ty - ball.pos.y) / cT + 0.5 * G * cT);
+          spin = out * clamp(spin, 6, 60); // (world.js: the heading turns by -spin * MAGNUS: back towards the goal)
+          // the estimate above is close; the real flight (drag, the spin dying away) is then flown and the angle and
+          // the lift put right until it crosses the line at the corner and the height wanted (a few quick passes)
+          var err0 = angle - chord - out * TH * CURVE_LEAD; // (the striker's own error, kept)
+          var aim = chord + out * TH * CURVE_LEAD;
+          for (var it = 0; it < 4; it++) {
+            ball.vel.set(Math.sin(aim) * speed, Math.max(0.6, vy), Math.cos(aim) * speed);
+            ball.spinY = spin;
+            if (!World.crossAt(goalX, 3)) break;
+            var ez = World.prZ - tz, ey = World.prY - ty;
+            // z moves by about -sin(chord) * distance per radian of aim: put the miss right
+            var dzda = -Math.sin(chord) * cd0;
+            if (dzda > -1 && dzda < 1) break;
+            aim -= ez / dzda;
+            vy = Math.min(13, Math.max(0.6, vy - ey / Math.max(0.3, World.prT)));
+            if (ez < 0.15 && ez > -0.15 && ey < 0.2 && ey > -0.2) break;
+          }
+          angle = aim + err0;
           ball.vel.set(Math.sin(angle) * speed, Math.max(0.6, vy), Math.cos(angle) * speed);
-          ball.spinY = side * attack * 26;
+          ball.spinY = spin;
+          ball.shotD = cd0;
           return;
         }
         if (type === ACT.CHIP) {
@@ -398,9 +434,29 @@
       var v = dead ? 9 : Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z);
       pow *= 0.92 + clamp((v - 4) / 11, 0, 1) * 0.16;
       err *= 1 + clamp((v - 11) / 5, 0, 1) * 0.25;
+      // his strong foot (p.foot): a shot with it is cleaner, with the other one weaker and wilder (Actions.footFor)
+      var ft = this.footFor(p, goalX - p.pos.x, goalZ - p.pos.z);
+      p.kickFoot = ft;
+      if ((ft > 0) === (p.foot !== 'L')) err *= STRONG_ERR; else { err *= WEAK_ERR; pow *= WEAK_POW; }
       this.shotPow = pow; this.shotErr = err;
     },
     shotPow: 1, shotErr: 1,
+
+    // The foot he strikes with (1 right, -1 left) for a ball played in direction (dx, dz): the foot on the side the
+    // ball is on at his feet (a ball clearly on one side: that foot); else his strong foot, unless the ball has to go
+    // sharply across to the other side (a right-footer shooting far to his right uses his left).
+    footFor: function (p, dx, dz) {
+      var ball = World.ball, f = p.foot === 'L' ? -1 : 1;
+      if (ball.dOwner === p) {
+        var side = wrapA(ball.dA - p.facing); // > 0: on his left
+        if (side > 0.35) return -1;
+        if (side < -0.35) return 1;
+      }
+      var a = wrapA(Math.atan2(dx, dz) - p.facing); // > 0: to his left
+      if (f > 0 && a < -0.8) return -1;
+      if (f < 0 && a > 0.8) return 1;
+      return f;
+    },
     shotSpeed: function (g) { return SHOT_MIN + (SHOT_MAX - SHOT_MIN) * Math.pow(Math.min(1, g / 0.55), 0.75); },
     driveShot: function (p, goalZ, g, accuracy, bend) {
       var ball = World.ball;

@@ -80,6 +80,7 @@
     if (p.headT > 0) p.headT -= dt;
     if (p.catchT > 0) p.catchT -= dt;
     if (p.shoulderT > 0) p.shoulderT -= dt;
+    if (p.touchT > 0) p.touchT -= dt;
     if (p.throwT > 0) p.throwT -= dt;
 
     var sp = Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z);
@@ -103,7 +104,7 @@
     var kneeL = run * (0.12 + 1.15 * (cph < 0 ? -cph : 0)) + (run ? 0 : 0.08);
     var kneeR = run * (0.12 + 1.15 * (cph > 0 ? cph : 0)) + (run ? 0 : 0.08);
     var elbL = -0.15 - 1.1 * run, elbR = elbL;
-    var u, b;
+    var u, b, kicking = false, gait = false;
 
     if (p.diveT > 0) {
       // keeper dive: whole body falls to the side, arms stretched over the head (higher for a high shot)
@@ -190,7 +191,9 @@
       outL = outR = 0.08 + 0.55 * b; spread = 0.05 + 0.32 * b; // legs wide open: the ball can go through
       kneeR = kneeR * (1 - b) + 0.05 * b; kneeL = kneeL * (1 - b) + 0.55 * b; // the stretched leg straight, the other bent
     } else if (p.kickT > 0) {
-      // kick: back-swing then strike through the ball (bigger swing and lean-back for shots and long balls)
+      // kick: back-swing then strike through the ball (bigger swing and lean-back for shots and long balls); drawn for
+      // the right foot, mirrored below when he kicks with his left (p.kickFoot)
+      kicking = true;
       var dur = p.kickHard ? 0.36 : 0.28;
       u = 1 - p.kickT / dur;
       var reach = p.kickHard ? 1.45 : 0.95;
@@ -237,6 +240,19 @@
       // a keeper set for a shot: crouched on bent knees, feet apart, arms out low with the elbows bent, palms forward
       armL = armR = -0.5; outL = outR = 0.42; elbL = elbR = -0.95;
       kneeL = kneeR = 0.4; spread = 0.14; lean = 0.18; hipY = H0 - 0.09 * hs;
+    } else {
+      gait = true;
+    }
+    var tmp;
+    if (kicking && p.kickFoot < 0) { // the left foot: the same kick, mirrored
+      tmp = legL; legL = legR; legR = tmp; tmp = outL; outL = outR; outR = tmp;
+      tmp = kneeL; kneeL = kneeR; kneeR = tmp; tmp = armL; armL = armR; armR = tmp;
+    }
+    if (gait && p.touchT > 0 && World.ball.owner === p) {
+      // running with the ball: each touch shows, the foot (p.touchFoot: 1 right, -1 left) reaching to the ball
+      var tk = Math.sin(clamp(1 - p.touchT / 0.2, 0, 1) * PI);
+      if (p.touchFoot > 0) { legR = legR * (1 - tk) - 0.55 * tk; kneeR = kneeR * (1 - tk) + 0.25 * tk; outR += 0.15 * tk; }
+      else { legL = legL * (1 - tk) - 0.55 * tk; kneeL = kneeL * (1 - tk) + 0.25 * tk; outL += 0.15 * tk; }
     }
 
     mesh.body.position.y = hipY;
@@ -349,6 +365,7 @@
   function rate(p, teamObj) {
     var st = NS.Players.statsFor(teamObj, p.name);
     p.st = st;
+    p.foot = st.foot || 'R';
     p.mSpd = clamp(1.03 + (st.spd - 72) * 0.0055, 0.8, 1.17);
     p.drain = 1.5 - st.sta / 99;
   }
@@ -1277,7 +1294,7 @@
             gkHands: false, diveCd: 0, diveHigh: false, mood: 0, celX: 0, celZ: 0, slid: false,
             fouls: 0, card: 0,
             throwIn: false, throwT: 0, shoulderT: 0, shoulderDir: 1, shCd: 0, offside: false, bumpT: 0, bumpK: 1,
-            blockT: 0, blockCd: 0, blockSide: 1,
+            blockT: 0, blockCd: 0, blockSide: 1, touchT: 0, touchFoot: 1, foot: 'R', kickFoot: 1,
             mark: null, icX: 0, icZ: 0, drX: 0, drZ: 0, runT: 0, runCd: 0, runX: 0, runZ: 0,
             aiT: 0, tgtX: 0, tgtZ: 0, tgtS: 8, gkRT: 0,
             st: null, mSpd: 1, drain: 1,
@@ -1298,7 +1315,8 @@
       ref = {
         mesh: rm, pos: rm.root.position, vel: new THREE.Vector3(), facing: 0, index: 0, animPhase: 0, mood: 0, stun: 0,
         kickT: 0, kickHard: false, lungeT: 0, slideT: 0, fallT: 0, diveT: 0, diveRoll: 0, diveHigh: false, headT: 0, catchT: 0, ftT: 0,
-        gkHands: false, throwIn: false, throwT: 0, shoulderT: 0, shoulderDir: 1, blockT: 0, blockSide: 1
+        gkHands: false, throwIn: false, throwT: 0, shoulderT: 0, shoulderDir: 1, blockT: 0, blockSide: 1, touchT: 0, touchFoot: 1,
+        kickFoot: 1
       };
     },
 
