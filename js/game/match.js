@@ -1386,7 +1386,9 @@
       var homeT = NS.Teams.byId(s.homeTeamId);
       var awayT = NS.Teams.byId(s.awayTeamId);
       var lit = NS.Scene.lit();
-      var kits = NS.Teams.matchKits(homeT, awayT);
+      // the kits picked on the kits screen (for these two teams), else the automatic ones
+      var kp = s.kitPick && s.kitPick.h === s.homeTeamId && s.kitPick.a === s.awayTeamId ? s.kitPick.k : null;
+      var kits = NS.Teams.matchKits(homeT, awayT, kp);
       for (var t = 0; t < 2; t++) {
         var dir = NS.attack(t);
         var td = t === 0 ? kits.home : kits.away;

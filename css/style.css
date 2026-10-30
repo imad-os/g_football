@@ -1055,3 +1055,21 @@ h1, h2, p { margin: 0; }
 .gp-split.dual .pc { width: 16%; min-width: 0; margin-left: -8%; }
 .gp-split.dual .gp-bench .pc { width: auto; flex-basis: 4.4rem; height: 3.5rem; margin: 0; }
 .gp-split.dual .pc-ovr { font-size: 1rem; }
+
+/* v1.62: the kits screen (FC kit select): the kit big, its row, the three small under it */
+.kt-body { align-items: center; }
+.kt-head { display: flex; align-items: center; gap: 0.6rem; flex-shrink: 0; }
+.kt-big { flex: 1 1 auto; min-height: 6rem; width: 100%; display: flex; justify-content: center; }
+.kt-big svg { height: 100%; width: auto; max-width: 100%; display: block; filter: none; }
+.kt-cyc { width: 100%; }
+.kt-name { font-size: 1.15rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.04em; }
+.kt-thumbs { flex-shrink: 0; display: flex; justify-content: center; gap: 0.7rem; }
+.kt-thumb { width: 3.4rem; height: 3.8rem; padding: 0.2rem; border: 2px solid transparent; border-radius: 0.35rem; opacity: 0.55; }
+.kt-thumb.sel { border-color: var(--fc-lime); opacity: 1; background: rgba(198, 244, 50, 0.1); }
+.kt-thumb svg { width: 100%; height: 100%; display: block; }
+.kt-mid { justify-content: center; padding-top: 0; }
+.kt-clash { text-align: center; font-size: 0.9rem; font-weight: 800; color: #ffb3b6; background: rgba(255, 90, 95, 0.15);
+  border: 1px solid rgba(255, 90, 95, 0.5); border-radius: 0.35rem; padding: 0.5rem; }
+.kt-mid .tp-vs { flex: 0 0 auto; }
+.sd-kit { opacity: 0.85; }
+@media (max-aspect-ratio: 1/1) { .kt-big { min-height: 10rem; } }

@@ -284,11 +284,27 @@
   // shirts decide (that is what you see from the camera); shorts only break ties
   function kitScore(a, b) { return colorDist(a.c1, b.c1) + 0.1 * colorDist(a.shorts, b.shorts); }
 
+  // A team's three kits for a match against `other`: its home kit, its away kit, a third one (the colour furthest from
+  // the other team's home kit)
+  function kitsOf(tm, other) {
+    var o = kitOf(other), best = THIRD[0], bs = -1;
+    for (var i = 0; i < THIRD.length; i++) {
+      var sc = colorDist(THIRD[i], o.c1) + 0.4 * colorDist(THIRD[i], o.shorts);
+      if (sc > bs) { bs = sc; best = THIRD[i]; }
+    }
+    var alt = tm.alt;
+    return [kitOf(tm), { pattern: alt.pattern, c1: alt.c1, c2: alt.c2, shorts: alt.shorts },
+      { pattern: 'SOLID', c1: best, c2: light(best) > 0.6 ? 0x0f172a : 0xffffff, shorts: light(best) > 0.6 ? 0x0f172a : best }];
+  }
+  function sameKit(a, b) { return a.c1 === b.c1 && a.c2 === b.c2 && a.pattern === b.pattern && a.shorts === b.shorts; }
+
   // Kits for a match: home in its first kit, away in the kit that differs most from it, keepers apart from both.
-  function matchKits(home, away) {
-    var h = kitOf(home);
+  // pick: [home kit, away kit] chosen on the kits screen (0 home, 1 away, 2 third; -1 or none: as above)
+  function matchKits(home, away, pick) {
+    var h = pick && pick[0] >= 0 ? kitsOf(home, away)[pick[0]] : kitOf(home);
     var a = kitOf(away);
-    if (kitScore(a, h) < 150) {
+    if (pick && pick[1] >= 0) a = kitsOf(away, home)[pick[1]];
+    else if (kitScore(a, h) < 150) {
       var alt = away.alt;
       if (kitScore(alt, h) > kitScore(a, h)) a = { pattern: alt.pattern, c1: alt.c1, c2: alt.c2, shorts: alt.shorts };
       if (kitScore(a, h) < 150) {
@@ -323,6 +339,15 @@
 
   NS.Teams = {
     matchKits: matchKits,
+    kitsOf: kitsOf,
+    // the kit (0 home, 1 away, 2 third) each team wears when nobody picks: [home, away]
+    autoKits: function (home, away) {
+      var k = matchKits(home, away), list = kitsOf(away, home), a = 0;
+      for (var i = 0; i < 3; i++) if (sameKit(list[i], k.away)) { a = i; break; }
+      return [0, a];
+    },
+    // true when the two shirts are too alike to tell apart
+    kitsClash: function (a, b) { return kitScore(a, b) < 150; },
     CATEGORIES: CATEGORIES,
     TEAMS: TEAMS,
     byCategory: function (catId) {

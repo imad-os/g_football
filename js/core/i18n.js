@@ -1237,6 +1237,11 @@
   Object.assign(D.fr, { 'hint.select': 'Choisir', 'hint.back': 'Retour', 'hint.side': 'Deplacer la manette', 'hint.tabs': 'Onglets' });
   Object.assign(D.es, { 'hint.select': 'Elegir', 'hint.back': 'Atras', 'hint.side': 'Mover mando', 'hint.tabs': 'Pestanas' });
   Object.assign(D.ar, { 'hint.select': 'اختيار', 'hint.back': 'رجوع', 'hint.side': 'تحريك الذراع', 'hint.tabs': 'التبويبات' });
+  // v1.62: the kits screen
+  Object.assign(D.en, { 'step.kits': 'KITS', 'kit.home': 'Home kit', 'kit.away': 'Away kit', 'kit.third': 'Third kit', 'kit.clash': 'The kits clash: pick another one' });
+  Object.assign(D.fr, { 'step.kits': 'MAILLOTS', 'kit.home': 'Maillot domicile', 'kit.away': 'Maillot exterieur', 'kit.third': 'Troisieme maillot', 'kit.clash': 'Les maillots se ressemblent : changez-en un' });
+  Object.assign(D.es, { 'step.kits': 'EQUIPACIONES', 'kit.home': 'Equipacion local', 'kit.away': 'Equipacion visitante', 'kit.third': 'Tercera equipacion', 'kit.clash': 'Las equipaciones se parecen: cambia una' });
+  Object.assign(D.ar, { 'step.kits': 'الأقمصة', 'kit.home': 'قميص الأرض', 'kit.away': 'قميص الضيف', 'kit.third': 'القميص الثالث', 'kit.clash': 'القميصان متشابهان: اختر قميصاً آخر' });
   // v1.61: FC-style team select and game plan
   Object.assign(D.en, { 'tp.home': 'HOME', 'tp.away': 'AWAY', 'tp.clubs': 'Clubs', 'tp.nations': 'National teams', 'tp.swap': 'Swap teams',
     'tp.random': 'Random', 'tp.att': 'ATT', 'tp.mid': 'MID', 'tp.def': 'DEF', 'gp.form': 'FORMATION', 'gp.tactics': 'TACTICS',

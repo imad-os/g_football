@@ -9,7 +9,7 @@
 
   var root;
   var screens = {};
-  var order = ['MAIN', 'SIDES', 'TEAMS', 'GAMEPLAN', 'COMPPICK', 'COMPHUB', 'PAUSE', 'SETTINGS', 'HELP', 'BUTTONS', 'DEBUG', 'RESULT', 'AIMALEARN'];
+  var order = ['MAIN', 'SIDES', 'TEAMS', 'KITS', 'GAMEPLAN', 'COMPPICK', 'COMPHUB', 'PAUSE', 'SETTINGS', 'HELP', 'BUTTONS', 'DEBUG', 'RESULT', 'AIMALEARN'];
   var current = 'MAIN';
   var open = true;
   var focused = null;
@@ -109,7 +109,7 @@
   /* Two cursors: on the Teams and Game plan screens, when two people play, each has his own cursor (P1 light blue, P2
    * light red, as their arrows in a match) and works on his own side's panel at the same time as the other; the shared
    * buttons (Back, Next, Kick off) are for both. With one player his cursor goes everywhere. */
-  var DUAL = { TEAMS: 1, GAMEPLAN: 1 };
+  var DUAL = { TEAMS: 1, KITS: 1, GAMEPLAN: 1 };
   var focus2 = null;
   var actor = 0;               // the cursor that pressed the button being handled (0 = P1 / the mouse)
   function twoPlayers() {
@@ -119,7 +119,7 @@
   // the cursor a device moves (P2's own device: the second one; every other device: the first)
   function cursorOf(dev) { return twoPlayers() && NS.Devices.player(dev || 'keys') === 1 ? 1 : 0; }
   // the panel (0 home, 1 away) cursor c looks after: its player's side; both on one side: P1 that one, P2 the other
-  function panelOf(c) { var p = NS.sidePads(); return c === 1 && p[0] === p[1] ? 1 - p[1] : p[c]; }
+  function panelOf(c) { var p = NS.sidePads(); return c === 1 && p[0] === p[1] && current !== 'GAMEPLAN' ? 1 - p[1] : p[c]; }
   function mayFocus(c, node) {
     if (!twoPlayers()) return true;
     var pn = node.closest ? node.closest('[data-panel]') : null;
@@ -271,6 +271,7 @@
       lastFocusKey.TEAMS = 't0'; // (each cursor on its side's team)
       renderTeams();
     }
+    if (key === 'KITS') renderKits();
     if (key === 'GAMEPLAN') {
       var sp = NS.sidePads();
       gpSide = sp[0] >= 0 ? sp[0] : 0; // (one player: his own team first)
@@ -312,7 +313,8 @@
     if (current === 'SIDES') hint(box, '◀ ▶', T('hint.side'));
     if (current === 'SETTINGS') hint(box, 'L R', T('hint.tabs'));
     if (current === 'TEAMS') hint(box, '◀ ▶', T('hint.change'));
-    if (current === 'GAMEPLAN' && !twoPlayers()) hint(box, 'L R', T('hint.team'));
+    if (current === 'GAMEPLAN' && !refs.gpTabs.classList.contains('hidden')) hint(box, 'L R', T('hint.team'));
+    if (current === 'KITS') hint(box, '◀ ▶', T('hint.change'));
   }
 
   function hide() {
@@ -345,7 +347,8 @@
       else show('PAUSE');
       return;
     }
-    if (current === 'GAMEPLAN') show(NS.Comp.active() ? 'COMPHUB' : 'TEAMS');
+    if (current === 'GAMEPLAN') show('KITS');
+    else if (current === 'KITS') show(NS.Comp.active() ? 'COMPHUB' : 'TEAMS');
     else if (current === 'COMPHUB') { NS.Comp.leave(); show('MAIN'); }
     else if (current === 'COMPPICK') show('MAIN');
     else if (current === 'TEAMS') show('SIDES');
@@ -543,7 +546,7 @@
       if (!NS.Comp.prepareMatch()) return;
       World.session.editingSquadIdx = 0;
       World.session.selStarter = [null, null];
-      show('GAMEPLAN');
+      show('KITS');
     }));
     refs.chPlay.setAttribute('data-default', '1');
     foot.appendChild(refs.chPlay);
@@ -692,11 +695,11 @@
       col.appendChild(el('div', 'sd-edge', T(t ? 'tp.away' : 'tp.home')));
       stage.appendChild(col);
       var top = el('div', 'sd-top ' + (t ? 'away' : 'home'));
-      slotEls['kit' + t] = el('div', 'sd-kit');
-      slotEls['name' + t] = el('div', 'sd-name');
+      // (no teams yet: a plain shirt in the side's colour)
+      var kit = el('div', 'sd-kit');
+      kit.innerHTML = kitSvg(t ? { pattern: 'SOLID', c1: 0x1d4f73, c2: 0x3db8ff, shorts: 0x15334a } : { pattern: 'SOLID', c1: 0x733036, c2: 0xff5a5f, shorts: 0x4a2226 });
+      top.appendChild(kit);
       slotEls['cpu' + t] = el('div', 'slot cpu', T('slot.cpu'));
-      top.appendChild(slotEls['kit' + t]);
-      top.appendChild(slotEls['name' + t]);
       top.appendChild(slotEls['cpu' + t]);
       stage.appendChild(top);
     });
@@ -755,12 +758,7 @@
       stage.appendChild(ic);
       icons.push(ic);
     });
-    for (var t = 0; t < 2; t++) {
-      var tm = NS.Teams.byId(t ? s.awayTeamId : s.homeTeamId);
-      slotEls['kit' + t].innerHTML = kitSvg(tm);
-      slotEls['name' + t].textContent = tm.name;
-      slotEls['cpu' + t].classList.toggle('hidden', s.pads[0] === t || s.pads[1] === t);
-    }
+    for (var t = 0; t < 2; t++) slotEls['cpu' + t].classList.toggle('hidden', s.pads[0] === t || s.pads[1] === t);
     renderCvc();
   }
 
@@ -984,7 +982,7 @@
       NS.Match.syncRosters();
       World.session.editingSquadIdx = 0;
       World.session.selStarter = [null, null];
-      show('GAMEPLAN');
+      show('KITS');
     })));
     wrap.appendChild(foot);
   }
@@ -1065,6 +1063,92 @@
       }
     } finally { actor = 0; }
     return c === 1; // (P2's Back never leaves the screen)
+  }
+
+  /* ------------------------------ KITS ------------------------------ */
+
+  // FC's kit select: each team's kit big on its side; left / right on its row change it (home, away, third), the three
+  // small under it, a warning in the middle when the two shirts are too alike. Two players: each picks his own side's.
+  var KP = [{}, {}];             // each side's panel: { owner, name, big, cyc, thumbs[] }
+  var KIT_NAMES = ['kit.home', 'kit.away', 'kit.third'];
+
+  // the kits picked for these two teams (new teams: the automatic ones)
+  function kitPick() {
+    var s = World.session;
+    if (!s.kitPick || s.kitPick.h !== s.homeTeamId || s.kitPick.a !== s.awayTeamId) {
+      s.kitPick = { h: s.homeTeamId, a: s.awayTeamId, k: NS.Teams.autoKits(NS.Teams.byId(s.homeTeamId), NS.Teams.byId(s.awayTeamId)) };
+    }
+    return s.kitPick.k;
+  }
+
+  function buildKits() {
+    var wrap = screens.KITS;
+    var stage = el('div', 'tp-stage kt-stage');
+    [0, 1].forEach(function (t) {
+      var P = KP[t];
+      var card = el('div', 'tp-panel ' + (t ? 'away' : 'home'));
+      card.setAttribute('data-panel', String(t));
+      card.appendChild(el('div', 'tp-edge', T(t ? 'tp.away' : 'tp.home')));
+      var body = el('div', 'tp-body kt-body');
+      var head = el('div', 'kt-head');
+      P.name = el('div', 'tp-name');
+      head.appendChild(P.name);
+      P.owner = el('span', 'owner-chip hidden');
+      head.appendChild(P.owner);
+      body.appendChild(head);
+      P.big = el('div', 'kt-big');
+      body.appendChild(P.big);
+      P.cyc = cycleBtn('kt-cyc', 'kt' + t, function (d) {
+        var k = kitPick();
+        if (!d) { if (actor === 0) focusKeyC(0, 'next'); return; } // (OK: on to Next)
+        k[t] = (k[t] + d + 3) % 3;
+        renderKits();
+      });
+      P.cyc.setAttribute('data-default', '1');
+      body.appendChild(P.cyc);
+      var th = el('div', 'kt-thumbs');
+      P.thumbs = [0, 1, 2].map(function () { var x = el('div', 'kt-thumb'); th.appendChild(x); return x; });
+      body.appendChild(th);
+      card.appendChild(body);
+      stage.appendChild(card);
+      if (t === 0) {
+        var mid = el('div', 'tp-mid kt-mid');
+        mid.appendChild(el('div', 'tp-vs', 'VS'));
+        refs.ktClash = el('div', 'kt-clash', T('kit.clash'));
+        mid.appendChild(refs.ktClash);
+        stage.appendChild(mid);
+      }
+    });
+    wrap.appendChild(stage);
+    var foot = el('div', 'foot');
+    foot.appendChild(btn('', T('nav.back'), 'back', back));
+    foot.appendChild(plusKey(btn('primary', T('nav.next_plan'), 'next', function () {
+      World.session.selStarter = [null, null];
+      show('GAMEPLAN');
+    })));
+    wrap.appendChild(foot);
+  }
+
+  // (the panels are built once; this only writes them)
+  function renderKits() {
+    var s = World.session, k = kitPick(), two = twoPlayers();
+    var tm = [NS.Teams.byId(s.homeTeamId), NS.Teams.byId(s.awayTeamId)];
+    var sets = [NS.Teams.kitsOf(tm[0], tm[1]), NS.Teams.kitsOf(tm[1], tm[0])];
+    [0, 1].forEach(function (t) {
+      var P = KP[t];
+      P.name.textContent = tm[t].name;
+      P.big.innerHTML = kitSvg(sets[t][k[t]]);
+      clear(P.cyc._mid);
+      P.cyc._mid.appendChild(el('span', 'kt-name', T(KIT_NAMES[k[t]])));
+      for (var i = 0; i < 3; i++) {
+        P.thumbs[i].innerHTML = kitSvg(sets[t][i]);
+        P.thumbs[i].classList.toggle('sel', i === k[t]);
+      }
+      var own = two ? (panelOf(0) === t ? 0 : 1) : -1;
+      P.owner.textContent = own >= 0 ? 'P' + (own + 1) : '';
+      P.owner.className = 'owner-chip' + (own >= 0 ? ' p' + (own + 1) : ' hidden');
+    });
+    refs.ktClash.style.visibility = NS.Teams.kitsClash(sets[0][k[0]], sets[1][k[1]]) ? 'visible' : 'hidden';
   }
 
   /* ------------------------------ GAME PLAN ------------------------------ */
@@ -1228,8 +1312,13 @@
     keys = keys || [keyOf(focused), keyOf(focus2)];
     var two = twoPlayers();
     if (!s.selStarter) s.selStarter = [null, null];
-    refs.gpTabs.classList.toggle('hidden', two);
-    refs.gpSplit.classList.toggle('dual', two);
+    // only the teams people play are set up here (not the CPU's): two players against each other, both teams at the
+    // same time; one player (or two on one side), that team; nobody (CPU v CPU), either one, a tab each
+    var sp = NS.sidePads(), both = sp[0] >= 0 && sp[1] >= 0 && sp[0] !== sp[1];
+    var mine = sp[0] >= 0 ? sp[0] : sp[1];
+    if (mine >= 0 && !both) gpSide = mine;
+    refs.gpTabs.classList.toggle('hidden', mine >= 0);
+    refs.gpSplit.classList.toggle('dual', both);
     [0, 1].forEach(function (t) {
       var P = GP[t];
       var teamObj = NS.Teams.byId(t === 0 ? s.homeTeamId : s.awayTeamId);
@@ -1238,12 +1327,12 @@
       var roster = s.rosters[t];
       var picked = s.selStarter[t];
       var kit = NS.Assets.hexToCss(teamObj.c1);
-      P.card.classList.toggle('off', !two && t !== gpSide);
+      P.card.classList.toggle('off', !both && t !== gpSide);
       refs.gpTab[t].textContent = T(t ? 'tp.away' : 'tp.home') + '  ·  ' + teamObj.name;
       refs.gpTab[t].classList.toggle('sel', t === gpSide);
       P.title.textContent = teamObj.name + '  ·  ' + formKey;
       var own = two ? (panelOf(0) === t ? 0 : 1) : -1;
-      P.owner.textContent = own >= 0 ? 'P' + (own + 1) : '';
+      P.owner.textContent = two && !both ? 'P1 + P2' : (own >= 0 ? 'P' + (own + 1) : '');
       P.owner.className = 'owner-chip' + (own >= 0 ? ' p' + (own + 1) : ' hidden');
       var fb = P.card.querySelectorAll('[data-form]');
       for (var i = 0; i < fb.length; i++) fb[i].classList.toggle('sel', fb[i].getAttribute('data-form') === formKey);
@@ -2644,6 +2733,7 @@
       buildSides();
       buildTeams();
       buildGamePlan();
+      buildKits();
       buildCompPick();
       buildCompHub();
       buildPause();
@@ -2670,7 +2760,7 @@
     // a controller's L / R (d -1 / +1): the Settings page goes to the tab before / after (round). false = not on Settings
     tabStep: function (d) {
       // the game plan (one player): the other team
-      if (open && current === 'GAMEPLAN' && !twoPlayers()) { refs.gpTab[1 - gpSide].click(); return true; }
+      if (open && current === 'GAMEPLAN') { if (!refs.gpTabs.classList.contains('hidden')) refs.gpTab[1 - gpSide].click(); return true; }
       if (!open || current !== 'SETTINGS') return false;
       var tabs = [].filter.call(refs.setTabs.querySelectorAll('[data-group]'), function (b) { return b.offsetParent !== null; });
       if (!tabs.length) return true;
