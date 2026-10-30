@@ -37,11 +37,12 @@
     var now = perfNow();
     if (!f.t0) f.t0 = now;
     if (now - f.t0 < 1000) return;
-    var n = f.n || 1, s = (now - f.t0) / 1000;
+    var n = f.n || 1, s = (now - f.t0) / 1000, di = NS.Scene.drawInfo();
     // text built once a second only
     f.box.textContent = 'FPS ' + Math.round(n / s) + '   worst frame ' + Math.round(f.worst) + ' ms   slow frames ' + f.slow +
       '\ngame ' + (f.step / n).toFixed(2) + ' ms (checkoAI ' + (f.ai / n).toFixed(2) + ')   draw ' + (f.draw / n).toFixed(2) +
       ' ms   steps/frame ' + (f.steps / n).toFixed(2) + (f.dropped ? '   dropped ' + f.dropped : '') +
+      (di ? '\ndraw calls ' + di.calls + '   triangles ' + di.triangles : '') +
       '\n' + NS.Quality.label() + ' ' + (NS.stadiumId || '') + ' ' + (World.settings.playerModel || '');
     f.n = 0; f.t0 = now; f.worst = 0; f.slow = 0; f.step = 0; f.ai = 0; f.draw = 0; f.steps = 0; f.dropped = 0;
   }

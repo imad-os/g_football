@@ -341,7 +341,7 @@
   // A player: root turns with the facing; body pivots at the hips (lean, roll, slide); legs pivot at the hips and
   // arms at the shoulders, so runs, kicks, tackles and dives can be animated by rotations only, whatever the model.
   function limb(parent, g, mat, x, y, len) {
-    var pivot = new THREE.Group();
+    var pivot = new THREE.Bone(); // (a bone: the merged body follows it, see bake)
     pivot.position.set(x, y, 0);
     var m = new THREE.Mesh(g, mat);
     m.position.y = -len / 2;
@@ -482,7 +482,7 @@
     var sleeveMat = new Mat({ map: limbTexture(look.c1, look.skin, 0, 0.3, 0) });
     mats.push(torsoMat, headMat, hairMat, shortsMat, sleeveMat);
 
-    var body = new THREE.Group();
+    var body = new THREE.Bone();
     body.position.y = HIP; // hips
     root.add(body);
     var torso = new THREE.Mesh(geo.torso, torsoMat);
@@ -528,7 +528,7 @@
     if (farmMat !== skinMat) mats.push(farmMat);
 
     var hip = b.hip * h;
-    var body = new THREE.Group();
+    var body = new THREE.Bone();
     body.position.y = hip;
     root.add(body);
     var pelvis = new THREE.Mesh(bodyPart(m, seg, h, 'pelvis'), shortsMat);
@@ -571,18 +571,92 @@
     mesh.hip = hip; mesh.legX = b.legX * h; mesh.legW = b.legW * h; mesh.legLen = hip; mesh.thighLen = thL;
   }
 
+  // ---- All the players in one draw call. Each body is built as above, parts hanging from pivots (bones); then its parts
+  // are baked into one piece (bake): every vertex where it hangs at rest, bound to its pivot, painted from one small
+  // picture of the player (his parts' own textures and colours side by side). Then all the players are put together into
+  // one skinned mesh with one skeleton (syncPlayers, before drawing): one draw call for the 22 players and the referee
+  // instead of 15 each. The pivots stay where they were, so the animation (js/game/match.js) and the replays turn them
+  // exactly as before. A hidden player (sent off) has his part of the skeleton folded to nothing. The shadows:
+  // js/render/scene.js, also one draw call.
+  var bakeM = null, bakeInv = null, bakeN = null;
+  var CELL_W = 128, CELL_H = 64; // one player's picture
+
+  // the light of the lit look (js/render/scene.js: ambient 0.8, sun 0.65 from (25, 50, 30)) averaged over the player's
+  // turn: a part facing up gets the sun, one facing sideways a fifth of it, one facing down only the ambient
+  var SUN_UP = 50 / Math.sqrt(25 * 25 + 50 * 50 + 30 * 30), SUN_SIDE = Math.sqrt(1 - SUN_UP * SUN_UP) / Math.PI;
+  function shade(ny) { return 0.8 + 0.65 * (Math.max(0, SUN_UP * ny) + SUN_SIDE * Math.sqrt(Math.max(0, 1 - ny * ny))); }
+
+  function bake(mesh) {
+    if (!bakeM) { bakeM = new THREE.Matrix4(); bakeInv = new THREE.Matrix4(); bakeN = new THREE.Matrix3(); }
+    var root = mesh.root, parts = [], bones = [], slots = [], i, j, k;
+    root.updateMatrixWorld(true);
+    bakeInv.copy(root.matrixWorld).invert();
+    root.traverse(function (o) { if (o.isBone) bones.push(o); else if (o.isMesh) parts.push(o); });
+    // his picture: one slot per material (a jersey 64 wide, a band 8, a plain colour 4), side by side (112 at most)
+    var x = 0;
+    for (i = 0; i < parts.length; i++) {
+      var mat = parts[i].material, s = null;
+      for (j = 0; j < slots.length; j++) if (slots[j].mat === mat) s = slots[j];
+      if (!s) { s = { mat: mat, x: x, w: mat.map ? mat.map.image.width : 4 }; x += s.w; slots.push(s); }
+      parts[i].userData.slot = s;
+    }
+    var canvas = document.createElement('canvas');
+    canvas.width = CELL_W;
+    canvas.height = CELL_H;
+    var ctx = canvas.getContext('2d');
+    for (j = 0; j < slots.length; j++) {
+      var sl = slots[j], sw = Math.min(sl.w, CELL_W - sl.x);
+      if (sl.mat.map) ctx.drawImage(sl.mat.map.image, sl.x, 0, sw, CELL_H);
+      else { ctx.fillStyle = hexToCss(sl.mat.color.getHex()); ctx.fillRect(sl.x, 0, sw, CELL_H); }
+    }
+    // the geometry: every part moved to where it hangs, its uvs into its slot (0..1 of his picture), its vertices bound
+    // to its pivot; the pivots' rest places (from the root) for the skeleton
+    var nv = 0, ni = 0;
+    for (i = 0; i < parts.length; i++) { nv += parts[i].geometry.attributes.position.count; ni += parts[i].geometry.index.count; }
+    var P = new Float32Array(nv * 3), N = new Float32Array(nv * 3), U = new Float32Array(nv * 2), C = new Float32Array(nv * 3);
+    var B = new Uint8Array(nv), I = new Uint32Array(ni);
+    var v0 = 0, i0 = 0, v = new THREE.Vector3();
+    for (i = 0; i < parts.length; i++) {
+      var pm = parts[i], g = pm.geometry, gp = g.attributes.position, gn = g.attributes.normal, gu = g.attributes.uv, gi = g.index;
+      var bone = pm.parent;
+      while (!bone.isBone) bone = bone.parent;
+      var bi = bones.indexOf(bone), slot = pm.userData.slot;
+      var u0 = (slot.x + 0.5) / CELL_W, uw = (Math.min(slot.w, CELL_W - slot.x) - 1) / CELL_W; // (texel centres only)
+      bakeM.multiplyMatrices(bakeInv, pm.matrixWorld);
+      bakeN.getNormalMatrix(bakeM);
+      for (k = 0; k < gp.count; k++) {
+        var o = v0 + k;
+        v.fromBufferAttribute(gp, k).applyMatrix4(bakeM);
+        P[o * 3] = v.x; P[o * 3 + 1] = v.y; P[o * 3 + 2] = v.z;
+        v.fromBufferAttribute(gn, k).applyMatrix3(bakeN).normalize();
+        N[o * 3] = v.x; N[o * 3 + 1] = v.y; N[o * 3 + 2] = v.z;
+        C[o * 3] = C[o * 3 + 1] = C[o * 3 + 2] = shade(v.y);
+        U[o * 2] = u0 + Math.min(1, Math.max(0, gu.getX(k))) * uw;
+        U[o * 2 + 1] = 0.5 / CELL_H + Math.min(1, Math.max(0, gu.getY(k))) * ((CELL_H - 1) / CELL_H);
+        B[o] = bi;
+      }
+      for (k = 0; k < gi.count; k++) I[i0 + k] = gi.getX(k) + v0;
+      v0 += gp.count;
+      i0 += gi.count;
+      pm.parent.remove(pm);
+    }
+    var rest = [];
+    for (j = 0; j < bones.length; j++) rest.push(new THREE.Matrix4().multiplyMatrices(bakeInv, bones[j].matrixWorld).invert());
+    for (j = 0; j < mesh.mats.length; j++) mesh.mats[j].dispose(); // (the parts' materials; their textures are shared)
+    mesh.mats = [];
+    mesh.baked = { P: P, N: N, U: U, C: C, B: B, I: I, canvas: canvas, bones: bones, rest: rest };
+    batchDirty = true;
+  }
+
   // Builds the body into mesh.root (kept: the player's position, facing and visibility stay as they are).
   function build(mesh, lit) {
     var Mat = lit ? THREE.MeshLambertMaterial : THREE.MeshBasicMaterial;
-    var root = mesh.root;
-    var shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.38 });
-    mesh.mats.push(shadowMat);
-    var shadow = new THREE.Mesh(geo.shadow, shadowMat);
-    shadow.position.y = 0.03;
-    root.add(shadow);
     var m = model();
     if (m === 'CLASSIC') buildClassic(mesh, Mat, mesh.look);
     else buildRounded(mesh, Mat, mesh.look, m);
+    bake(mesh);
+    var root = mesh.root;
+    mesh.lit = lit;
     mesh.style = styleKey(lit);
     // his booking (warning / yellow / red), hidden until he gets one; it sits just under the controlled-player arrow
     var cardMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
@@ -596,9 +670,12 @@
 
   // Returns { root, body, leftLeg, rightLeg, leftArm, rightArm, card, mats, hip, legX, legW, legLen } (mats are owned
   // by the player and disposed with him). look = { pattern, c1, c2, shorts, skin, gk, seed }.
+  var live = []; // every player's mesh until it is disposed (drawn together by syncPlayers; their shadows: scene.js)
   function createPlayer(look, lit) {
-    var mesh = { root: new THREE.Group(), look: look, mats: [], style: '' };
+    var mesh = { root: new THREE.Group(), look: look, mats: [], style: '', lit: true, baked: null };
     build(mesh, lit);
+    live.push(mesh);
+    batchDirty = true;
     return mesh;
   }
 
@@ -610,8 +687,7 @@
     if (mesh.style === styleKey(lit)) return false;
     var cardOn = mesh.card.visible, cardColor = mesh.card.material.color.getHex();
     for (var i = mesh.root.children.length - 1; i >= 0; i--) mesh.root.remove(mesh.root.children[i]);
-    disposePlayer(mesh);
-    mesh.mats = [];
+    freeBody(mesh);
     build(mesh, lit);
     mesh.card.visible = cardOn;
     mesh.card.material.color.setHex(cardColor);
@@ -624,8 +700,104 @@
     bodyGeo = {};
   }
 
-  function disposePlayer(mesh) {
+  // (the booking card's material; the body itself is in the players' mesh, rebuilt without him)
+  function freeBody(mesh) {
     for (var i = 0; i < mesh.mats.length; i++) mesh.mats[i].dispose();
+    mesh.mats = [];
+    mesh.baked = null;
+    batchDirty = true;
+  }
+
+  function disposePlayer(mesh) {
+    freeBody(mesh);
+    var i = live.indexOf(mesh);
+    if (i >= 0) live.splice(i, 1);
+  }
+
+  // ---- the players' mesh: every player of `live` in one skinned mesh, one skeleton, one picture (a grid of theirs) ----
+  var batch = null, batchDirty = true, batchScene = null;
+  var batchRanges = []; // per player: [root, first bone, bones] (the hidden ones are folded, see hideBones)
+
+  function freeBatch() {
+    if (!batch) return;
+    if (batch.parent) batch.parent.remove(batch);
+    batch.geometry.dispose();
+    batch.material.map.dispose();
+    batch.material.dispose();
+    if (batch.skeleton.dispose) batch.skeleton.dispose();
+    batch = null;
+  }
+
+  // after the skeleton's own update: the bones of a player who is not on show (hidden, or out of the scene) are made
+  // nothing, so his part of the mesh shrinks to a point and is not drawn
+  function hideBones() {
+    THREE.Skeleton.prototype.update.call(this);
+    var m = this.boneMatrices;
+    for (var i = 0; i < batchRanges.length; i += 3) {
+      var r = batchRanges[i];
+      if (r.visible && r.parent) continue;
+      m.fill(0, batchRanges[i + 1] * 16, (batchRanges[i + 1] + batchRanges[i + 2]) * 16);
+    }
+  }
+
+  function buildBatch() {
+    freeBatch();
+    batchRanges.length = 0;
+    batchDirty = false;
+    var list = [], i, k, nv = 0, ni = 0;
+    for (i = 0; i < live.length; i++) if (live[i].baked) { list.push(live[i]); nv += live[i].baked.B.length; ni += live[i].baked.I.length; }
+    if (!list.length) return;
+    // the picture: the players' own, in a grid 4 across
+    var cols = 4, rows = Math.ceil(list.length / cols), AW = CELL_W * cols, AH = CELL_H;
+    while (AH < rows * CELL_H) AH *= 2;
+    var canvas = document.createElement('canvas');
+    canvas.width = AW;
+    canvas.height = AH;
+    var ctx = canvas.getContext('2d');
+    var P = new Float32Array(nv * 3), N = new Float32Array(nv * 3), U = new Float32Array(nv * 2), C = new Float32Array(nv * 3);
+    var SI = new Uint16Array(nv * 4), SW = new Float32Array(nv * 4), I = nv > 65535 ? new Uint32Array(ni) : new Uint16Array(ni);
+    var bones = [], rest = [], v0 = 0, i0 = 0;
+    for (i = 0; i < list.length; i++) {
+      var b = list[i].baked, cx = (i % cols) * CELL_W, cy = Math.floor(i / cols) * CELL_H, n = b.B.length, b0 = bones.length;
+      ctx.drawImage(b.canvas, cx, cy);
+      P.set(b.P, v0 * 3); N.set(b.N, v0 * 3); C.set(b.C, v0 * 3);
+      for (k = 0; k < n; k++) {
+        U[(v0 + k) * 2] = (cx + b.U[k * 2] * CELL_W) / AW;
+        U[(v0 + k) * 2 + 1] = 1 - (cy + (1 - b.U[k * 2 + 1]) * CELL_H) / AH; // (the picture is drawn top down, v goes up)
+        SI[(v0 + k) * 4] = b0 + b.B[k];
+        SW[(v0 + k) * 4] = 1;
+      }
+      for (k = 0; k < b.I.length; k++) I[i0 + k] = b.I[k] + v0;
+      batchRanges.push(list[i].root, b0, b.bones.length);
+      for (k = 0; k < b.bones.length; k++) { bones.push(b.bones[k]); rest.push(b.rest[k].clone()); }
+      v0 += n;
+      i0 += b.I.length;
+    }
+    var g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(P, 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(N, 3));
+    g.setAttribute('uv', new THREE.BufferAttribute(U, 2));
+    g.setAttribute('color', new THREE.BufferAttribute(C, 3));
+    g.setAttribute('skinIndex', new THREE.BufferAttribute(SI, 4));
+    g.setAttribute('skinWeight', new THREE.BufferAttribute(SW, 4));
+    g.setIndex(new THREE.BufferAttribute(I, 1));
+    var tex = new THREE.CanvasTexture(canvas);
+    tex.generateMipmaps = false;          // (mipmaps would blend the players' slots together; the picture is small anyway)
+    tex.minFilter = THREE.LinearFilter;
+    // lit (HIGH): the sun as the player turns; not lit: the same light painted once on the vertices (no lighting cost)
+    var lit = list[0].lit, Mat = lit ? THREE.MeshLambertMaterial : THREE.MeshBasicMaterial;
+    batch = new THREE.SkinnedMesh(g, new Mat({ map: tex, skinning: true, vertexColors: !lit }));
+    batch.frustumCulled = false; // (the players are all over the pitch)
+    var sk = new THREE.Skeleton(bones, rest); // (the bones' rest places from each player's root: the mesh stays at 0)
+    sk.update = hideBones;
+    batch.bind(sk, new THREE.Matrix4());
+    batchScene.add(batch);
+  }
+
+  // before drawing (js/render/scene.js): the players' mesh again if a player came, went or changed look
+  function syncPlayers(scene) {
+    batchScene = scene;
+    if (batchDirty) buildBatch();
   }
 
   // The crowd: flat stands (js/render/scene.js) wearing one small tile of fans drawn here once, no 3D people. Two frames
@@ -703,6 +875,8 @@
     for (k in ballTextures) ballTextures[k].dispose();
     ballTextures = {};
     dropBodyGeometry();
+    freeBatch();
+    batchDirty = true;
   }
 
   NS.Assets = {
@@ -720,6 +894,8 @@
     dropBodyGeometry: dropBodyGeometry,
     rebuildBall: rebuildBall,
     disposePlayer: disposePlayer,
+    live: live,
+    syncPlayers: syncPlayers,
     disposeAll: disposeAll
   };
 })(window.RS6 = window.RS6 || {});

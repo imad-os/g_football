@@ -4,6 +4,7 @@
 
   var renderer, scene, camera, dirLight, ambLight;
   var pitchMesh, crowdMesh, ballMesh, ballShadow, ballShadowMat;
+  var shadowMesh = null, SHADOW_MAX = 64; // the players' shadows (see render)
   var spinQ = null, spinAxis = null;
   var wx = 0, wy = 0, wz = 0;  // the ball's spin (rad/s, world axes)
   var stadium = null;       // everything sized from the pitch (rebuilt when the stadium changes)
@@ -148,8 +149,7 @@
   NS.Scene = {
     init: function (canvas, tier) {
       canvasEl = canvas;
-      renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: false, powerPreference: 'high-performance' });
-      width = window.innerWidth;
+      renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: false, powerPreference: 'high-performance' });      width = window.innerWidth;
       height = window.innerHeight;
       renderer.setSize(width, height);
       scene = new THREE.Scene();
@@ -185,6 +185,14 @@
         trail.push(tm);
       }
       projV = new THREE.Vector3();
+      // the players' shadows: one instanced mesh (one draw call for all of them), moved under each player in render()
+      shadowMesh = new THREE.InstancedMesh(NS.Assets.geo.shadow,
+        new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.38 }), SHADOW_MAX);
+      var one = new THREE.Matrix4();
+      for (var s = 0; s < SHADOW_MAX; s++) shadowMesh.setMatrixAt(s, one); // (only the position is written later)
+      shadowMesh.frustumCulled = false;
+      shadowMesh.count = 0;
+      scene.add(shadowMesh);
       for (var i = 0; i < 4; i++) {
         // light fill + dark border (a slightly bigger back-face copy drawn behind it)
         rings[i] = new THREE.Group();
@@ -222,7 +230,9 @@
     applyTier: function (tier) {
       if (!renderer) return;
       currentTier = tier;
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5) * tier.pixelRatio);
+      var pr = Math.min(window.devicePixelRatio || 1, 1.5) * tier.pixelRatio;
+      if (tier.maxW && width * pr > tier.maxW) pr = tier.maxW / width; // (a 4K screen: drawn at the tier's size, stretched)
+      renderer.setPixelRatio(pr * NS.Quality.scale()); // (dynamic resolution, js/core/quality.js)
       renderer.setSize(width, height);
       if (pitchMesh) {
         pitchMesh.material.map = NS.Assets.pitchTexture(tier.pitchStripes);
@@ -365,7 +375,20 @@
       lookTarget.set(bx * 0.5 + sg * near * HW * 0.22, 0, bz * 0.58);
       camera.lookAt(lookTarget);
     },
-    render: function () { renderer.render(scene, camera); },
+    render: function () {
+      NS.Assets.syncPlayers(scene); // (all the players: one mesh, rebuilt only when one came, went or changed look)
+      var L = NS.Assets.live, a = shadowMesh.instanceMatrix.array, n = 0;
+      for (var i = 0; i < L.length && n < SHADOW_MAX; i++) {
+        var r = L[i].root;
+        if (!r.visible || !r.parent) continue;
+        var o = n * 16;
+        a[o + 12] = r.position.x; a[o + 13] = r.position.y + 0.03; a[o + 14] = r.position.z;
+        n++;
+      }
+      shadowMesh.count = n;
+      shadowMesh.instanceMatrix.needsUpdate = true;
+      renderer.render(scene, camera);
+    },
     // replays (js/game/replay.js): what the camera, the ball and the nets look like now, 13 numbers from out[o], and the
     // ball's turn about the vertical in out[y]
     camState: function (out, o, y) {
@@ -415,7 +438,9 @@
       buildStadium(currentTier || { pitchStripes: true });
       if (currentTier) crowdMesh.visible = currentTier.crowdCount > 0;
     },
-    lit: function () { return currentTier ? currentTier.useLighting : true; },
+    lit: function () { return currentTier ? currentTier.litPlayers !== false : true; }, // (the players: js/render/assets.js)
+    // Dev mode > Performance: what the last frame drew ({ calls, triangles })
+    drawInfo: function () { return renderer ? renderer.info.render : null; },
     dispose: function () {
       if (!scene) return;
       scene.traverse(function (o) {
