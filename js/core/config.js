@@ -2,7 +2,7 @@
 (function (NS) {
   'use strict';
 
-  NS.VERSION = '1.63.0';
+  NS.VERSION = '1.64.0';
 
   // Pitch geometry (world units; x = length, z = width, y = up). NS.M: world units per metre, from the players: an
   // average footballer (1.81 m) is 2.9 units tall. Everything is at real size at that scale: the ball, the players,
@@ -95,6 +95,7 @@
     devArrow: true,
     powLow: 1.0,
     powThru: 1.0,
+    powLobThru: 1.0, // the long through ball (lofted over the defenders)
     powLong: 1.0,
     powShot: 1.0,
     passAssist: 60,
@@ -184,6 +185,7 @@
       options: [[true, 'opt.show'], [false, 'opt.hide']] },
     { key: 'powLow', group: 'dev', label: 'set.powlow', hint: 'set.pow.h', options: POW },
     { key: 'powThru', group: 'dev', label: 'set.powthru', hint: 'set.pow.h', options: POW },
+    { key: 'powLobThru', group: 'dev', label: 'set.powlobthru', hint: 'set.pow.h', options: POW },
     { key: 'powLong', group: 'dev', label: 'set.powlong', hint: 'set.pow.h', options: POW },
     { key: 'powShot', group: 'dev', label: 'set.powshot', hint: 'set.pow.h', options: POW },
     // 0: the ball goes exactly where the stick and the power bar say; 100: always to the best team-mate that way

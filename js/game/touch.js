@@ -15,12 +15,13 @@
   var R = NS.BALL_R;
   var PI = Math.PI;
   var REACH = 1.65;    // a foot gets to the ball up to this far from his centre (~1 m, stretching) ...
-  var STRIKE = 1.2;    // ... and strikes it cleanly up to this far (further: stretched, Touch.quality)
   var REACH_Y = 0.8;   // ... and this high (above: thigh, chest, head)
   var BODY = 0.42;     // closer than this the ball is against his feet / shins: pushed out (player-ball collision)
   var LOSE = 3.4;      // a ball this far from him (~2.1 m) and running away faster than he can run is no longer his
   var LOSE_MAX = 5.2;  // ... and one this far (~3.3 m) is gone whatever it does
-  var KQ_T = 0.8;      // a kick asked for with the ball out of reach waits this long for him to get to it
+  var POKE_R = 1.3;    // an opponent's foot gets to the dribbler's ball up to this far from his centre (~0.8 m)
+  var TURN_T = 0.34;   // a turn with the ball (Touch.turnMove): how long the move takes (match.js animate shows it)
+  var KQ_T = 1.4;      // a kick asked for with the ball out of reach waits this long for him to get to it
   var TOUCH_T = 0.2;   // a touch's animation (match.js animate)
   // p.touchKind: what touched the ball (the animation shows it)
   var K_INSIDE = 0, K_OUTSIDE = 1, K_LACES = 2, K_SOLE = 3, K_THIGH = 4, K_CHEST = 5, K_HEAD = 6;
@@ -93,16 +94,13 @@
       return dx * dx + dz * dz <= REACH * REACH;
     },
 
-    // The moment to strike it: at a comfortable distance, or at a stretch when it is getting away from him (or he has
-    // waited long enough: kqT, the time a kept kick has left)
-    strikeNow: function (p, kqT) {
+    // The moment to strike it: as soon as a foot gets to it (at a stretch it comes off a little worse: Touch.quality),
+    // so a pass or shot asked for is never held back longer than it takes him to reach the ball
+    strikeNow: function (p) {
       var ball = World.ball;
       if (ball.pos.y > 1.0) return false;
-      var dx = ball.pos.x - p.pos.x, dz = ball.pos.z - p.pos.z, d2 = dx * dx + dz * dz;
-      if (d2 <= STRIKE * STRIKE) return true;
-      if (d2 > REACH * REACH) return false;
-      var away = (dx * (ball.vel.x - p.vel.x) + dz * (ball.vel.z - p.vel.z)) / Math.sqrt(d2);
-      return away > 0.5 || kqT < 0.25;
+      var dx = ball.pos.x - p.pos.x, dz = ball.pos.z - p.pos.z;
+      return dx * dx + dz * dz <= REACH * REACH;
     },
 
     // A kick (Actions fn with its arguments) asked for by the man on the ball while it is out of his reach: kept, and
@@ -113,7 +111,7 @@
       if (this.go || ball.owner !== p || p.gkHands || p.throwIn || p.fkSpot) return false;
       var m = World.match;
       if ((m.restart || m.penalty || m.so) && p === m.setTaker) return false; // a dead ball: he stands at it
-      if (this.strikeNow(p, KQ_T)) return false;
+      if (this.strikeNow(p)) return false;
       p.kq = fn;
       p.kqA = Array.prototype.slice.call(args);
       p.kqT = KQ_T;
@@ -168,13 +166,16 @@
       if (NS.dbg) NS.dbg(why, p.team);
     },
 
-    // An opponent gets a foot to a ball out of the dribbler's feet: it comes off his foot (his run, and a little
-    // astray), loose for whoever gets to it first (usually him)
-    poke: function (q, p) {
+    // An opponent gets a foot to the dribbler's ball: it comes off his foot (his run, and a little astray), loose for
+    // whoever gets to it first (usually him); take: he steps in and takes it off him (it stays at his own feet)
+    poke: function (q, p, take) {
       var ball = World.ball, a = (Math.random() - 0.5) * 1.6, ps = 1.5 + Math.random() * 2.5;
       var hx = Math.sin(q.facing + a), hz = Math.cos(q.facing + a);
-      this.lose(p, 'ball_nicked_off_dribbler');
-      ball.vel.set(ball.vel.x * 0.25 + q.vel.x * 0.5 + hx * ps, 0.15, ball.vel.z * 0.25 + q.vel.z * 0.5 + hz * ps);
+      this.lose(p, take ? 'ball_taken_off_dribbler' : 'ball_nicked_off_dribbler');
+      if (take) {
+        var fx = q.pos.x + Math.sin(q.facing) * 0.6 - ball.pos.x, fz = q.pos.z + Math.cos(q.facing) * 0.6 - ball.pos.z;
+        ball.vel.set(q.vel.x * 0.8 + fx * 3, 0, q.vel.z * 0.8 + fz * 3);
+      } else ball.vel.set(ball.vel.x * 0.25 + q.vel.x * 0.5 + hx * ps, 0.15, ball.vel.z * 0.25 + q.vel.z * 0.5 + hz * ps);
       ball.lastTouchTeam = q.team; ball.lastToucher = q.name;
       ball.receiver = q; ball.pickupCooldown = 0.15; // (he reacts to it first)
       q.touchT = TOUCH_T; q.touchFoot = 1; q.touchKind = K_INSIDE;
@@ -219,10 +220,34 @@
       else { ux = Math.sin(p.facing); uz = Math.cos(p.facing); }
       // he wants to stop (the stick let go, the CPU holding it up): he steps to the ball and puts his sole on it
       var stop = ws < 1.5 || il < 1.5;
+      // ---- a turn with the ball: the stick reversed while it is in reach of his foot. He does not run a wide arc
+      // round it: a drag-back (the sole rolls it back) or a Cruyff (the inside of the foot plays it behind his standing
+      // leg), and he spins round with it
+      // A ball a little ahead of his foot when he asks for it: the turn is kept (p.turnQ) while he steps onto the ball
+      // at his pace (no braking arc), and made as soon as his foot gets to it
+      if (p.turnQ > 0) p.turnQ -= dt;
+      var hs0 = Math.sqrt(p.pvx * p.pvx + p.pvz * p.pvz), rev = 0;
+      if (!stop && !p.kq && !(p.turnT > 0) && ball.pos.y < REACH_Y) {
+        if (hs0 > 1) rev = wrapA(Math.atan2(ux, uz) - Math.atan2(p.pvx, p.pvz));
+        var back = rev > 2.2 || rev < -2.2;
+        if (p.turnQ > 0 && !(rev > 1.2 || rev < -1.2)) p.turnQ = 0; // (the stick came back round: no turn)
+        if ((back && hs0 > 2.5) || p.turnQ > 0) {
+          if (bd <= REACH && !(p.tchCd > 0.12)) {
+            this.turnMove(p, ux, uz, ws, Math.max(hs0, 3), rev);
+            p.turnQ = 0; p.pvx = p.vel.x; p.pvz = p.vel.z;
+            return;
+          }
+          if (!(p.turnQ > 0) && bd <= REACH + 1.4) p.turnQ = 0.45;
+        }
+      } else p.turnQ = 0;
       // ... and what he can do: no instant turn. The turn rate falls with his pace and rises with his agility; a sharp
       // turn asked for at pace brakes him (less for a well balanced player)
-      var vx = wx, vz = wz, ps = Math.sqrt(p.pvx * p.pvx + p.pvz * p.pvz);
-      if (ws > 0.5 && ps > 2) {
+      var vx = wx, vz = wz, ps = hs0;
+      if (p.turnQ > 0) {
+        // stepping onto the ball for the turn: straight to it, at his pace
+        var qs = Math.max(ps, 4) / (bd || 1);
+        vx = bx * qs; vz = bz * qs;
+      } else if (ws > 0.5 && ps > 2) {
         var a0 = Math.atan2(p.pvx, p.pvz), da = wrapA(Math.atan2(wx, wz) - a0), ada = da < 0 ? -da : da;
         var maxT = (5.5 + 6.5 * (p.agi || 0.6)) / (1 + ps * 0.07) * (p.balT > 0 ? 0.55 : 1) * dt;
         if (ada > maxT) {
@@ -258,7 +283,7 @@
       else if (ws > 0.5) p.facing += clamp(wrapA(Math.atan2(wx, wz) - p.facing), -9 * dt, 9 * dt); // turning on the spot
 
       // ---- the ball against his feet / shins: it bounces off him (never through him)
-      if (bd < BODY && ball.pos.y < 1.2) {
+      if (bd < BODY && ball.pos.y < 1.2 && !(p.turnT > 0)) { // (a turn plays it past his feet)
         var nx = bd > 0.01 ? bx / bd : Math.sin(p.facing), nz = bd > 0.01 ? bz / bd : Math.cos(p.facing);
         ball.pos.x = p.pos.x + nx * BODY; ball.pos.z = p.pos.z + nz * BODY;
         var rn = (bvx - vx) * nx + (bvz - vz) * nz;
@@ -269,24 +294,58 @@
       // ---- a kick waiting for the ball: played the moment it is in reach (or given up)
       if (p.kq) {
         p.kqT -= dt;
-        if (this.strikeNow(p, p.kqT)) { this.fire(p); p.pvx = p.vel.x; p.pvz = p.vel.z; return; }
+        if (this.strikeNow(p)) { this.fire(p); p.pvx = p.vel.x; p.pvz = p.vel.z; return; }
         if (p.kqT <= 0) { p.kq = null; p.kqA = null; if (NS.dbg) NS.dbg('kick_ball_out_of_reach', p.team); }
       }
 
-      // ---- lost: too far, or running away faster than he can follow it
-      if (bd > LOSE_MAX || (bd > LOSE && (bvx * bx + bvz * bz) / bd > 12.5)) { this.lose(p, 'touch_too_heavy'); return; }
-      // ... or out of his feet with an opponent's foot nearer to it: the opponent reacts (his Defense) and pokes it
-      if (bd > 1.4 && ball.pos.y < 1.0) {
+      // ---- lost: too far, or running away faster than he can follow it (a kick waiting for it: he is on his way to
+      // play it, it stays his a little longer)
+      if (p.kq ? bd > LOSE_MAX * 1.4 : (bd > LOSE_MAX || (bd > LOSE && (bvx * bx + bvz * bz) / bd > 12.5))) { this.lose(p, 'touch_too_heavy'); return; }
+      // ... or an opponent's foot gets to it: as near to it as he is (or nearer: it is out of his feet) the opponent
+      // reacts (his Defense against the dribbler's control) and pokes it away, or takes it off him
+      if (ball.pos.y < 1.0 && !(m.protectT > 0)) {
         var od = nearOpp(p, ball.pos.x, ball.pos.z), q = this.opp;
-        if (q && od < 0.85 && od < bd - 0.5 && !(q.tackleT > 0) && q.role !== 'GK' &&
-            Math.random() < dt * 4 * (0.3 + 0.7 * (q.st ? q.st.def / 99 : 0.6))) {
-          this.poke(q, p); return;
+        if (q && od < POKE_R && od < bd + 0.25 && !(q.tackleT > 0) && q.role !== 'GK') {
+          var rate = (2.2 + 3.5 * clamp(bd - od, 0, 1.5)) * (0.35 + 0.65 * (q.st ? q.st.def / 99 : 0.6)) * (1.25 - 0.5 * (p.ctl || 0.6));
+          if (Math.random() < rate * dt) { this.poke(q, p, od < 0.95 && Math.random() < 0.5); return; }
         }
       }
 
       // ---- the touch
-      if (!(p.tchCd > 0) && bd <= REACH && ball.pos.y < REACH_Y) this.dribbleTouch(p, bx, bz, bd, ux, uz, stop ? 0 : ws, vs);
+      if (!(p.tchCd > 0) && !(p.turnQ > 0) && bd <= REACH && ball.pos.y < REACH_Y) this.dribbleTouch(p, bx, bz, bd, ux, uz, stop ? 0 : ws, vs);
       p.pvx = p.vel.x; p.pvz = p.vel.z;
+    },
+
+    // The turn with the ball (Touch.carry): the ball is played back past him the new way (ux, uz), just far enough to
+    // be met in his first strides, and he pivots on the spot (TURN_T: the move; p.turnKind 0 drag-back, 1 Cruyff).
+    // ws: the pace he wants, hs: his pace now, rev: the turn (radians, > 0 to his left)
+    turnMove: function (p, ux, uz, ws, hs, rev) {
+      var ball = World.ball;
+      var cruyff = Math.random() < (hs > 6.5 ? 0.6 : 0.25);
+      var foot = rev > 0 ? 1 : -1; // turning to his left: the right foot drags it back (and the other way round)
+      if (cruyff) foot = -foot;    // (a Cruyff: the other foot plays it behind the standing leg)
+      // where the ball goes: past the side of that foot, about a stride into the new way
+      var sx = uz * foot * 0.3, sz = -ux * foot * 0.3, ahead = 2 + ws * 0.12;
+      var gx = p.pos.x + ux * ahead + sx - ball.pos.x, gz = p.pos.z + uz * ahead + sz - ball.pos.z;
+      var gl = Math.sqrt(gx * gx + gz * gz) || 1;
+      var ns = 1.5 + (p.agi || 0.6) * 3.5; // (his pace out of the turn)
+      var v = Math.sqrt(2 * 9 * gl) + ns; // (it rolls out to there and slows on the grass, ahead of him as he goes)
+      // a clean move from a good dribbler; a man on him, his weak foot and his pace make it harder
+      var opp = nearOpp(p, p.pos.x, p.pos.z);
+      var diff = 0.04 + hs / 13 * 0.05 + (opp < 2.2 ? 0.06 : 0);
+      if ((foot > 0) !== (p.foot !== 'L')) diff += (1 - (p.wf || 0.5)) * 0.05;
+      diff *= 1.4 - (p.ctl || 0.6);
+      var ea = gaussR() * diff, es = 1 + gaussR() * diff * 0.8, c = Math.cos(ea), s = Math.sin(ea);
+      var vx = gx / gl * v * es, vz = gz / gl * v * es;
+      contact(p, vx * c + vz * s, 0, -vx * s + vz * c, cruyff ? K_INSIDE : K_SOLE, foot, TURN_T * 0.9);
+      // he pivots: the old run stops, the new one starts (a quicker man gets going sooner)
+      p.turnA0 = p.facing;
+      p.vel.x = ux * ns; p.vel.z = uz * ns;
+      p.facing = Math.atan2(ux, uz);
+      p.turnT = TURN_T; p.turnKind = cruyff ? 1 : 0; p.turnFoot = foot;
+      p.touchT = 0; // (the move has its own animation)
+      p.balT = Math.max(p.balT || 0, 0.12 * (1.3 - (p.bal || 0.6)));
+      if (NS.dbg) NS.dbg(cruyff ? 'turn_cruyff' : 'turn_drag_back', p.team);
     },
 
     // A touch while he runs with it (or stands on it): does the ball need one, and which.
@@ -364,8 +423,8 @@
       diff *= 1.4 - (p.ctl || 0.6);
       if (NS.teamClass) diff *= clamp(1 - 0.2 * NS.teamClass(p.team), 0.7, 1.3);
       var ea = gaussR() * diff * 1.2, es = 1 + gaussR() * diff * 1.4;
-      if (kind !== K_SOLE && Math.random() < diff * 0.25) {
-        es *= 1.25 + Math.random() * 0.35; // a heavy touch: it runs away from him
+      if (kind !== K_SOLE && Math.random() < diff * 0.12) {
+        es *= 1.15 + Math.random() * 0.25; // a heavy touch: it runs away from him
         if (NS.dbg) NS.dbg('heavy_touch', p.team);
       }
       var c = Math.cos(ea), s = Math.sin(ea);
@@ -422,8 +481,8 @@
       if (ball.receiver === p) q *= 0.85; // he was ready for it
       if (ball.thrown) q *= 0.4;          // a throw to his feet / chest
       if (NS.teamClass) q *= clamp(1 - 0.2 * NS.teamClass(p.team), 0.7, 1.3);
-      var keep = clamp(0.03 + q * 0.3, 0.02, 0.45);
-      if (Math.random() < q * 0.25) { keep += 0.3; if (NS.dbg) NS.dbg('first_touch_bounced_off', p.team); }
+      var keep = clamp(0.02 + q * 0.16, 0.02, 0.25);
+      if (Math.random() < q * 0.12) { keep += 0.15; if (NS.dbg) NS.dbg('first_touch_bounced_off', p.team); }
       var ea = gaussR() * q * 0.35, c = Math.cos(ea), s = Math.sin(ea);
       if (kind !== K_INSIDE) os *= 0.6; // the body cushions it down more than it directs it
       var tx = (ox * c + oz * s) * os, tz = (-ox * s + oz * c) * os;

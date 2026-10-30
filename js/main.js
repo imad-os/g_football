@@ -69,6 +69,16 @@
     perf.n = 0; perf.t0 = 0;
   }
 
+  // A menu on screen: the 3D scene is not drawn under it. The main menus cover it (the canvas is hidden, so the TV only
+  // composites the menu); a pause menu shows the frozen match, drawn once when it opens.
+  var menuDrawn = false, canvasHidden = false;
+  function hideCanvas(h) {
+    if (h === canvasHidden) return;
+    canvasHidden = h;
+    var cv = document.getElementById('game-canvas');
+    if (cv) cv.style.visibility = h ? 'hidden' : '';
+  }
+
   function frame(ts) {
     raf = requestAnimationFrame(frame);
     if (!last) last = ts;
@@ -76,6 +86,16 @@
     last = ts;
     if (elapsed > 250) elapsed = 250;
     var m = World.match;
+
+    if (NS.UI.isOpen() && !NS.Replay.active() && (!m.running || m.paused)) {
+      acc = 0;
+      hideCanvas(!m.running);
+      if (m.running && !menuDrawn) { NS.Match.drawHud(0); NS.Scene.render(); }
+      menuDrawn = true;
+      return;
+    }
+    if (menuDrawn) { menuDrawn = false; NS.Quality.resetTimer(); } // (the menu's time is not a slow frame)
+    hideCanvas(false);
 
     if (NS.Replay.active()) {
       // a replay on screen: the game waits, the recorded frames are shown
@@ -123,6 +143,7 @@
   }
 
   function onResize() {
+    menuDrawn = false; // (a resized canvas is cleared: the frozen match is drawn again)
     NS.Scene.resize();
     NS.HUD.measure();
   }

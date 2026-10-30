@@ -252,6 +252,8 @@
       else if (p.role === 'MID') x = T.lineX + a * clamp(depth * 0.6, 6, g[0]);
       else x = T.lineX + a * clamp(depth * 0.9, g[0] + 4, g[0] + g[1] + moodOf(p.team, 2) * 3);
     }
+    // the forwards stay up as an outlet (a won ball has somebody to go to): never deep in our half
+    if (p.role === 'FWD' && T.iq > 0 && x * a < -HALF_W * 0.12) x = -a * HALF_W * 0.12;
     ZX = clamp(x, -HALF_W + 4, HALF_W - 4);
     // narrow and shifted to the ball's side (the far side tucks in; forwards close the middle)
     var kz = p.role === 'FWD' ? 0.5 : 0.7;
@@ -438,6 +440,7 @@
     var a = NS.attack(t), players = World.players, behind = 0, inOurHalf = 0, out = 0;
     var cx = c.pos.x * a;
     if (cx > HALF_W * 0.45) return 0; // already near their box: a normal attack
+    if (World.match.restart) return 0; // a dead ball (a goal kick, a throw-in): the team sets up first
     for (var i = 0; i < players.length; i++) {
       var o = players[i];
       if (o.team === t || o.role === 'GK') continue;
@@ -461,6 +464,7 @@
       lv = open <= OPEN_MAX[sv] * 0.6 || T.urgency > 0.5 || sv === 2 ? 2 : 1;
     }
     if (lv === 2 && T.caution > 0.5 && plan < 2) lv = 1; // winning late: a few go, the rest stays
+    if (lv === 2 && c.role === 'GK') lv = 1; // (the keeper has it: the forwards break, the rest goes to its places)
     return lv;
   }
 
@@ -515,7 +519,7 @@
     }
     if (T.has) {
       if (T.cntLevel) T.moment = M_COUNTER;
-      else if (T.wonT < 1.2 && iq >= 1) T.moment = M_SECURE;
+      else if (T.wonT < 1.2 && iq >= 1 && !(owner && owner.role === 'GK')) T.moment = M_SECURE;
       else T.moment = bx < -HALF_W / 3 ? M_BUILD : (bx > HALF_W / 3 ? M_FINAL : M_PROG);
     } else {
       T.moment = T.lostT < CP_T[iq] ? M_CPRESS : M_BLOCK;
@@ -547,7 +551,7 @@
     var rest;
     if (T.iq === 0) { rest = 0; for (i = 0; i < n; i++) if (SH_P[i].role === 'DEF') rest++; rest = clamp(rest, 1, n - 2); }
     else {
-      rest = n >= 8 ? 5 : (n >= 5 ? 3 : 1); // (11-a-side 3+2; 7-a-side 2+1)
+      rest = n >= 8 ? 4 : (n >= 5 ? 3 : 1); // (11-a-side 3+1; 7-a-side 2+1)
       rest += (dm < 0 ? 1 : 0) + (am < 0 ? 1 : 0) - (am > 0 ? 1 : 0) - (T.urgency > 0.5 ? 1 : 0) + (T.caution > 0.5 ? 1 : 0);
       // a counter with everyone: only the last two (Normal) or three (Hard, Legend) stay; 7-a-side two (one when losing late)
       if (M === M_COUNTER && T.cntLevel === 2) {
@@ -583,9 +587,12 @@
     }
     for (i = 0; i < n; i++) if (!SH_P[i].slPick) SH_A.push(SH_P[i]);
 
-    // rest defence spots
-    var backA = clamp(bxA - (M === M_BUILD ? 8 : 18), -HALF_W + 12, HALF_W * 0.2);
-    var wb = (M === M_BUILD ? 0.55 : 0.38) * HALF_H;
+    // rest defence spots. The keeper on the ball (a goal kick, a ball in his hands): the centre-backs split at the
+    // edge of the box, everyone else well up the pitch (nobody waits in the box for it)
+    var gkBall = !!(ball.owner && ball.owner.role === 'GK');
+    var backA = gkBall ? -HALF_W + NS.BOX_D + 2 :
+      clamp(bxA - (M === M_BUILD ? 8 : 18), M === M_BUILD ? -HALF_W + NS.BOX_D * 0.75 : -HALF_W + 12, HALF_W * 0.2);
+    var wb = (gkBall ? 0.6 : (M === M_BUILD ? 0.55 : 0.38)) * HALF_H;
     SH_R.sort(byHomeZ);
     for (j = 0; j < SH_R.length; j++) {
       p = SH_R[j];
@@ -599,7 +606,7 @@
       p = pivs[j];
       var kp = pivs.length;
       p.slOn = true;
-      p.slX = a * (backA + (M === M_BUILD ? 8 : 10));
+      p.slX = a * (backA + (gkBall ? 14 : (M === M_BUILD ? 8 : 10)));
       p.slZ = (kp === 1 ? 0 : (-0.3 + 0.6 * j / (kp - 1)) * HALF_H) + bz * 0.3;
     }
 
@@ -626,7 +633,10 @@
       else { high = nonWide === 1 ? true : (q % 2 === 1); q++; }
       if (p.cntRun) continue; // (a counter runner: his lane is set)
       var xa;
-      var mid = M === M_BUILD ? Math.min(between, bxA + 22) : between;
+      // building up from deep: the midfield and the wide men no closer than about a third of the pitch from our goal
+      // (from the keeper: up to the half-way line), so the ball can be played forward
+      var bMid = Math.max(bxA + 22, gkBall ? -HALF_W * 0.1 : -HALF_W * 0.4), bWide = Math.max(bxA + 16, gkBall ? -HALF_W * 0.3 : -HALF_W * 0.5);
+      var mid = M === M_BUILD ? Math.min(between, bMid) : between;
       if (M === M_COUNTER && T.cntLevel === 2) {
         // following the counter just behind the ball: a pass back, a cut-back, the second ball
         xa = Math.min(bxA + 5, lim - 4);
@@ -637,7 +647,7 @@
         continue;
       }
       if (M === M_COUNTER) xa = wide ? Math.min(Math.max(bxA + 8, mid), lim) : (high ? lim : mid); // (a quick break: the others as usual)
-      else if (M === M_BUILD) xa = wide ? Math.min(bxA + 16, lim) : (high ? lim : mid);
+      else if (M === M_BUILD) xa = wide ? Math.min(bWide, lim) : (high ? lim : mid);
       else if (M === M_SECURE) xa = wide ? Math.min(bxA + 5, lim) : (high ? lim : mid);
       else if (M === M_FINAL) xa = wide ? lim - 1 : (high ? lim : (z * bz > 0 || nonWide < 3 ? mid : lim - 0.5));
       else xa = wide ? Math.min(Math.max(bxA + 8, mid), lim) : (high ? lim : mid);
@@ -1310,7 +1320,9 @@
         shapeTarget(p, T, carrier);
         var sdx = p.tgtX - p.pos.x, sdz = p.tgtZ - p.pos.z;
         // a counter: the runners sprint flat out, the ones following run hard
-        p.tgtS = T.moment === M_COUNTER && !p.slRest ? (p.cntRun ? 11.8 : 10.6) : (sdx * sdx + sdz * sdz > 64 ? 10 : 8.6);
+        // (a player behind his place goes up at a run: the ball moves on at a run too, a jog never catches it up)
+        var sd2 = sdx * sdx + sdz * sdz, up = sdx * a > 3 && !p.slRest;
+        p.tgtS = T.moment === M_COUNTER && !p.slRest ? (p.cntRun ? 11.8 : 10.6) : (sd2 > 64 || (up && sd2 > 16) ? 11 : (sd2 > 16 ? 9.8 : 8.6));
       } else {
         // shape: the formation moved up with the ball, wide players wide, forwards on the offside line (never
         // beyond it), defenders a line behind the ball
@@ -1329,7 +1341,7 @@
         if ((p.tgtX - line) * a > -0.5) p.tgtX = line - a * 0.8; // the search for space never takes him offside
         // far from his place (we have just won it back): he sprints up to join in
         var fdx = p.tgtX - p.pos.x, fdz = p.tgtZ - p.pos.z;
-        p.tgtS = fdx * fdx + fdz * fdz > 64 ? 10 : 8.6;
+        p.tgtS = fdx * fdx + fdz * fdz > 64 ? 11 : (fdx * fdx + fdz * fdz > 16 ? 9.8 : 8.6);
       }
     }
     moveToward(p, p.tgtX, p.tgtZ, p.tgtS * prof.speedMul, dt);

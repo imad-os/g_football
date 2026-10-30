@@ -83,6 +83,7 @@
     if (p.shoulderT > 0) p.shoulderT -= dt;
     if (p.touchT > 0) p.touchT -= dt;
     if (p.throwT > 0) p.throwT -= dt;
+    if (p.turnT > 0) p.turnT -= dt;
 
     var sp = Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z);
     var run = sp > 0.5 ? clamp(sp / 12, 0, 1) : 0;
@@ -259,6 +260,23 @@
       if (kd === 5) { lean = lean * (1 - tk) - 0.35 * tk; armL -= 0.5 * tk; armR -= 0.5 * tk; }
       else if (p.touchFoot > 0) { legR = legR * (1 - tk) + swing * tk; kneeR = kneeR * (1 - tk) + bend * tk; outR += turnOut * tk; }
       else { legL = legL * (1 - tk) + swing * tk; kneeL = kneeL * (1 - tk) + bend * tk; outL += turnOut * tk; }
+    }
+    if (gait && p.turnT > 0) {
+      // a turn with the ball (Touch.turnMove): he spins from his old heading to the new one. A drag-back: the foot
+      // reaches out, the sole on the ball, and pulls it back under him as he turns; a Cruyff: the foot swings across
+      // behind the standing leg and plays it back the other way
+      var tu = clamp(1 - p.turnT / 0.34, 0, 1), te = tu * tu * (3 - 2 * tu), tw = Math.sin(tu * PI);
+      var da = p.facing - p.turnA0;
+      while (da > PI) da -= 2 * PI;
+      while (da < -PI) da += 2 * PI;
+      mesh.root.rotation.y = p.turnA0 + da * te;
+      var tl, tkn, tout;
+      if (p.turnKind === 1) { tl = 0.45 * tw; tkn = 0.9 * tw; tout = -0.35 * tw; }      // across, behind the other leg
+      else { tl = (tu < 0.5 ? -0.8 : -0.8 + (tu - 0.5) * 2.2) * tw; tkn = 0.12 * tw; tout = 0.1 * tw; } // the sole forward, then back
+      if (p.turnFoot > 0) { legR = legR * (1 - tw) + tl; kneeR = kneeR * (1 - tw) + tkn; outR += tout; }
+      else { legL = legL * (1 - tw) + tl; kneeL = kneeL * (1 - tw) + tkn; outL += tout; }
+      lean = lean * (1 - tw) - 0.12 * tw; // (his weight goes back over the standing leg)
+      hipY -= 0.04 * hs * tw;
     }
 
     mesh.body.position.y = hipY;
@@ -1419,6 +1437,7 @@
             fouls: 0, card: 0,
             throwIn: false, throwT: 0, shoulderT: 0, shoulderDir: 1, shCd: 0, offside: false, bumpT: 0, bumpK: 1,
             blockT: 0, blockCd: 0, blockSide: 1, touchT: 0, touchFoot: 1, foot: 'R', kickFoot: 1,
+            turnT: 0, turnKind: 0, turnFoot: 1, turnA0: 0,
             fkSpot: null, fkPend: null, wall: false, wallT: 0,
             mark: null, icX: 0, icZ: 0, drX: 0, drZ: 0, runT: 0, runCd: 0, runX: 0, runZ: 0,
             aiT: 0, tgtX: 0, tgtZ: 0, tgtS: 8, gkRT: 0,
@@ -1443,7 +1462,7 @@
       ref = {
         mesh: rm, pos: rm.root.position, vel: new THREE.Vector3(), facing: 0, index: 0, animPhase: 0, mood: 0, stun: 0,
         kickT: 0, kickHard: false, lungeT: 0, slideT: 0, fallT: 0, diveT: 0, diveRoll: 0, diveHigh: false, headT: 0, catchT: 0, ftT: 0,
-        gkHands: false, throwIn: false, throwT: 0, shoulderT: 0, shoulderDir: 1, blockT: 0, blockSide: 1, touchT: 0, touchFoot: 1,
+        gkHands: false, throwIn: false, throwT: 0, shoulderT: 0, shoulderDir: 1, blockT: 0, blockSide: 1, touchT: 0, touchFoot: 1, turnT: 0, turnKind: 0, turnFoot: 1, turnA0: 0,
         kickFoot: 1
       };
     },
@@ -1478,7 +1497,7 @@
         p.kickT = 0; p.lungeT = 0; p.slideT = 0; p.fallT = 0; p.diveT = 0; p.headT = 0; p.catchT = 0; p.gkHands = false;
         p.smotherT = 0; p.spreadT = 0; p.oneT = 0; p.blockT = 0; p.blockCd = 0;
         p.fkSpot = null; p.fkPend = null; p.wall = false; p.wallT = 0;
-        p.mood = 0; p.slid = false; p.throwIn = false; p.throwT = 0; p.shoulderT = 0; p.offside = false; p.bumpT = 0;
+        p.mood = 0; p.slid = false; p.throwIn = false; p.throwT = 0; p.shoulderT = 0; p.offside = false; p.bumpT = 0; p.turnT = 0;
         animate(p, 0);
         p.mark = null; p.drX = 0; p.drZ = 0; p.runT = 0; p.runCd = 0; p.aiT = 0; p.gkRT = 0; p.stamina = Math.min(100, p.stamina + 30); p.gkHold = 0;
       }
@@ -1955,6 +1974,7 @@
           for (i = 0; i < n; i++) {
             p = players[i];
             if (p.role === 'GK' || p.isCtl || humanTeam(p.team) || p.tackleT > 0) continue;
+            if (ball.thrown && ball.age < 0.6 && p.team !== ball.lastTouchTeam) continue; // (a throw-in reaches its man first)
             if (!Actions.canHead(p)) continue;
             var att = NS.attack(p.team);
             var toGoal = Math.abs(att * HALF_W - p.pos.x) + Math.abs(p.pos.z) * 0.5;

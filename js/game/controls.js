@@ -119,7 +119,7 @@
     if (c && c.team !== p.team && !c.gkHands && p.tackleCd <= 0 && World.match.protectT <= 0) {
       var dx = c.pos.x - p.pos.x;
       var dz = c.pos.z - p.pos.z;
-      if (dx * dx + dz * dz < (slide ? 30 : 9)) { Actions.startTackle(p, c, true, slide); return; }
+      if (dx * dx + dz * dz < (slide ? 30 : 12.25)) { Actions.startTackle(p, c, true, slide); return; }
     }
     switchCursor(slot);
   }
@@ -244,6 +244,12 @@
   }
 
   var assignT = 0;
+  // an automatic switch to n: the man left is remembered for a moment (no switching straight back to him)
+  function autoTo(s, n) {
+    if (s.player === n) return;
+    s.backP = s.player; s.backT = 1.2;
+    s.player = n; s.holdT = 0.6;
+  }
 
   // Seconds p needs to reach the ball (at a run, where the ball will be in a moment).
   function timeTo(p) {
@@ -315,6 +321,8 @@
         var auto = autoSet || s.ai; // AI.MA: auto switching (plus its own switch button)
         var other = otherPlayer(s);
         var cur = s.player;
+        if (s.holdT > 0) s.holdT -= 0.12;
+        if (s.backT > 0) s.backT -= 0.12;
         if (!cur) { s.player = Actions.nearestToBall(s.team, other, null); continue; }
         if (o && o.team === s.team) {
           // our ball: the carrier is always ours (any mode, even mid-gesture)
@@ -327,11 +335,14 @@
           if (ball.receiver && ball.receiver.team === s.team) rcv = ball.receiver;
           else if (ball.contester && ball.contester.team === s.team) rcv = ball.contester;
         }
-        if (rcv && rcv !== cur && rcv !== other) {
-          // the receiver, unless a team-mate gets to the ball much sooner (a pass cut out, a deflection)
+        if (rcv && rcv !== cur && rcv !== other && rcv !== s.rcvLast) {
+          // the receiver, unless a team-mate gets to the ball much sooner (a pass cut out, a deflection). Decided once
+          // per pass (s.rcvLast): the cursor does not flick between him and the other man while the ball travels
           var nr = fastestToBall(s.team, other);
-          if (!nr || nr === rcv || timeTo(nr) > timeTo(rcv) * 0.6 - 0.2) { s.player = rcv; continue; }
+          s.rcvLast = rcv;
+          if (!nr || nr === rcv || timeTo(nr) > timeTo(rcv) * 0.6 - 0.2) { autoTo(s, rcv); continue; }
         }
+        if (!rcv) s.rcvLast = null;
         // a lock waits for the pass he made: over as soon as that ball is no longer coming to him
         if (s.lockT > 0 && (o || ball.receiver !== cur)) s.lockT = 0;
         if (s.lockT > 0 || (s.evActive && s.evCtx !== 2)) continue; // never in the middle of a pass / shot gesture
@@ -341,20 +352,31 @@
           if (o && o === s.manualOwner) continue;
           s.manual = false;
         }
-        if (auto) {
+        // an automatic switch is never followed by another one at once (s.holdT), and never straight back to the man it
+        // just left (s.backT) unless he is clearly the one now: no flicking between two players
+        if (auto && (!(s.holdT > 0) || cur.stun > 0)) {
+          var pad = s.pad || Input.pads[s.idx];
+          var stick = pad && pad.x * pad.x + pad.y * pad.y > 0.1;
+          // the man he steers at the ball or its carrier, close to it: his to play (a tackle, a challenge on it)
+          var bx0 = ball.pos.x - cur.pos.x, bz0 = ball.pos.z - cur.pos.z;
+          var engaged = cur.stun <= 0 && stick && bx0 * bx0 + bz0 * bz0 < 30;
           // the team-mate who gets to the ball first (where it is going, not only where it is)
           var dm = o && o.team !== s.team ? lastManPick(s.team, other, null, o) : null;
-          if (dm) {
+          if (engaged) {
+            // (kept)
+          } else if (dm) {
             // defending: the man between the carrier and our goal; kept while he is still goal-side and not much worse
             if (dm !== cur) {
-              var cc = goalSideCost(cur, o);
-              if (cur.stun > 0 || cc < 0 || goalSideCost(dm, o) < cc - 5) s.player = dm;
+              var cc = goalSideCost(cur, o), cd = goalSideCost(dm, o);
+              var need = dm === s.backP && s.backT > 0 ? 12 : 5;
+              if (cur.stun > 0 || (cc < 0 && cd >= 0 && (dm !== s.backP || !(s.backT > 0))) || cd < cc - need) autoTo(s, dm);
             }
           } else {
             var n = fastestToBall(s.team, other);
             if (n && n !== cur) {
               var tn = timeTo(n), tc = timeTo(cur);
-              if (cur.stun > 0 || tn < tc * 0.75 - 0.15) s.player = n;
+              var k = n === s.backP && s.backT > 0 ? 0.5 : 0.75;
+              if (cur.stun > 0 || tn < tc * k - 0.15) autoTo(s, n);
             }
           }
         }
@@ -425,7 +447,13 @@
         else slot.evT += dt;
         var mv;
         if (slot.evCtx === 1) {
-          if (!has) {
+          if (!has && !ball.owner && ball.receiver === p) {
+            // his own touch ran a little ahead of him while he was charging it: the press is kept and played as soon
+            // as he gets to the ball (a first-time kick, the hold so far is its power), never dropped
+            slot.evCtx = 4;
+            slot.ftPow = Math.min(1, slot.evT / fullCharge());
+            p.ftT = 0;
+          } else if (!has) {
             endEvent(slot);
           } else {
             mv = B.resolve(1, slot.evMask);

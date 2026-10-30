@@ -31,6 +31,7 @@
   // a human's power bar (0..1) -> the distance he is passing to: DEPTH0 + DEPTH1 * power
   var DEPTH0 = [0, 6, 10, 18];
   var DEPTH1 = [0, 44, 42, 52];
+  var FIRST_POW = 0.2; // a human's pass with less of the power bar than this: to the first team-mate in line
 
   // Human reaction: the seconds a player needs between a ball being played and a controlled header / first touch
   // strong / weak foot (Actions.footFor): a shot's error and power multipliers
@@ -44,6 +45,7 @@
 
   // a through ball still rolls on at this pace where it meets the runner (slower than him: he runs onto it)
   var THRU_END = 6.5;
+  var THRU_OUT = 4.8; // ... and rolls on about this far after it if nobody gets to it (grass drag from THRU_END)
   var ROLL_F = NS.PHYS.ROLL_F;
   // Rolling ball (grass drag K and friction F): the time it takes to cover d and still roll at vEnd (closed form).
   function rollV0(d, vEnd) {
@@ -77,11 +79,34 @@
       var fx, fz;
       if (al > 0.1) { fx = ax / al; fz = az / al; } else { fx = Math.sin(passer.facing); fz = Math.cos(passer.facing); }
       var t = type >= ACT.PASS && type <= ACT.LONG ? type : ACT.PASS;
+      // a tap (a human's power bar under 20%): the first team-mate in line that way, however near he is
+      if (this.passPower >= 0 && this.passPower < FIRST_POW) {
+        var first = this.firstInLine(passer, fx, fz, t, 0.8) || this.firstInLine(passer, fx, fz, t, 0.5);
+        if (first) return first;
+      }
       var want = this.passPower >= 0 ? DEPTH0[t] + DEPTH1[t] * this.passPower : -1;
       if (this.lob && want >= 0) want = 16 + 36 * this.passPower;
       var best = this.scanTargets(passer, fx, fz, t, 0.82, want);
       if (!best) best = this.scanTargets(passer, fx, fz, t, 0.34, want);
       if (!best) best = this.scanTargets(passer, fx, fz, t, -0.2, want);
+      return best;
+    },
+
+    // The nearest team-mate within the cone (minDot) the way (fx, fz) points: the first one in line (a slightly wider
+    // angle counts as a little further away)
+    firstInLine: function (passer, fx, fz, t, minDot) {
+      var players = World.players, best = null, bc = 1e9;
+      for (var i = 0; i < players.length; i++) {
+        var m = players[i];
+        if (m.team !== passer.team || m === passer || m.stun > 0) continue;
+        if (m.role === 'GK' && t !== ACT.PASS) continue;
+        var dx = m.pos.x - passer.pos.x, dz = m.pos.z - passer.pos.z, d = Math.sqrt(dx * dx + dz * dz);
+        if (d < 1.5 || d > MAX_D[t]) continue;
+        var dot = (dx * fx + dz * fz) / d;
+        if (dot < minDot) continue;
+        var c = d * (1 + (1 - dot) * 3);
+        if (c < bc) { bc = c; best = m; }
+      }
       return best;
     },
 
@@ -203,7 +228,12 @@
       var ball = World.ball;
       this.markOffside(p);
       ball.thrown = !!p.throwIn;
-      if (p.throwIn) { p.throwIn = false; p.throwT = 0.4; }
+      if (p.throwIn) {
+        p.throwIn = false; p.throwT = 0.4;
+        // (held over his head behind the line, it is let go over the line: never out of play the moment it is thrown)
+        var tl = HALF_H - R0 - 0.05;
+        if (ball.pos.z > tl) ball.pos.z = tl; else if (ball.pos.z < -tl) ball.pos.z = -tl;
+      }
       ball.owner = null;
       ball.pickupCooldown = 0.24;
       ball.lastTouchTeam = p.team;
@@ -353,8 +383,14 @@
       var attack = NS.attack(p.team);
       var human = this.passPower >= 0 && !forceTarget && !(p.throwT > 0.35);
       var asst = human ? this.assist() : 1;
-      var mate = forceTarget || (asst > 0.05 ? this.pickTarget(p, ax, az, type) : null);
-      if (!mate && p.throwT > 0.35) mate = this.nearestMate(p, 24);
+      var mate = forceTarget || (asst > 0.05 && !(p.throwT > 0.35) ? this.pickTarget(p, ax, az, type) : null);
+      if (!mate && p.throwT > 0.35) {
+        // a throw-in: to the nearest team-mate the way the stick points (the way he faces without it), a short one
+        var tl0 = Math.sqrt(ax * ax + az * az);
+        var tfx = tl0 > 0.1 ? ax / tl0 : Math.sin(p.facing), tfz = tl0 > 0.1 ? az / tl0 : Math.cos(p.facing);
+        mate = this.firstInLine(p, tfx, tfz, ACT.PASS, 0.55) || this.firstInLine(p, tfx, tfz, ACT.PASS, -0.2) || this.nearestMate(p, 24);
+        if (mate && mate.role === 'GK') mate = this.nearestMate(p, 24) || mate;
+      }
       var tx, tz, man = null;
       if (!mate) {
         if (human) man = this.manualSpot(p, type, ax, az);
@@ -391,6 +427,14 @@
             var lfd = Math.sqrt((tx - p.pos.x) * (tx - p.pos.x) + (tz - p.pos.z) * (tz - p.pos.z));
             if (lfd > 52) { tx = p.pos.x + (tx - p.pos.x) * 52 / lfd; tz = p.pos.z + (tz - p.pos.z) * 52 / lfd; }
           }
+          if (this.lob) {
+            // a lofted ball lands, bounces and runs on: it comes down short of the keeper's area (in the middle no
+            // deeper than the edge of the box, out wide short of the line) and well inside the touchline
+            var central = Math.abs(tz) < NS.BOX_HW + 2 * NS.M;
+            var maxA = HALF_W - (central ? NS.BOX_D * 0.85 : 9);
+            if (tx * attack > maxA) tx = attack * maxA;
+            tz = clamp(tz, -HALF_H + 6, HALF_H - 6);
+          }
         }
       } else if (type === ACT.LONG) {
         var ldx = mate.pos.x - p.pos.x, ldz = mate.pos.z - p.pos.z;
@@ -402,7 +446,8 @@
         tz = mate.pos.z + mate.vel.z * 0.25;
       }
       // pass assist below 100: the ball goes part of the way from the team-mate to where the stick and power bar say
-      if (human && mate && asst < 0.999) {
+      var tap = human && mate && this.passPower < FIRST_POW; // (a tap: right to the first man in line, all the help)
+      if (human && mate && asst < 0.999 && !tap) {
         man = this.manualSpot(p, type, ax, az);
         tx = man[0] + (tx - man[0]) * asst;
         tz = man[1] + (tz - man[1]) * asst;
@@ -410,7 +455,7 @@
       tx = clamp(tx, -HALF_W + 2, HALF_W - 2);
       tz = clamp(tz, -HALF_H + 2, HALF_H - 2);
       // no help (or not all of it): the team-mate nearest to where it goes runs onto it
-      if (human && (asst < 0.999 || !mate)) mate = this.nearestTo(p, tx, tz, type === ACT.PASS ? 9 : 14) || (asst > 0.5 ? mate : null);
+      if (human && !tap && (asst < 0.999 || !mate)) mate = this.nearestTo(p, tx, tz, type === ACT.PASS ? 9 : 14) || (asst > 0.5 ? mate : null);
       return [tx, tz, mate];
     },
 
@@ -551,10 +596,18 @@
       var run = 11.2 * (mate.st ? 0.9 + mate.st.spd / 99 * 0.2 : 1);
       var vEnd = THRU_END, best = null, bestSc = -1e9;
       for (var L = 5; L <= 40; L += 2.5) {
-        var tx = clamp(bx + dx * L, -HALF_W + 3, HALF_W - 3);
-        var tz = clamp(bz + dz * L, -HALF_H + 2.5, HALF_H - 2.5);
+        var rx0 = bx + dx * L, rz0 = bz + dz * L;
+        var tx = clamp(rx0, -HALF_W + 3, HALF_W - 3);
+        var tz = clamp(rz0, -HALF_H + 2.5, HALF_H - 2.5);
         var ex = tx - p.pos.x, ez = tz - p.pos.z, d = Math.sqrt(ex * ex + ez * ez);
         if (d < 6) continue;
+        // never a ball he cannot keep in play or the keeper's: a run that would take him off the pitch, a ball that
+        // rolls out over a line if he is a moment late (THRU_OUT past the spot), one into the goal area
+        var bad = 0, ux0 = ex / d, uz0 = ez / d;
+        if (rx0 !== tx || rz0 !== tz) bad += 1;
+        if (Math.abs(tx + ux0 * THRU_OUT) > HALF_W - 0.5 || Math.abs(tz + uz0 * THRU_OUT) > HALF_H - 0.5) bad += 1.2;
+        if (Math.abs(tx) > HALF_W - NS.SIX_D - 1.5 && Math.abs(tz) < NS.BOX_HW) bad += 2;
+        var gkT = 99;
         var bt = rollTime(d, vEnd);                       // the ball gets there
         var mx = tx - mate.pos.x, mz = tz - mate.pos.z;
         var rt = 0.25 + Math.sqrt(mx * mx + mz * mz) / run; // the runner gets there
@@ -572,11 +625,14 @@
             if (perp < 1.6 + tu * 3) t = Math.min(t, tu + 0.1);
           }
           if (t < ot) ot = t;
+          if (o.role === 'GK') gkT = t;
         }
         var meet = Math.max(bt, rt);
+        if (gkT < meet + 0.25) bad += 2.5;                 // the keeper comes out and takes it
         var sc = clamp(ot - meet, -1.5, 1.5) * 1.6       // first to it
           - Math.abs(bt - rt) * 0.9                        // together (he does not wait, it does not run away from him)
-          + (tx - mate.pos.x) * attack * 0.012;            // deeper is better
+          + (tx - mate.pos.x) * attack * 0.012             // deeper is better
+          - bad;
         if (want > 0) sc -= Math.abs(L - want) / Math.max(want, 8) * 1.4;
         if (sc > bestSc) { bestSc = sc; best = [tx, tz]; }
       }
@@ -599,7 +655,7 @@
       var s = World.settings;
       if (!s || !this.human) return 1;
       if (type === ACT.PASS) return s.powLow || 1;
-      if (type === ACT.THROUGH) return s.powThru || 1;
+      if (type === ACT.THROUGH) return (this.lob ? s.powLobThru : s.powThru) || 1;
       if (type === ACT.LONG) return s.powLong || 1;
       return s.powShot || 1;
     },
@@ -652,8 +708,9 @@
 
       if (type === ACT.LONG && d > 18) d *= 1 + gaussR() * 0.06 * (accuracy || 1);
       if (p.throwT > 0.35) {
-        if (d > 24) { dx *= 24 / d; dz *= 24 / d; d = 24; }
-        var Tt = clamp(d / 18, 0.45, 1.1);
+        // (thrown flat and quick, from over his head down to the receiver's waist: not looped up for a header)
+        if (d > 20) { dx *= 20 / d; dz *= 20 / d; d = 20; }
+        var Tt = clamp(d / 21, 0.4, 0.8);
         speed = airSpeed(d, Tt);
         vy = (THROW_Y - ball.pos.y) / Tt + 0.5 * G * Tt;
         if (mate) { mate.runToX = p.pos.x + dx; mate.runToZ = p.pos.z + dz; mate.runToT = Tt + 0.6; }
@@ -690,6 +747,8 @@
       if (type === ACT.PASS || (type === ACT.THROUGH && !this.lob)) speed *= fpow;
       if (!thrown) speed *= this.powMul(type);
       ball.vel.set(Math.sin(angle) * speed, vy, Math.cos(angle) * speed);
+      // a throw always goes into the pitch (an error in its aim never sends it back out over the line)
+      if (thrown && ball.vel.z * ball.pos.z > 0) ball.vel.z = -ball.vel.z * 0.5;
       if (this.human) this.shown = { x: tx, z: tz, fx: ball.pos.x, fz: ball.pos.z, kind: type === ACT.LONG || (type === ACT.THROUGH && this.lob) ? 1 : 0, t: 1.4 };
       ball.receiver = mate || null;
       ball.thru = !!mate && type === ACT.THROUGH && !(p.throwT > 0.35);
@@ -918,7 +977,7 @@
         var dz = carrier.pos.z - p.pos.z;
         var bx = ball.pos.x - p.pos.x;
         var bz = ball.pos.z - p.pos.z;
-        var reach = p.tackleSlide ? 3.8 : 1.56;
+        var reach = p.tackleSlide ? 3.8 : 2.25; // (squared: a standing tackle reaches ~1.5 from him)
         var onBall = bx * bx + bz * bz < reach;
         if (onBall || dx * dx + dz * dz < reach * 0.8) {
           p.tackleHit = true;
@@ -1016,12 +1075,12 @@
       var pace = Math.max(0, s - (ball.receiver === p ? 18 : 9.5)) / 22;
       var quick = react < REACT_TOUCH ? Math.min(1, (REACT_TOUCH - react) / (REACT_TOUCH - 0.14)) : 0;
       var skill = (p.role === 'GK' ? p.st.drb * 0.5 + 30 : p.st.drb) / 99;
-      var fail = (pace * 0.35 + quick * 0.5) * (1.6 - skill * 1.0);
+      var fail = (pace * 0.25 + quick * 0.32) * (1.5 - skill * 1.0);
       if (NS.teamClass) fail *= clamp(1 - 0.25 * NS.teamClass(p.team), 0.6, 1.4);
       if (ball.thrown && ball.receiver === p) return Math.random() >= clamp(fail * 0.2, 0, 0.1);
       if (ball.receiver === p) fail *= 0.45;
-      if (ball.pos.y > 1.9) fail += 0.18; else if (ball.pos.y > 0.9) fail += 0.07;
-      return Math.random() >= clamp(fail, 0, 0.85);
+      if (ball.pos.y > 1.9) fail += 0.12; else if (ball.pos.y > 0.9) fail += 0.04;
+      return Math.random() >= clamp(fail, 0, 0.6);
     },
 
     // Realistic surface-normal reflection when a loose ball or hard shot hits player p.
@@ -1060,21 +1119,22 @@
         NS.Audio.tackle();
       } else {
         // Heavy first touch / miscontrol: dampened bounce in the direction of the touch or body normal
-        var keep = 0.28 + Math.random() * 0.22;
+        // (it stays near him: a miscontrol he can still recover, not a ball sent away)
+        var keep = 0.14 + Math.random() * 0.14;
         if (vn < 0) {
-          rvx -= 1.35 * vn * nx;
-          rvz -= 1.35 * vn * nz;
+          rvx -= 1.2 * vn * nx;
+          rvz -= 1.2 * vn * nz;
         }
         var ang = (Math.random() - 0.5) * 0.9;
         var c = Math.cos(ang), s = Math.sin(ang);
         var vx = rvx * c - rvz * s, vz = rvx * s + rvz * c;
-        ball.vel.set(p.vel.x * 0.55 + vx * keep + nx * 1.6, 0.5 + Math.random() * 1.6, p.vel.z * 0.55 + vz * keep + nz * 1.6);
+        ball.vel.set(p.vel.x * 0.6 + vx * keep + nx * 0.9, 0.3 + Math.random() * 1.0, p.vel.z * 0.6 + vz * keep + nz * 0.9);
         NS.Audio.kick(false);
       }
 
       ball.hard = false;
       ball.thrown = false;
-      ball.receiver = null;
+      ball.receiver = hardShot ? null : p; // (a miscontrol: he goes straight after it)
       ball.contester = null;
       ball.pickupCooldown = 0.15;
       ball.gkTried = 0; // keeper can react to a deflected ball

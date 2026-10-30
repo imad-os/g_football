@@ -173,7 +173,8 @@
         p.spreadT = 0;
         if (p.diveT > 0) return; // still on the grass after a diving catch
         p.aiCd -= dt;
-        if (p.gkHold > 0.9 && p.aiCd <= 0) {
+        // (a moment first for the team to spread out: longer for a goal kick, when they start in their own half)
+        if (p.gkHold > (World.match.restart === 5 ? 2.2 : 1.3) && p.aiCd <= 0) {
           p.aiCd = 0.25;
           if (K.gkDistribute(p, prof, p.gkHold > 3.5)) p.gkHold = 0;
         }
