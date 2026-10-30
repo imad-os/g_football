@@ -7,6 +7,7 @@
   var Actions = NS.Actions;
   var Controls = NS.Controls;
   var AI = NS.AI;
+  var Touch = NS.Touch;
   var HALF_W = NS.PITCH_HALF_W;
   var HALF_H = NS.PITCH_HALF_H;
   NS.pitchHooks.push(function () { HALF_W = NS.PITCH_HALF_W; HALF_H = NS.PITCH_HALF_H; });
@@ -248,11 +249,16 @@
       tmp = legL; legL = legR; legR = tmp; tmp = outL; outL = outR; outR = tmp;
       tmp = kneeL; kneeL = kneeR; kneeR = tmp; tmp = armL; armL = armR; armR = tmp;
     }
-    if (gait && p.touchT > 0 && World.ball.owner === p) {
-      // running with the ball: each touch shows, the foot (p.touchFoot: 1 right, -1 left) reaching to the ball
-      var tk = Math.sin(clamp(1 - p.touchT / 0.2, 0, 1) * PI);
-      if (p.touchFoot > 0) { legR = legR * (1 - tk) - 0.55 * tk; kneeR = kneeR * (1 - tk) + 0.25 * tk; outR += 0.15 * tk; }
-      else { legL = legL * (1 - tk) - 0.55 * tk; kneeL = kneeL * (1 - tk) + 0.25 * tk; outL += 0.15 * tk; }
+    if (gait && p.touchT > 0) {
+      // a touch on the ball (js/game/touch.js), shown as it happens: the foot (p.touchFoot: 1 right, -1 left) reaching
+      // to it, opened out for the inside, turned in for the outside, lifted with the toe up for the sole; the thigh
+      // raised, or the chest leaning back to cushion a ball in the air
+      var tk = Math.sin(clamp(1 - p.touchT / 0.2, 0, 1) * PI), kd = p.touchKind;
+      var swing = kd === 3 ? -0.75 : (kd === 4 ? -1.1 : -0.55), bend = kd === 3 ? 0.1 : (kd === 4 ? 1.2 : 0.25);
+      var turnOut = kd === 0 ? 0.3 : (kd === 1 ? -0.12 : 0.15);
+      if (kd === 5) { lean = lean * (1 - tk) - 0.35 * tk; armL -= 0.5 * tk; armR -= 0.5 * tk; }
+      else if (p.touchFoot > 0) { legR = legR * (1 - tk) + swing * tk; kneeR = kneeR * (1 - tk) + bend * tk; outR += turnOut * tk; }
+      else { legL = legL * (1 - tk) + swing * tk; kneeL = kneeL * (1 - tk) + bend * tk; outL += turnOut * tk; }
     }
 
     mesh.body.position.y = hipY;
@@ -371,6 +377,7 @@
     p.foot = st.foot || 'R';
     p.mSpd = clamp(1.03 + (st.spd - 72) * 0.0055, 0.8, 1.17);
     p.drain = 1.5 - st.sta / 99;
+    NS.Touch.rate(p); // ball control, agility, balance, weak foot (js/game/touch.js)
   }
 
   function fatigue(p) { return p.stamina >= 35 ? 1 : 0.86 + 0.14 * p.stamina / 35; }
@@ -1417,7 +1424,10 @@
             // (fields the AI, the keeper and checkoAI fill in later: declared here so every player has the same hidden
             // shape and the hot code stays optimized; a player whose fields arrive in another order is a new shape)
             wX: 0, wZ: 0, wF: 0, slOn: false, slX: 0, slZ: 0, slRest: 0, slPick: false, cntRun: 0, ahead: 0, tmRecv: null, knockCd: 0,
-            smotherT: 0, spreadT: 0, oneT: 0, aiv: null
+            smotherT: 0, spreadT: 0, oneT: 0, aiv: null,
+            // the player-ball contacts (js/game/touch.js): ratings, touch state, a kick waiting for the ball
+            ctl: 0.6, agi: 0.6, bal: 0.6, wf: 0.5, touchKind: 0, tchCd: 0, balT: 0, inV: 0, inT: 9,
+            cOwn: false, pvx: 0, pvz: 0, kq: null, kqA: null, kqT: 0, kqPow: -1, kqLob: false, kqHum: false, kqFol: 0
           });
           rate(World.players[World.players.length - 1], t === 0 ? homeT : awayT);
         }
@@ -1777,6 +1787,9 @@
         } else if (!p.isCtl) {
           AI.step(p, dt, p.rank, prof, World.pressT[p.team] > 0);
         }
+        // the same body and the same contacts with the ball for everybody (human, CPU, checkoAI): the carrier turns
+        // as fast as he can, runs to the ball and touches it on (js/game/touch.js)
+        Touch.carry(p, dt);
 
         // Fixed: both human and CPU players drain and recover stamina fairly; velocity is only scaled by fatigue/bump
         var run = Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z);
@@ -1971,7 +1984,10 @@
             if (Actions.knockOff(taker, hardHit)) return;
           } else {
             var byHands = taker.role === 'GK' && ball.lastTouchTeam !== taker.team && inOwnBox(taker.team);
-            if (takeBall(taker) && byHands) { taker.gkHands = true; taker.catchT = 0.4; }
+            if (takeBall(taker)) {
+              if (byHands) { taker.gkHands = true; taker.catchT = 0.4; }
+              else Touch.receive(taker); // the first touch: the ball is met, not caught by the feet
+            }
           }
         }
       }

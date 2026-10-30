@@ -138,6 +138,7 @@
 
     // A knock-on: the dribbler pushes the ball a few metres ahead ((dx, dz): the stick) and runs onto it.
     knockOn: function (p, dx, dz) {
+      if (NS.Touch.later(p, 'knockOn', arguments)) return;
       var ball = World.ball;
       var l = Math.sqrt(dx * dx + dz * dz) || 1;
       dx /= l; dz /= l;
@@ -164,6 +165,7 @@
     // A fake shot (a shot being charged, then the pass button): he swings over the ball without touching it, and with
     // the stick held he steps it about a metre that way (past a defender who bit), then plays on. (ax, az): the stick
     fakeShot: function (p, ax, az) {
+      if (NS.Touch.later(p, 'fakeShot', arguments)) return;
       if (ax * ax + az * az > 0.09) {
         this.knockOn(p, ax, az);
         var ball = World.ball, sp = Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z) + 3.5;
@@ -246,6 +248,7 @@
 
     kick: function (p, type, power, ax, az, accuracy, forceTarget) {
       if (this.fkLater(p, 'kick', arguments)) return;
+      if (NS.Touch.later(p, 'kick', arguments)) return; // the ball is not at his foot yet: played when he gets to it
       var ball = World.ball;
       if (p.throwIn && type !== ACT.LONG && type !== ACT.THROUGH) type = ACT.PASS;
       var rs = World.match.restart;
@@ -453,7 +456,12 @@
       // his strong foot (p.foot): a shot with it is cleaner, with the other one weaker and wilder (Actions.footFor)
       var ft = this.footFor(p, goalX - p.pos.x, goalZ - p.pos.z);
       p.kickFoot = ft;
-      if ((ft > 0) === (p.foot !== 'L')) err *= STRONG_ERR; else { err *= WEAK_ERR; pow *= WEAK_POW; }
+      // (the weak foot by his weak-foot rating: 1, as good as the strong one; 0.5, the usual WEAK_ERR / WEAK_POW)
+      var wf = p.wf >= 0 ? p.wf : 0.5;
+      if ((ft > 0) === (p.foot !== 'L')) err *= STRONG_ERR;
+      else { err *= 1 + (WEAK_ERR - 1) * 2 * (1 - wf); pow *= 1 - (1 - WEAK_POW) * 2 * (1 - wf); }
+      // how cleanly the ball is met where it is (js/game/touch.js): stretched, first time, a volley, off balance
+      if (!dead && NS.Touch) { NS.Touch.quality(p); err *= NS.Touch.qErr; pow *= NS.Touch.qPow; }
       this.shotPow = pow; this.shotErr = err;
     },
     shotPow: 1, shotErr: 1,
@@ -463,8 +471,9 @@
     // sharply across to the other side (a right-footer shooting far to his right uses his left).
     footFor: function (p, dx, dz) {
       var ball = World.ball, f = p.foot === 'L' ? -1 : 1;
-      if (ball.dOwner === p) {
-        var side = wrapA(ball.dA - p.facing); // > 0: on his left
+      var bx = ball.pos.x - p.pos.x, bz = ball.pos.z - p.pos.z;
+      if (bx * bx + bz * bz > 0.04 && bx * bx + bz * bz < 4) {
+        var side = wrapA(Math.atan2(bx, bz) - p.facing); // > 0: on his left
         if (side > 0.35) return -1;
         if (side < -0.35) return 1;
       }
@@ -511,12 +520,14 @@
 
     shootAt: function (p, goalZ, g, accuracy) {
       if (this.fkLater(p, 'shootAt', arguments)) return;
+      if (NS.Touch.later(p, 'shootAt', arguments)) return;
       this.release(p, ACT.SHOOT);
       this.driveShot(p, goalZ, g, accuracy, 0);
     },
 
     kickTo: function (p, type, tx, tz, mate, accuracy) {
       if (this.fkLater(p, 'kickTo', arguments)) return;
+      if (NS.Touch.later(p, 'kickTo', arguments)) return;
       this.release(p, type);
       this.lastTarget = mate;
       World.ball.spinY = 0;
@@ -745,22 +756,27 @@
       if (Math.random() >= clamp(chance, 0.02, 0.3)) { if (NS.dbg) NS.dbg('shoulder_failed', p.team); return false; }
       ball.receiver = null;
       ball.contester = null;
+      // he got his body in and a foot to it: the ball is poked off the carrier's foot (never handed over). Half the
+      // time it is steered back to the challenger's own feet (he collects it), else it runs loose
+      ball.owner = null;
+      ball.lastTouchTeam = p.team;
+      ball.lastToucher = p.name;
+      ball.kicker = c; ball.kickerT = 0.35;
+      ball.fromX = ball.pos.x; ball.fromZ = ball.pos.z; ball.age = 0.4; ball.headed = false;
       if (Math.random() < 0.5) {
         if (NS.dbg) NS.dbg('shoulder_took_ball', p.team);
-        ball.owner = p;
-        ball.lastTouchTeam = p.team;
-        ball.lastToucher = p.name;
-        ball.pickupCooldown = 0.12;
-        this.touch(p);
+        var kx = p.pos.x + Math.sin(p.facing) * 0.8 - ball.pos.x, kz = p.pos.z + Math.cos(p.facing) * 0.8 - ball.pos.z;
+        var kl = Math.sqrt(kx * kx + kz * kz) || 1, ks = Math.min(3, kl * 2.5);
+        ball.vel.set(p.vel.x * 0.7 + kx / kl * ks, 0, p.vel.z * 0.7 + kz / kl * ks);
+        ball.pickupCooldown = 0.05;
+        ball.receiver = p;
       } else {
         if (NS.dbg) NS.dbg('shoulder_knocked_loose', p.team);
-        ball.owner = null;
         ball.vel.set(c.vel.x * 0.9 - nz * 1.8 * p.shoulderDir, 0.45, c.vel.z * 0.9 + nx * 1.8 * p.shoulderDir);
-        ball.lastTouchTeam = p.team;
         ball.pickupCooldown = 0.1;
-        ball.kicker = c; ball.kickerT = 0.35;
-        ball.fromX = ball.pos.x; ball.fromZ = ball.pos.z; ball.age = 0; ball.headed = false;
       }
+      p.touchT = 0.2; p.touchFoot = p.shoulderDir; p.touchKind = 0;
+      this.touch(p);
       c.dribbling = false;
       c.stun = 0.3;
       c.fallT = 0.4;
@@ -854,6 +870,7 @@
 
     oneTwo: function (p, ax, az) {
       if (this.fkLater(p, 'oneTwo', arguments)) return null;
+      if (NS.Touch.later(p, 'oneTwo', arguments)) return null;
       var attack = NS.attack(p.team);
       this.kick(p, ACT.PASS, 0.6, ax, az, 1);
       var m = this.lastTarget;
@@ -921,6 +938,11 @@
           else chance *= 1.08;
           if (carrier.dribbling) chance *= 0.75;
           if (!onBall) chance *= 0.45;
+          // the ball out of his feet (a big touch, between two touches at a sprint) is there to be won; tight at the
+          // feet of a good dribbler, less so
+          var cbx = ball.pos.x - carrier.pos.x, cbz = ball.pos.z - carrier.pos.z, cbd = Math.sqrt(cbx * cbx + cbz * cbz);
+          if (cbd > 1.5) chance *= 1 + Math.min(0.5, (cbd - 1.5) * 0.4);
+          else chance *= 1.1 - (carrier.ctl || 0.6) * 0.2;
           if (NS.classEdge) chance *= NS.classEdge(p.team, carrier.team);
           chance = clamp(chance, 0.03, 0.92);
           if (Math.random() < chance) {
@@ -930,21 +952,28 @@
             ball.contester = null;
             ball.lastTouchTeam = p.team;
             ball.lastToucher = p.name;
+            // the tackle meets the ball: it is knocked away (never handed over). A slide / a lunge at full stretch
+            // sends it on; a clean standing tackle wins it back to his own feet, where he collects it
+            var tl = Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z) || 1;
+            var tx0 = p.vel.x / tl, tz0 = p.vel.z / tl;
+            ball.owner = null;
+            ball.fromX = ball.pos.x; ball.fromZ = ball.pos.z; ball.age = 0.4; ball.headed = false;
+            ball.kicker = carrier; ball.kickerT = 0.35;
             if (Math.random() < (p.tackleSlide ? 0.8 : 0.45)) {
               if (NS.dbg) NS.dbg('tackle_poked_loose', p.team);
-              var tl = Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z) || 1;
               var pk = 5.5 + Math.random() * 6.5;
               var pa = (Math.random() - 0.5) * 1.1;
-              var tx0 = p.vel.x / tl, tz0 = p.vel.z / tl;
-              ball.owner = null;
               ball.vel.set((tx0 * Math.cos(pa) - tz0 * Math.sin(pa)) * pk, 0.6 + Math.random() * 1.1, (tx0 * Math.sin(pa) + tz0 * Math.cos(pa)) * pk);
               ball.pickupCooldown = 0.18;
-              ball.kicker = p; ball.kickerT = 0.25;
-              ball.fromX = ball.pos.x; ball.fromZ = ball.pos.z; ball.age = 0; ball.headed = false;
             } else {
-              ball.owner = p;
-              ball.pickupCooldown = 0.12;
+              if (NS.dbg) NS.dbg('tackle_won_to_feet', p.team);
+              var fx = p.pos.x + tx0 * 0.4 - ball.pos.x, fz = p.pos.z + tz0 * 0.4 - ball.pos.z;
+              var fl = Math.sqrt(fx * fx + fz * fz) || 1, fs = Math.min(3.5, fl * 3);
+              ball.vel.set(p.vel.x * 0.45 + fx / fl * fs, 0, p.vel.z * 0.45 + fz / fl * fs);
+              ball.pickupCooldown = 0.05;
+              ball.receiver = p;
             }
+            p.touchT = 0.2; p.touchFoot = 1; p.touchKind = 0;
             this.touch(p);
             carrier.stun = 0.55;
             carrier.fallT = 0.55;
@@ -957,6 +986,20 @@
             if (NS.dbg) NS.dbg(p.tackleSlide ? 'slide_contact_lost' : 'tackle_contact_lost', p.team);
             p.stun = (p.tackleSlide ? 0.85 : 0.45) + (front < -0.35 ? 0.25 : 0);
             p.tackleT = 0;
+            // the foot got a toe to it without winning it: the ball is deflected, still there for either of them
+            if (onBall && Math.random() < 0.35) {
+              if (NS.dbg) NS.dbg('tackle_deflected', p.team);
+              var da2 = (Math.random() - 0.5) * 2.2, dsp = 2 + Math.random() * 4;
+              var cvx = ball.vel.x, cvz = ball.vel.z;
+              ball.owner = null;
+              ball.vel.set(cvx * 0.5 + Math.sin(p.facing + da2) * dsp, 0.3 + Math.random() * 0.8, cvz * 0.5 + Math.cos(p.facing + da2) * dsp);
+              ball.lastTouchTeam = p.team; ball.lastToucher = p.name;
+              ball.kicker = p; ball.kickerT = 0.5;
+              ball.receiver = carrier; ball.contester = null; ball.pickupCooldown = 0.05;
+              ball.fromX = ball.pos.x; ball.fromZ = ball.pos.z; ball.age = 0.4; ball.headed = false;
+              p.touchT = 0.2; p.touchFoot = 1; p.touchKind = 0;
+              NS.Audio.kick(false);
+            }
           }
         }
       }

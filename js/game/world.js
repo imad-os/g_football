@@ -235,14 +235,10 @@
     nutThru: null, nutT: 0, // the player it just went through the legs of (he cannot touch it for nutT seconds)
     nutP: null, nutAge: 0, // the last player a through-the-legs check was made for, and when (ball.age)
     offTeam: -1,     // team whose last pass left some of its players offside (their p.offside flags), -1 none
-    // the dribble (stepBall): the ball has its own place at the carrier's feet, at angle dA (world) and distance dR,
-    // moving out at dV after each touch; dOwner: the carrier it was set up for (a new one starts where the ball is)
+    // a free kick's ball on its spot (stepBall): its taker, its angle from him dA (world) and distance dR
     dOwner: null, dA: 0, dR: 0, dV: 0, dY: 0
   };
 
-  function wrapA(a) { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; }
-  var TURN_RATE = 9;   // rad/s the ball goes round him when he turns (a turn is a touch to the new side, not a jump)
-  var SETTLE = 7;      // how fast a received ball comes to his feet (1/s): it rolls in, it is not stuck to him
 
   function makeSlot(idx) {
     return {
@@ -343,55 +339,12 @@
         ball.dOwner = o; ball.dR = Math.sqrt(fx * fx + fz * fz); ball.dA = Math.atan2(fx, fz); ball.dV = 0; ball.dY = R;
         return -1;
       }
-      if (o) {
-        // ---- the dribble. Nothing is stuck to his foot: the ball keeps its own place round him (angle dA, distance
-        // dR). Running, he pushes it ahead with a touch (dV), it rolls out and he catches it up, touch after touch, in
-        // the rhythm of his run (a sprint: longer touches, a looser ball). Turning, the ball goes round him at TURN_RATE
-        // (a sharp turn is a touch to the side, shown as one). A ball he has just received comes in to his feet from
-        // where it was (SETTLE), dropping to the grass if it came in the air.
-        var sp = Math.sqrt(o.vel.x * o.vel.x + o.vel.z * o.vel.z);
-        var ox = ball.pos.x, oz = ball.pos.z;
-        if (ball.dOwner !== o) {
-          ball.dOwner = o;
-          var rx = ball.pos.x - o.pos.x, rz = ball.pos.z - o.pos.z;
-          ball.dR = Math.min(Math.sqrt(rx * rx + rz * rz), 2.4);
-          ball.dA = ball.dR > 0.05 ? Math.atan2(rx, rz) : o.facing;
-          ball.dV = 0;
-          ball.dY = ball.pos.y;
-        }
-        var want = o.carry, da = wrapA(o.facing - ball.dA), mt = World.match;
-        if ((da > 0.6 || da < -0.6) && sp > 1 && !(o.touchT > 0)) { o.touchT = 0.2; o.touchFoot = da > 0 ? -1 : 1; } // the outside of the foot
-        var turn = TURN_RATE * dt * (ball.dR > want + 0.4 ? 0.6 : 1); // (a ball out in front takes longer to bring round)
-        ball.dA += da > turn ? turn : (da < -turn ? -turn : da);
-        if (sp > 2.5 && !mt.restart && !mt.penalty) {
-          if (ball.dR <= want && ball.dV <= 0) {
-            // a touch: pushed out ahead, the longer the faster he runs (the ball is easier to win while it is out)
-            ball.dV = 1.0 + sp * 0.22;
-            if (!(o.touchT > 0)) { o.touchT = 0.2; o.touchFoot = o.foot === 'L' ? -1 : 1; }
-          }
-          ball.dV -= (5 + sp * 0.15) * dt; // he catches it up
-          ball.dR += ball.dV * dt;
-          if (ball.dR < want * 0.85) { ball.dR = want * 0.85; ball.dV = 0; }
-        } else {
-          // standing or walking: it comes to his feet and stays there
-          ball.dR += (want - ball.dR) * Math.min(1, dt * SETTLE);
-          ball.dV = 0;
-        }
-        ball.dY += (R - ball.dY) * Math.min(1, dt * 10);
-        ball.pos.x = o.pos.x + Math.sin(ball.dA) * ball.dR;
-        ball.pos.z = o.pos.z + Math.cos(ball.dA) * ball.dR;
-        ball.pos.y = ball.dY;
-        ball.vel.set((ball.pos.x - ox) / dt, 0, (ball.pos.z - oz) / dt); // (its roll is drawn from it)
-        // He ran it over a line (not while he holds it for a throw-in / restart)
-        if (!o.throwIn && !World.match.restart) {
-          if (ball.pos.z > HALF_H + R || ball.pos.z < -HALF_H - R) return -3;
-          if (ball.pos.x > HALF_W + R || ball.pos.x < -HALF_W - R) return -4;
-        }
-        return -1;
-      }
-
+      // ---- the dribble: nothing is stuck to his foot. The ball he has is a free ball like any other (the same flight,
+      // roll and bounce below); only his touches move it (js/game/touch.js), and between them it rolls on by itself
+      // while he runs to it. A dead ball waiting for its taker just lies there.
       ball.dOwner = null;
-      ball.age += dt;
+      if (!o) ball.age += dt;
+      else if (World.match.restart && o === World.match.setTaker && ball.pos.y < R + 0.05) ball.vel.set(0, 0, 0); // a dead ball lies still
       loadState(S);
       // 2 sub-steps per frame prevent fast shots from tunneling through posts or skipping ground bounces
       var h = dt * 0.5;
@@ -411,6 +364,7 @@
       ball.pos.set(S.x, S.y, S.z);
       ball.vel.set(S.vx, S.vy, S.vz);
       ball.spinY = S.spin;
+      if (o && World.match.restart && res <= -3) return -1; // a dead ball on its spot is not out
       return res;
     },
 

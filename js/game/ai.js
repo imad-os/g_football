@@ -1017,6 +1017,8 @@
       if (bType === ACT.LONG) NS.dbg('cpu_long_ball_' + bKind, p.team);
       if (cnt && bType === ACT.SHOOT) NS.dbg('counter_attack_shots', p.team);
     }
+    // a hack / clearance is struck at once: only with the ball at his foot (else he goes to it and thinks again)
+    if (bType === -2 && !NS.Touch.reachable(p)) { p.aiCd = 0.05; return; }
     if (bType === -2 && Math.abs(-a * HALF_W - px) < 8 && Math.abs(pz) > 8 && pressure < 1.6 && Math.random() < 0.35) {
       // pinned on his own goal line: he hacks it behind for a corner rather than lose it there
       Actions.release(p, ACT.LONG);
@@ -1151,6 +1153,7 @@
       return;
     }
 
+    if (p.kq) return; // a kick he has decided on waits for the ball to come to his foot (js/game/touch.js)
     p.aiCd -= dt;
     if (p.knockCd > 0) p.knockCd -= dt;
     // Hard / Legend in open grass, already running: a knock-on (the ball pushed ahead, he sprints onto it), as a human's

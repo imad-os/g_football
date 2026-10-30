@@ -558,6 +558,38 @@ that differ from both teams.
   so a player standing with his feet together cannot be nutmegged, while a lunging defender can. An opponent may still close
   his legs in time (slower ball, more time to see it, better defending); a team-mate lets a pass meant for someone else run
   through (a dummy).
+* **Every touch is a contact (js/game/touch.js)**: the ball is never carried, glued to a foot or turned with the
+  player. A ball a player has is a free ball like any other (the same flight, roll, bounce and spin); only his touches
+  move it, and between two touches it rolls on by itself while he runs to it. Humans, the CPU and checkoAI share the
+  same body and the same contacts:
+  - **The body**: no instant turn. The turn rate falls with his pace and rises with his agility; a sharp turn asked for
+    at pace brakes him (less for a well balanced player). He goes to the ball: a ball rolling on ahead of him from his
+    own touch is let run (he keeps his stride and bends his run onto its line), any other (stopped, going across, behind
+    him, far away) he runs after, harder the further it is. A ball against his feet / shins bounces off him.
+  - **Dribble touches**: in the rhythm of his stride (a jog: ~0.6 units out, a touch every ~0.7 s; a sprint: longer
+    touches, ~0.9 s), shorter with a man close (close control). A turn is a touch: inside / outside of the foot that
+    side, a hook with a checked stride for 100-140 degrees, a sole drag-back for a U-turn at a walk / jog; the stick let
+    go: he steps to the ball and stops it with the sole, on the side away from a man on him (shielding).
+  - **Touch quality**: each touch's error and a heavy touch now and then (it runs away from him) come from the turn,
+    his pace, the ball's speed at him, a man on him, his weak foot, a ball behind him or at a stretch, his balance, and
+    his ball control (Dribble). Lost: a ball 3.3 m away, or 2.1 m and running away faster than he can follow it; an
+    opponent's foot nearer to a ball out of his feet pokes it away (by his Defense, after a reaction).
+  - **First touch** (after Actions.controls): the body part by the ball's height (foot, sole, thigh, chest, head), where
+    he wants it (into his stride at a run, the right stick's direction, else at his feet) and how much of the incoming
+    pace is killed: a good touch keeps almost none, a poor one (pace, height, a ball to turn round or from behind, a man
+    on him, his balance and control) keeps some of it and goes astray, sometimes bouncing off him.
+  - **Kicks need the ball**: a pass, shot, knock-on or one-two asked for with the ball out of his reach (~1 m) waits
+    until he gets to it (0.8 s at most; a pass at a team-mate is re-aimed where he has run to), and is struck at a
+    comfortable distance (~0.75 m) unless it is getting away. How cleanly it is met (Touch.quality, in Actions.shotForm)
+    changes every pass and shot: a ball at a stretch, rolling across / at him (first time), off the grass (a volley) or
+    struck off balance comes off wider and softer; the weak foot by his weak-foot rating.
+  - **Challenges**: a won tackle or shoulder challenge knocks the ball off the carrier's foot (never hands it over): to
+    the tackler's feet, where he collects it, or loose; a tackle that gets a toe to it without winning it deflects it. A
+    ball out of the carrier's feet is easier to win, one tight at a good dribbler's feet harder.
+  - **Ratings behind it** (from the six ratings, players.js): ball control = Dribble, agility = Dribble + Speed, balance =
+    Defense + Header + Stamina, weak foot = Dribble plus a fixed personal variation.
+  - Debug matches count the new events: kick_waits_for_ball, kick_ball_out_of_reach, heavy_touch, touch_too_heavy,
+    ball_nicked_off_dribbler, first_touch_bounced_off, tackle_won_to_feet, tackle_deflected.
 * Ball (js/game/world.js): gravity, light air drag, rolling drag plus rolling resistance (the ball stops instead of creeping),
   bounces that lose height and some pace, spin that curls the ball sideways in the air, posts and crossbar that the ball bounces
   off. `World.predict` / `World.intercept` run the same physics ahead so receivers, the CPU and the keeper read the flight.
@@ -582,7 +614,7 @@ vendor/zzfx.js        ZzFX sound generator (MIT), self-hosted
 js/core/              config (constants + settings schema), i18n (en fr es ar), bindings (button map), gamepad (MyPC.gamepad), audio, storage (MyPC.save/load), input (per-player controller state), quality
 js/data/              teams (110 clubs and nations), players (ratings), formations
 js/render/            assets (procedural kits and players), scene (three.js scene, camera, stadium)
-js/game/              world (state + ball physics), actions (kicks, tackle), ai (CPU), keeper (goalkeepers), controls (human), match (flow + fixed step), comp (league / cup / world cup)
+js/game/              world (state + ball physics), actions (kicks, tackle), touch (every player-ball contact), ai (CPU), keeper (goalkeepers), controls (human), match (flow + fixed step), comp (league / cup / world cup)
 js/ui/                hud (cached DOM writes, radar), menu (remote-friendly spatial focus navigation), mapper (real button detection)
 js/main.js            My PC lifecycle (init / ready / start / pause / resume / destroy) and the single rAF loop
 ```

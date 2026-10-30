@@ -160,10 +160,13 @@
     Actions.passPower = follow ? power : -1;
     Actions.lob = lob;
     Actions.human = true;
+    NS.Touch.deferred = false;
     Actions.kick(p, type, power, pad.x, pad.y, 1);
     Actions.human = false;
     Actions.lob = false;
     Actions.passPower = -1;
+    // the ball was not at his foot yet: the pass is played when he gets to it (js/game/touch.js), and followed then
+    if (NS.Touch.deferred) { if (follow) p.kqFol = type === ACT.LONG || lob ? 2.2 : 1.6; return; }
     var target = Actions.lastTarget;
     // the receiver is the human's player right away (both switch modes): he goes to meet the ball
     if (follow && target && target !== otherPlayer(slot)) {
@@ -263,6 +266,16 @@
   }
 
   NS.Controls = {
+    // A human's pass kept until the ball was in reach (Touch.fire) has just been played: his cursor goes to the
+    // receiver, as for a pass played at once
+    follow: function (p, target, lock) {
+      if (!target) return;
+      for (var i = 0; i < 2; i++) {
+        var s = World.slots[i];
+        if (s.active && s.player === p && target !== otherPlayer(s)) { s.player = target; s.lockT = lock; return; }
+      }
+    },
+
     // The ball changed hands: a human team always controls its ball carrier (any switch mode), and a team that just
     // lost the ball may switch to a defender at once.
     claimBall: function (o) {
