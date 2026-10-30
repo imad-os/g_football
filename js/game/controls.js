@@ -447,7 +447,8 @@
         else slot.evT += dt;
         var mv;
         if (slot.evCtx === 1) {
-          if (!has && !ball.owner && ball.receiver === p) {
+          var kmv = B.resolve(1, slot.evMask);
+          if (!has && !ball.owner && ball.receiver === p && kmv >= 0 && kmv !== I_ONETWO && !(slot.knockT > 0)) {
             // his own touch ran a little ahead of him while he was charging it: the press is kept and played as soon
             // as he gets to the ball (a first-time kick, the hold so far is its power), never dropped
             slot.evCtx = 4;
