@@ -272,6 +272,7 @@
       mesh.root.rotation.y = p.turnA0 + da * te;
       var tl, tkn, tout;
       if (p.turnKind === 1) { tl = 0.45 * tw; tkn = 0.9 * tw; tout = -0.35 * tw; }      // across, behind the other leg
+      else if (p.turnKind === 2) { tl = -0.35 * tw; tkn = 0.3 * tw; tout = 0.45 * tw; } // an oriented first touch: the inside opened to it
       else { tl = (tu < 0.5 ? -0.8 : -0.8 + (tu - 0.5) * 2.2) * tw; tkn = 0.12 * tw; tout = 0.1 * tw; } // the sole forward, then back
       if (p.turnFoot > 0) { legR = legR * (1 - tw) + tl; kneeR = kneeR * (1 - tw) + tkn; outR += tout; }
       else { legL = legL * (1 - tw) + tl; kneeL = kneeL * (1 - tw) + tkn; outL += tout; }

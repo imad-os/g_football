@@ -452,6 +452,17 @@
           sl.preT = 0;
         }
       }
+      // ... or the oriented control: the left stick held the way he wants to go. The first touch takes the ball that
+      // way, a stride out, and he opens his body and goes with it (no stop and turn after controlling it)
+      var oriented = false;
+      for (var j = 0; !dir && j < 2; j++) {
+        var sj = World.slots[j];
+        if (!sj.active || sj.player !== p) continue;
+        var pd = sj.pad || NS.Input.pads[sj.idx];
+        if (!pd || pd.x * pd.x + pd.y * pd.y < 0.25) continue;
+        var pdl = Math.sqrt(pd.x * pd.x + pd.y * pd.y);
+        ox = pd.x / pdl; oz = pd.y / pdl; os = Math.max(ps, 4) + 3; dir = true; oriented = true;
+      }
       var opp1 = nearOpp(p, p.pos.x, p.pos.z);
       if (!dir && ps > 3) {
         ox = p.vel.x / ps; oz = p.vel.z / ps; dir = true;
@@ -493,6 +504,15 @@
       if (kind === K_HEAD) p.headT = Math.max(p.headT, 0.3);
       p.inV = rs; p.inT = 0;
       if (q > 0.3) p.balT = Math.max(p.balT || 0, 0.15);
+      if (oriented && kind !== K_HEAD) {
+        // he turns with the touch: facing the new way and already moving off after it (a big turn shows him opening
+        // his body to the ball: match.js animate, turnKind 2)
+        var fa = Math.atan2(ox, oz), dA = wrapA(fa - p.facing);
+        if (dA > 1.2 || dA < -1.2) { p.turnA0 = p.facing; p.turnT = TURN_T; p.turnKind = 2; p.turnFoot = dA > 0 ? -1 : 1; }
+        p.facing = fa;
+        var ov = Math.max(ps * 0.6, 2.5);
+        p.vel.x = ox * ov; p.vel.z = oz * ov;
+      }
       p.pvx = p.vel.x; p.pvz = p.vel.z; p.cOwn = true;
     }
   };
