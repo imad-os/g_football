@@ -1232,6 +1232,12 @@
     'set.bounce': 'ارتداد الكرة', 'set.bounce.h': 'مقدار السرعة التي تحتفظ بها الكرة عند ارتدادها على العشب',
     'aima.lessons': 'الدروس', 'learn.w.lesson': 'درس', 'aima.newopt': 'دماغ جديد (خيارات 2.0)', 'aima.tr.bench': 'اختبار (بدون تعلم)' });
 
+  // v1.60: the button prompts along the bottom of the menus
+  Object.assign(D.en, { 'hint.select': 'Select', 'hint.back': 'Back', 'hint.side': 'Move controller', 'hint.tabs': 'Tabs' });
+  Object.assign(D.fr, { 'hint.select': 'Choisir', 'hint.back': 'Retour', 'hint.side': 'Deplacer la manette', 'hint.tabs': 'Onglets' });
+  Object.assign(D.es, { 'hint.select': 'Elegir', 'hint.back': 'Atras', 'hint.side': 'Mover mando', 'hint.tabs': 'Pestanas' });
+  Object.assign(D.ar, { 'hint.select': 'اختيار', 'hint.back': 'رجوع', 'hint.side': 'تحريك الذراع', 'hint.tabs': 'التبويبات' });
+
   var lang = 'en';
 
   NS.I18n = {

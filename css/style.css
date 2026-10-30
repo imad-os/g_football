@@ -702,3 +702,218 @@ h1, h2, p { margin: 0; }
 /* Dev mode > Performance (js/main.js) */
 .perf-hud { position: fixed; right: 8px; top: 64px; z-index: 50; pointer-events: none; white-space: pre; padding: 6px 10px;
   border-radius: 8px; background: rgba(0, 0, 0, .72); color: #a7f3d0; font: 13px/1.4 ui-monospace, Consolas, monospace; }
+
+/* ================================================================== v1.60: FC-style menus
+ * Full-screen dark pitch-green backdrop with soft light beams, a top bar (mark + screen title), flat translucent tiles
+ * with square corners, a lime focus (thick outline + scale-up, readable from 3 m), lime main buttons, button prompts
+ * along the bottom. Static gradients only (painted once), transform / opacity transitions, no backdrop-filter. */
+:root {
+  --fc-bg0: #020d0c;
+  --fc-bg1: #05241f;
+  --fc-bg2: #0b3a30;
+  --fc-tile: rgba(6, 22, 24, 0.82);
+  --fc-tile2: rgba(12, 38, 40, 0.9);
+  --fc-edge: rgba(190, 255, 230, 0.14);
+  --fc-lime: #c6f432;
+  --fc-teal: #1fe0b4;
+  --fc-ink: #04110e;
+  --fc-text: #eef7f3;
+  --fc-muted: #8fb3a8;
+  --fc-home: #ff5a5f;
+  --fc-away: #3db8ff;
+  --fc-gold: #ffc23d;
+  --card: var(--fc-tile);
+  --line: var(--fc-edge);
+  --muted: var(--fc-muted);
+}
+
+#menu-root {
+  padding: 0;
+  background:
+    linear-gradient(112deg, transparent 0 34%, rgba(198, 244, 50, 0.05) 34% 46%, transparent 46% 58%, rgba(31, 224, 180, 0.05) 58% 66%, transparent 66%),
+    radial-gradient(ellipse 70% 60% at 50% 115%, rgba(31, 224, 180, 0.22), transparent 70%),
+    radial-gradient(ellipse 60% 70% at 0% 0%, rgba(11, 58, 48, 0.95), transparent 70%),
+    linear-gradient(180deg, var(--fc-bg1), var(--fc-bg0));
+}
+/* the pause menus: the frozen match shows through on the right */
+#menu-root.in-match { background: linear-gradient(90deg, rgba(2, 13, 12, 0.96) 0%, rgba(2, 13, 12, 0.88) 55%, rgba(2, 13, 12, 0.62) 100%); }
+.menu-panel { max-width: none; border: 0; border-radius: 0; background: transparent; padding: 2.6% 4.5% 1.6%; gap: 0.9rem; }
+#menu-root.menu-wide { padding: 0; }
+#menu-root.menu-wide .menu-panel { padding: 1.6% 2.5% 1.2%; }
+
+/* top bar */
+.menu-head { border-bottom: 0; padding-bottom: 0.2rem; }
+.brand { gap: 0.75rem; }
+.logo { width: 2.5rem; height: 2.5rem; }
+.brand-txt h1 { font-size: 1.05rem; font-style: italic; font-weight: 900; letter-spacing: 0.02em; color: var(--fc-text); }
+.brand-txt h1 span { color: var(--fc-lime); }
+.brand-txt .small { font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.head-sep { display: block; width: 2px; height: 2.2rem; margin: 0 0.4rem; background: rgba(255, 255, 255, 0.22); }
+.badge-step { margin: 0; padding: 0; border: 0; background: transparent; color: #fff; font-size: 1.85rem; font-weight: 900; line-height: 1; }
+.stats { gap: 1.2rem; padding: 0.35rem 1rem; background: rgba(0, 0, 0, 0.35); border: 1px solid var(--fc-edge); border-radius: 0.3rem;
+  font-family: inherit; font-size: 0.78rem; font-weight: 800; letter-spacing: 0.06em; color: var(--fc-muted); }
+.stats b { color: var(--fc-lime); font-size: 1rem; margin-inline-start: 0.25rem; }
+
+/* button prompts */
+.menu-hints { flex-shrink: 0; display: flex; align-items: center; gap: 1.6rem; padding-top: 0.2rem; font-size: 0.85rem; font-weight: 700; color: #cfe3dc; }
+.hint { display: inline-flex; align-items: center; gap: 0.45rem; white-space: nowrap; }
+.hint-key { display: inline-flex; align-items: center; justify-content: center; min-width: 1.45rem; height: 1.45rem; padding: 0 0.35rem;
+  border-radius: 0.75rem; background: rgba(255, 255, 255, 0.92); color: var(--fc-ink); font-size: 0.75rem; font-weight: 900; }
+
+.screen-head { text-align: start; }
+.screen-head h2 { font-size: 1.45rem; letter-spacing: 0.02em; }
+.screen-head p { font-size: 0.9rem; }
+
+/* buttons: flat, square-ish, lime focus */
+.btn { border-radius: 0.3rem; border: 2px solid var(--fc-edge); background: var(--fc-tile); color: var(--fc-text);
+  transition: transform 0.12s ease, border-color 0.12s ease, background-color 0.12s ease; }
+.btn.sel { background: rgba(31, 224, 180, 0.2); border-color: var(--fc-teal); color: #fff; }
+.btn.primary, .btn.kick, .btn.good { background: var(--fc-lime); border-color: var(--fc-lime); color: var(--fc-ink); font-weight: 900; text-transform: uppercase; letter-spacing: 0.03em; }
+.btn.good { background: var(--fc-teal); border-color: var(--fc-teal); }
+.btn.kick { font-size: 1.05rem; }
+.btn.danger { color: #ff9aa0; border-color: rgba(255, 90, 95, 0.45); }
+.btn.focus { border-color: var(--fc-lime); background-color: var(--fc-tile2); transform: scale(1.04);
+  box-shadow: 0 0 0 2px var(--fc-lime), 0 0.4rem 1.2rem rgba(0, 0, 0, 0.45); }
+.btn.primary.focus, .btn.kick.focus, .btn.good.focus { background: #fff; border-color: #fff; color: var(--fc-ink);
+  box-shadow: 0 0 0 3px var(--fc-lime), 0 0.4rem 1.2rem rgba(0, 0, 0, 0.45); }
+.btn.sel.focus { background-color: rgba(31, 224, 180, 0.32); }
+.plus-key { background: var(--fc-ink); color: var(--fc-lime); width: 1.25rem; height: 1.25rem; font-size: 0.9rem; }
+.foot { border-top: 0; padding-top: 0.2rem; }
+
+/* tiles and panels */
+.panel-card { background: var(--fc-tile); border: 1px solid var(--fc-edge); border-radius: 0.35rem; }
+.tag { letter-spacing: 0.1em; }
+.tag.amber { color: var(--fc-lime); }
+.tag.green { color: var(--fc-teal); }
+.tag.red { color: var(--fc-home); }
+.tag.blue { color: var(--fc-away); }
+.chip { border-radius: 0.25rem; background: rgba(198, 244, 50, 0.14); color: var(--fc-lime); border-color: rgba(198, 244, 50, 0.4); }
+
+/* main menu: big tiles, the first one a hero tile two rows tall */
+.cards { gap: 0.9rem; padding: 0.6rem; }
+.card { position: relative; overflow: hidden; justify-content: flex-end; padding: 1rem 1.2rem 1.1rem;
+  background: linear-gradient(160deg, rgba(14, 52, 48, 0.9), rgba(4, 16, 18, 0.92) 70%);
+  border: 2px solid var(--fc-edge); border-bottom: 4px solid var(--fc-teal); }
+.card-icon { position: absolute; top: 0.6rem; right: 0.7rem; width: auto; height: auto; margin: 0; background: transparent; font-size: 3.4rem; line-height: 1; }
+[dir="rtl"] .card-icon { right: auto; left: 0.7rem; }
+.card-tag { color: var(--fc-teal); font-size: 0.75rem; letter-spacing: 0.12em; }
+.card-title { font-size: 1.55rem; text-transform: uppercase; line-height: 1.05; margin-top: 0.15rem; }
+.card-desc { color: #b9d2ca; font-size: 0.85rem; }
+.card.tone-amber { border-bottom-color: var(--fc-gold); }
+.card.tone-green { border-bottom-color: var(--fc-lime); }
+.card.tone-purple { border-bottom-color: #b48cff; }
+.card.tone-rose { border-bottom-color: var(--fc-home); }
+.card.tone-teal { border-bottom-color: var(--fc-teal); }
+.card.focus { background: linear-gradient(160deg, rgba(30, 86, 74, 0.95), rgba(8, 28, 28, 0.95) 70%); border-bottom-color: var(--fc-lime); }
+.card.focus .card-tag { color: var(--fc-lime); }
+.cards.main { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); grid-auto-flow: dense; }
+.cards.main > :first-child { grid-row: span 2; background: linear-gradient(170deg, rgba(198, 244, 50, 0.22), rgba(31, 224, 180, 0.12) 40%, rgba(4, 16, 18, 0.95) 85%); }
+.cards.main > :first-child .card-icon { font-size: 6.5rem; top: 1rem; }
+.cards.main > :first-child .card-title { font-size: 2.2rem; }
+.cards.main > :last-child:nth-child(6) { grid-column: span 2; }
+
+/* pause menu rows */
+.row-card { border-radius: 0.3rem; border: 2px solid var(--fc-edge); border-inline-start: 5px solid var(--fc-teal); background: var(--fc-tile); }
+.row-card.tone-green, .row-card.tone-good { border-inline-start-color: var(--fc-lime); }
+.row-card.tone-amber { border-inline-start-color: var(--fc-gold); }
+.row-card.tone-purple { border-inline-start-color: #b48cff; }
+.row-card.tone-orange { border-inline-start-color: #ff9a3d; }
+.row-card.tone-rose { border-inline-start-color: var(--fc-home); }
+.row-card .card-icon.sm { position: static; font-size: 1.5rem; width: 2.4rem; height: 2.4rem; display: flex; align-items: center; justify-content: center;
+  background: rgba(255, 255, 255, 0.06); border-radius: 0.3rem; }
+.row-card.focus { border-color: var(--fc-lime); border-inline-start-color: var(--fc-lime); }
+.score-line { font-size: 2.1rem; }
+#screen-pause .cards.two { max-width: 54rem; align-content: start; }
+
+/* tabs: words with a lime underline (FC's Squad / Tactics / Assignments) */
+.tabs { gap: 0.3rem; padding: 0.2rem 0.2rem 0.5rem; }
+.tab { background: transparent; border: 2px solid transparent; color: var(--fc-muted); font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
+.tab.sel { background: transparent; color: #fff; border-color: transparent; box-shadow: inset 0 -3px 0 var(--fc-lime); }
+.tab.focus { color: #fff; background: var(--fc-tile2); border-color: var(--fc-lime); box-shadow: 0 0 0 2px var(--fc-lime); }
+
+/* teams (FC's team select): HOME / AWAY written up the outer edge of each panel */
+.two-cols { gap: 1.4rem; }
+.two-cols .panel-card { position: relative; }
+.two-cols .panel-card.home { border-color: var(--fc-edge); padding-left: 2.7rem; }
+.two-cols .panel-card.away { border-color: var(--fc-edge); padding-right: 2.7rem; }
+.two-cols .col-head .tag { position: absolute; top: 0; bottom: 0; margin: 0; display: flex; align-items: center; justify-content: center; width: 1.9rem;
+  writing-mode: vertical-rl; font-size: 1.1rem; font-weight: 900; letter-spacing: 0.3em; color: #fff; }
+.two-cols .home .col-head .tag { left: 0; transform: rotate(180deg); background: linear-gradient(0deg, rgba(255, 90, 95, 0.4), rgba(255, 90, 95, 0.08)); }
+.two-cols .away .col-head .tag { right: 0; background: linear-gradient(180deg, rgba(61, 184, 255, 0.4), rgba(61, 184, 255, 0.08)); }
+.col-head { border-bottom: 1px solid var(--fc-edge); padding-bottom: 0.7rem; }
+.col-head .swatch { width: 3.2rem; height: 3.2rem; border-radius: 0.5rem 0.5rem 1.6rem 1.6rem; border: 2px solid rgba(255, 255, 255, 0.85); }
+.col-title { font-size: 1.35rem; }
+.stars { color: var(--fc-gold); font-size: 1.1rem; letter-spacing: 0.06em; }
+.team { border-radius: 0.3rem; }
+.team.sel.home { background: rgba(255, 90, 95, 0.2); border-color: var(--fc-home); }
+.team.sel.away { background: rgba(61, 184, 255, 0.2); border-color: var(--fc-away); }
+.team-sub { color: var(--fc-gold); font-family: inherit; font-weight: 700; }
+.team.cat .team-sub { color: var(--fc-muted); }
+.team-crumb { text-transform: uppercase; letter-spacing: 0.08em; font-weight: 800; }
+
+/* sides */
+.side-cell.home { border-left-color: rgba(255, 90, 95, 0.6); }
+.side-cell.away { border-right-color: rgba(61, 184, 255, 0.6); }
+.pad-ico, .slot { border-radius: 0.35rem; }
+.slot.cpu { background: rgba(31, 224, 180, 0.12); border-color: rgba(31, 224, 180, 0.5); color: #bff7e8; }
+
+/* game plan */
+.gp-panel.home, .gp-panel.away { border-color: var(--fc-edge); }
+.gp-panel.home { box-shadow: inset 4px 0 0 var(--fc-home); }
+.gp-panel.away { box-shadow: inset -4px 0 0 var(--fc-away); }
+.player { border-radius: 0.25rem; }
+.player.sel { background: rgba(198, 244, 50, 0.2); border-color: var(--fc-lime); }
+.role { background: rgba(0, 0, 0, 0.4); color: var(--fc-lime); border-radius: 0.2rem; min-width: 2.3rem; text-align: center; }
+.role.sub { color: var(--fc-away); background: rgba(0, 0, 0, 0.4); }
+.ovr { color: var(--fc-ink); background: var(--fc-gold); border-radius: 0.2rem; padding: 0 0.25rem; }
+.btn.tac.m0 { border-color: rgba(61, 184, 255, 0.7); }
+.btn.tac.m2 { border-color: rgba(255, 90, 95, 0.75); }
+.num.good { color: var(--fc-teal); }
+
+/* settings, help, mapping, debug */
+.set-row { background: var(--fc-tile); border-color: var(--fc-edge); border-radius: 0.35rem; }
+.set-name { text-transform: uppercase; letter-spacing: 0.03em; font-size: 0.95rem; }
+.map-val { color: var(--fc-teal); }
+.map-val.pad { color: var(--fc-lime); }
+.capture { background: rgba(2, 13, 12, 0.96); border-radius: 0.35rem; }
+.cap-title { color: var(--fc-lime); }
+.cap-live { color: var(--fc-teal); }
+.dbg-text { background: rgba(0, 0, 0, 0.5); border-radius: 0.3rem; }
+
+/* competitions */
+.ltable th { text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.06em; }
+.ltable td.pts { color: var(--fc-lime); }
+.ltable tr.me td { background: rgba(198, 244, 50, 0.14); }
+.br-match { border-radius: 0.25rem; background: rgba(0, 0, 0, 0.35); }
+.br-match.me { border-color: var(--fc-lime); }
+.br-team.win { color: var(--fc-lime); }
+.vs-x { color: var(--fc-lime); font-size: 2.2rem; }
+.vs-team .swatch, .champ .swatch { border-radius: 0.5rem 0.5rem 1.6rem 1.6rem; }
+.vs-team.me .vs-name { color: var(--fc-lime); }
+.hub-msg { color: var(--fc-teal); }
+.hub-msg.gold { color: var(--fc-gold); }
+
+/* full time */
+.res-hero { border-radius: 0.35rem; border-color: var(--fc-edge);
+  background: radial-gradient(ellipse at 50% 0%, rgba(198, 244, 50, 0.16), transparent 70%), var(--fc-tile); }
+.res-score { background: rgba(0, 0, 0, 0.55); border-color: var(--fc-edge); border-radius: 0.35rem; font-family: inherit; }
+.res-score .w { color: var(--fc-lime); }
+.res-badge { border-radius: 0.5rem 0.5rem 1.6rem 1.6rem; }
+.btn.res-goal { background: var(--fc-tile); }
+.res-gteam { color: var(--fc-lime); }
+
+::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.3); }
+::-webkit-scrollbar-thumb { background: rgba(198, 244, 50, 0.5); }
+
+@media (max-aspect-ratio: 1/1) {
+  .menu-panel { padding: 4% 4% 2%; }
+  .cards.main { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-auto-rows: auto; }
+  .cards.main > :first-child { grid-row: auto; }
+  .cards.main > :last-child:nth-child(6) { grid-column: auto; }
+  .head-sep, .brand-txt .small, .menu-hints .hint:nth-child(n+3) { display: none; }
+  .badge-step { font-size: 1.3rem; }
+}
+/* the focus beats a team / player's own "picked" colour (P1 / P2 cursors on two-cursor screens keep theirs) */
+.btn.sel.focus { border-color: var(--fc-lime); }
+.two-cur .btn.sel.focus { border-color: #60a5fa; }
+#menu-root.in-match .res-body { background: rgba(2, 13, 12, 0.7); border-radius: 0.35rem; }

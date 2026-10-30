@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Real Soccer 6</title>
-<link rel="icon" type="image/svg+xml" href="icon.svg?v=1.59.0">
-<link rel="stylesheet" href="css/style.css?v=1.59.0">
+<link rel="icon" type="image/svg+xml" href="icon.svg?v=1.60.0">
+<link rel="stylesheet" href="css/style.css?v=1.60.0">
 </head>
 <body>
 
@@ -80,18 +80,19 @@
 <div id="menu-root">
   <div class="menu-panel">
     <span id="train-dot" class="train-dot hidden" aria-hidden="true"></span>
+    <!-- top bar: the game's mark, then this screen's title (FC style) -->
     <div class="menu-head">
       <div class="brand">
         <svg class="logo" viewBox="0 0 64 64" aria-hidden="true">
-          <path d="M32 4 L56 14 V32 C56 48 32 60 32 60 C32 60 8 48 8 32 V14 Z" fill="#0f172a" stroke="#f59e0b" stroke-width="4"/>
-          <circle cx="32" cy="28" r="11" fill="#fff"/>
-          <polygon points="32,20 37,24 35,31 29,31 27,24" fill="#0284c7"/>
-          <text x="32" y="51" font-family="Arial,sans-serif" font-size="11" font-weight="900" fill="#f59e0b" text-anchor="middle">RS6</text>
+          <circle cx="32" cy="32" r="29" fill="none" stroke="#c6f432" stroke-width="4"/>
+          <text x="32" y="41" font-family="Arial,sans-serif" font-size="24" font-weight="900" font-style="italic" fill="#fff" text-anchor="middle">RS6</text>
         </svg>
-        <div>
-          <h1>REAL SOCCER <span>6</span><span id="menu-step-badge" class="badge-step"></span></h1>
+        <div class="brand-txt">
+          <h1>REAL SOCCER <span>6</span></h1>
           <div class="muted small" data-i18n="app.sub"></div>
         </div>
+        <i class="head-sep"></i>
+        <div id="menu-step-badge" class="badge-step"></div>
       </div>
       <div class="stats">
         <span><span data-i18n="stat.wins"></span> <b id="menu-stat-wins">0</b></span>
@@ -113,46 +114,48 @@
     <section id="screen-buttons" class="screen hidden"></section>
     <section id="screen-result" class="screen hidden"></section>
     <section id="screen-aimalearn" class="screen hidden"></section>
+    <!-- button prompts (js/ui/menu.js fills it for each screen) -->
+    <div id="menu-hints" class="menu-hints"></div>
   </div>
 </div>
 
 <!-- My PC SDK first (never copied into this repo), then our own files (all with ?v=<version>) -->
 <script src="https://imad-os.github.io/g/sdk/mypc-sdk.js"></script>
-<script src="vendor/three.min.js?v=1.59.0"></script>
-<script src="js/core/config.js?v=1.59.0"></script>
-<script src="js/core/i18n.js?v=1.59.0"></script>
-<script src="js/core/bindings.js?v=1.59.0"></script>
-<script src="vendor/zzfx.js?v=1.59.0"></script>
-<script src="js/core/audio.js?v=1.59.0"></script>
-<script src="js/core/storage.js?v=1.59.0"></script>
-<script src="js/core/input.js?v=1.59.0"></script>
-<script src="js/core/gamepad.js?v=1.59.0"></script>
-<script src="js/core/keyboard.js?v=1.59.0"></script>
-<script src="js/core/quality.js?v=1.59.0"></script>
-<script src="js/data/teams.js?v=1.59.0"></script>
-<script src="js/data/squads.js?v=1.59.0"></script>
-<script src="js/data/players.js?v=1.59.0"></script>
-<script src="js/data/formations.js?v=1.59.0"></script>
-<script src="js/render/assets.js?v=1.59.0"></script>
-<script src="js/render/scene.js?v=1.59.0"></script>
-<script src="js/game/world.js?v=1.59.0"></script>
-<script src="js/game/actions.js?v=1.59.0"></script>
-<script src="js/game/touch.js?v=1.59.0"></script>
-<script src="js/game/ai.js?v=1.59.0"></script>
-<script src="js/game/keeper.js?v=1.59.0"></script>
-<script src="js/game/controls.js?v=1.59.0"></script>
-<script src="js/data/aima-cloud.js?v=1.59.0"></script>
-<script src="js/game/aimaopt.js?v=1.59.0"></script>
-<script src="js/game/aima.js?v=1.59.0"></script>
-<script src="js/game/match.js?v=1.59.0"></script>
-<script src="js/game/comp.js?v=1.59.0"></script>
-<script src="js/game/debug.js?v=1.59.0"></script>
-<script src="js/game/stats.js?v=1.59.0"></script>
-<script src="js/game/commentary.js?v=1.59.0"></script>
-<script src="js/game/replay.js?v=1.59.0"></script>
-<script src="js/ui/hud.js?v=1.59.0"></script>
-<script src="js/ui/mapper.js?v=1.59.0"></script>
-<script src="js/ui/menu.js?v=1.59.0"></script>
-<script src="js/main.js?v=1.59.0"></script>
+<script src="vendor/three.min.js?v=1.60.0"></script>
+<script src="js/core/config.js?v=1.60.0"></script>
+<script src="js/core/i18n.js?v=1.60.0"></script>
+<script src="js/core/bindings.js?v=1.60.0"></script>
+<script src="vendor/zzfx.js?v=1.60.0"></script>
+<script src="js/core/audio.js?v=1.60.0"></script>
+<script src="js/core/storage.js?v=1.60.0"></script>
+<script src="js/core/input.js?v=1.60.0"></script>
+<script src="js/core/gamepad.js?v=1.60.0"></script>
+<script src="js/core/keyboard.js?v=1.60.0"></script>
+<script src="js/core/quality.js?v=1.60.0"></script>
+<script src="js/data/teams.js?v=1.60.0"></script>
+<script src="js/data/squads.js?v=1.60.0"></script>
+<script src="js/data/players.js?v=1.60.0"></script>
+<script src="js/data/formations.js?v=1.60.0"></script>
+<script src="js/render/assets.js?v=1.60.0"></script>
+<script src="js/render/scene.js?v=1.60.0"></script>
+<script src="js/game/world.js?v=1.60.0"></script>
+<script src="js/game/actions.js?v=1.60.0"></script>
+<script src="js/game/touch.js?v=1.60.0"></script>
+<script src="js/game/ai.js?v=1.60.0"></script>
+<script src="js/game/keeper.js?v=1.60.0"></script>
+<script src="js/game/controls.js?v=1.60.0"></script>
+<script src="js/data/aima-cloud.js?v=1.60.0"></script>
+<script src="js/game/aimaopt.js?v=1.60.0"></script>
+<script src="js/game/aima.js?v=1.60.0"></script>
+<script src="js/game/match.js?v=1.60.0"></script>
+<script src="js/game/comp.js?v=1.60.0"></script>
+<script src="js/game/debug.js?v=1.60.0"></script>
+<script src="js/game/stats.js?v=1.60.0"></script>
+<script src="js/game/commentary.js?v=1.60.0"></script>
+<script src="js/game/replay.js?v=1.60.0"></script>
+<script src="js/ui/hud.js?v=1.60.0"></script>
+<script src="js/ui/mapper.js?v=1.60.0"></script>
+<script src="js/ui/menu.js?v=1.60.0"></script>
+<script src="js/main.js?v=1.60.0"></script>
 </body>
 </html>

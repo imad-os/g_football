@@ -179,6 +179,7 @@
     }
     var cx = (r.left + r.right) / 2;
     var cy = (r.top + r.bottom) / 2;
+    if (dir < 2) cy = Math.min(cy, r.top + 40); // (a tall tile, as the main menu's first one: left / right go to the one beside its top)
     var best = null;
     var bestScore = Infinity;
     var bestOverlap = null;
@@ -249,6 +250,7 @@
     if (matchRunning()) { World.match.paused = true; NS.Audio.crowd(false); }
     for (var i = 0; i < order.length; i++) screens[order[i]].classList.toggle('hidden', order[i] !== key);
     root.classList.toggle('menu-wide', key === 'SETTINGS' || key === 'AIMALEARN'); // these use the whole screen
+    root.classList.toggle('in-match', matchRunning()); // (the pitch shows through the pause menus)
     trainDot();
     refs.badge.textContent = T('step.' + key.toLowerCase());
     refreshNav();
@@ -278,7 +280,26 @@
     setFocus2(null);
     root.classList.toggle('two-cur', twoPlayers()); // (P1's cursor blue, P2's red)
     if (twoPlayers()) { focusC(0, ''); focusC(1, ''); } else focusDefault();
+    renderHints();
     NS.App.syncMenuItems();
+  }
+
+  // the button prompts along the bottom (FC style): A select, B back, + the screen's main button, the screen's extras
+  function hint(box, key, txt) {
+    var h = el('span', 'hint');
+    h.appendChild(el('b', 'hint-key', key));
+    h.appendChild(el('span', null, txt));
+    box.appendChild(h);
+  }
+  function renderHints() {
+    var box = refs.hints, plus = plusButton();
+    clear(box);
+    hint(box, 'A', T('hint.select'));
+    hint(box, 'B', T('hint.back'));
+    if (plus && plus.firstChild && plus.firstChild.nodeType === 3) hint(box, '+', plus.firstChild.textContent.replace(/[←→]/g, '').trim());
+    else if (current === 'PAUSE') hint(box, '+', T('pause.resume'));
+    if (current === 'SIDES') hint(box, '◀ ▶', T('hint.side'));
+    if (current === 'SETTINGS') hint(box, 'L R', T('hint.tabs'));
   }
 
   function hide() {
@@ -354,7 +375,7 @@
   }
 
   function buildMain() {
-    refs.mainGrid = el('div', 'cards');
+    refs.mainGrid = el('div', 'cards main');
     screens.MAIN.appendChild(refs.mainGrid);
   }
 
@@ -2432,6 +2453,7 @@
     build: function () {
       root = document.getElementById('menu-root');
       refs.badge = document.getElementById('menu-step-badge');
+      refs.hints = document.getElementById('menu-hints');
       refs.dot = document.getElementById('train-dot');
       setInterval(function () { if (open) trainDot(); }, 1000);
       refs.statWins = document.getElementById('menu-stat-wins');
