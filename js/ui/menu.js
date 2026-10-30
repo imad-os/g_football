@@ -78,6 +78,7 @@
     focused = node;
     if (!node) return;
     node.classList.add('focus');
+    if (node._pl) gpDetail(node._pl[0], node._pl[1]); // (the game plan's player panel)
     var k = node.getAttribute('data-k');
     if (k) lastFocusKey[current] = k;
     if (node.hasAttribute('data-mv')) mapLast = +node.getAttribute('data-mv');
@@ -131,26 +132,34 @@
     focus2 = node;
     if (!node) return;
     node.classList.add('focus2');
+    if (node._pl) gpDetail(node._pl[0], node._pl[1]);
     if (node.scrollIntoView) node.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
   // cursor c onto the button with this key, else onto its panel's selected / first button
   function focusC(c, key) {
-    var list = visibleFocusables(), i, first = null, sel = null;
+    var list = visibleFocusables(), i, first = null, sel = null, def = null;
     for (i = 0; i < list.length; i++) {
       if (!mayFocus(c, list[i])) continue;
       if (key && list[i].getAttribute('data-k') === key) { setF(c, list[i]); return; }
       var pn = list[i].closest('[data-panel]');
       if (pn && +pn.getAttribute('data-panel') === panelOf(c)) {
         if (!first) first = list[i];
+        if (!def && list[i].hasAttribute('data-default')) def = list[i];
         if (!sel && list[i].classList.contains('sel')) sel = list[i];
       }
     }
-    if (c === 1) setFocus2(sel || first);
-    else if (twoPlayers() && (sel || first)) setFocus(sel || first);
+    if (c === 1) setFocus2(def || sel || first);
+    else if (twoPlayers() && (def || sel || first)) setFocus(def || sel || first);
     else focusDefault();
   }
   // after a screen was drawn again: both cursors back on the buttons they were on (by key)
   function keyOf(node) { return node ? node.getAttribute('data-k') : ''; }
+  // a screen drawn again after cursor `actor` pressed key k: that cursor stays there, the other one where it was
+  function redrawKeys(k) {
+    var k0 = keyOf(focused), k1 = keyOf(focus2);
+    if (actor === 1) k1 = k; else k0 = k;
+    return [k0, k1];
+  }
   function refocus(k0, k1) {
     if (focused) focused.classList.remove('focus');
     focused = null;
@@ -259,12 +268,14 @@
     if (key === 'COMPHUB') { abandonArmed = false; renderCompHub(); }
     if (key === 'SIDES') updateSideSlots();
     if (key === 'TEAMS') {
-      // both sides start on their leagues, each cursor on its side's league
-      teamView[0] = teamView[1] = 'cats';
-      lastFocusKey.TEAMS = 'c0:' + World.session.activeCategory;
+      lastFocusKey.TEAMS = 't0'; // (each cursor on its side's team)
       renderTeams();
     }
-    if (key === 'GAMEPLAN') renderGamePlan();
+    if (key === 'GAMEPLAN') {
+      var sp = NS.sidePads();
+      gpSide = sp[0] >= 0 ? sp[0] : 0; // (one player: his own team first)
+      renderGamePlan();
+    }
     if (key === 'SETTINGS') renderSettings();
     if (key === 'HELP') renderHelp();
     if (key === 'BUTTONS') renderButtons();
@@ -300,6 +311,8 @@
     else if (current === 'PAUSE') hint(box, '+', T('pause.resume'));
     if (current === 'SIDES') hint(box, '◀ ▶', T('hint.side'));
     if (current === 'SETTINGS') hint(box, 'L R', T('hint.tabs'));
+    if (current === 'TEAMS') hint(box, '◀ ▶', T('hint.change'));
+    if (current === 'GAMEPLAN' && !twoPlayers()) hint(box, 'L R', T('hint.team'));
   }
 
   function hide() {
@@ -667,27 +680,30 @@
   function buildSides() {
     var wrap = screens.SIDES;
     var head = el('div', 'screen-head');
-    head.appendChild(el('h2', null, T('sides.title')));
     head.appendChild(el('p', 'muted', T('sides.how')));
     wrap.appendChild(head);
 
-    var grid = el('div', 'panel-card sides-grid');
-    var hr = el('div', 'side-row side-head');
-    var h0 = el('div', 'side-cell home');
-    h0.appendChild(el('div', 'tag red', T('sides.home')));
-    slotEls.cpu0 = el('div', 'slot cpu', T('slot.cpu'));
-    h0.appendChild(slotEls.cpu0);
-    var hm = el('div', 'side-cell mid');
-    hm.appendChild(el('div', 'tag amber', T('sides.ctrl')));
-    var h1 = el('div', 'side-cell away');
-    h1.appendChild(el('div', 'tag blue', T('sides.away')));
-    slotEls.cpu1 = el('div', 'slot cpu', T('slot.cpu'));
-    h1.appendChild(slotEls.cpu1);
-    hr.appendChild(h0); hr.appendChild(hm); hr.appendChild(h1);
-    grid.appendChild(hr);
-    slotEls.rows = el('div', 'side-rows');
-    grid.appendChild(slotEls.rows);
-    wrap.appendChild(grid);
+    // FC's kit / controller screen: HOME on the left, AWAY on the right (their kits and names), the controllers in the
+    // middle, each on its own row; a device's stick / arrows move its icon across
+    var stage = el('div', 'sd-stage');
+    slotEls.stage = stage;
+    [0, 1].forEach(function (t) {
+      var col = el('div', 'sd-col ' + (t ? 'away' : 'home'));
+      col.appendChild(el('div', 'sd-edge', T(t ? 'tp.away' : 'tp.home')));
+      stage.appendChild(col);
+      var top = el('div', 'sd-top ' + (t ? 'away' : 'home'));
+      slotEls['kit' + t] = el('div', 'sd-kit');
+      slotEls['name' + t] = el('div', 'sd-name');
+      slotEls['cpu' + t] = el('div', 'slot cpu', T('slot.cpu'));
+      top.appendChild(slotEls['kit' + t]);
+      top.appendChild(slotEls['name' + t]);
+      top.appendChild(slotEls['cpu' + t]);
+      stage.appendChild(top);
+    });
+    var mt = el('div', 'sd-top mid');
+    mt.appendChild(el('div', 'sd-ctrl', T('sides.ctrl')));
+    stage.appendChild(mt);
+    wrap.appendChild(stage);
     refs.sideMsg = el('div', 'muted small side-msg');
     wrap.appendChild(refs.sideMsg);
     refs.cvc = el('div', 'panel-card cvc hidden');
@@ -722,21 +738,29 @@
       s.sideMode = 'CUSTOM';
     }
     D.fix();
-    clear(slotEls.rows);
-    D.list().forEach(function (dev) {
+    var stage = slotEls.stage, icons = slotEls.icons || [];
+    for (var i = 0; i < icons.length; i++) stage.removeChild(icons[i]);
+    icons = slotEls.icons = [];
+    var devs = D.list();
+    stage.style.gridTemplateRows = 'auto repeat(' + devs.length + ', minmax(4.6rem, auto)) 1fr';
+    devs.forEach(function (dev, row) {
       var n = D.player(dev), sd = n >= 0 ? s.pads[n] : -1;
-      var row = el('div', 'side-row');
-      var cells = [el('div', 'side-cell home'), el('div', 'side-cell mid'), el('div', 'side-cell away')];
       var nm = devName(dev);
       var ic = el('div', 'pad-ico ' + (n >= 0 ? 'p' + (n + 1) : 'idle'));
       ic.appendChild(el('b', null, n >= 0 ? 'P' + (n + 1) : nm[0]));
       ic.appendChild(el('span', 'dev-name', (n >= 0 ? nm[0] + ' ' : '') + nm[1]));
-      ic.appendChild(el('span', 'dev-arrows', '\u25C0  \u25B6'));
-      cells[sd === 0 ? 0 : (sd === 1 ? 2 : 1)].appendChild(ic);
-      cells.forEach(function (c) { row.appendChild(c); });
-      slotEls.rows.appendChild(row);
+      ic.appendChild(el('span', 'dev-arrows', '◀  ▶'));
+      ic.style.gridRow = String(row + 2);
+      ic.style.gridColumn = String(sd === 0 ? 1 : (sd === 1 ? 3 : 2));
+      stage.appendChild(ic);
+      icons.push(ic);
     });
-    for (var t = 0; t < 2; t++) slotEls['cpu' + t].classList.toggle('hidden', s.pads[0] === t || s.pads[1] === t);
+    for (var t = 0; t < 2; t++) {
+      var tm = NS.Teams.byId(t ? s.awayTeamId : s.homeTeamId);
+      slotEls['kit' + t].innerHTML = kitSvg(tm);
+      slotEls['name' + t].textContent = tm.name;
+      slotEls['cpu' + t].classList.toggle('hidden', s.pads[0] === t || s.pads[1] === t);
+    }
     renderCvc();
   }
 
@@ -816,40 +840,143 @@
 
   /* ------------------------------ TEAMS ------------------------------ */
 
-  // Each side: first its league / continent (a list), then that one's teams (Back: the leagues again). Two players pick
-  // at the same time, each on his own side with his own cursor.
-  var teamView = ['cats', 'cats'];
-  var TP = [{}, {}];             // each side's panel: { sw, title, stars, crumb, list, owner }
+  // FC's Classic Match: HOME on the left, AWAY on the right. Each side: Clubs / National teams, then ◀ league ▶ and
+  // ◀ team ▶ (its crest, stars, ATT / MID / DEF); left / right on those two rows change them (the cursor stays), up / down
+  // walk the rows, OK goes on to the next row. The middle: swap the two teams, random teams. Two players pick at the
+  // same time, each on his own side with his own cursor.
+  var TP = [{}, {}];             // each side's panel: { kinds[], cat, team, crest, name, stars, rv[], league, owner }
+  var kitN = 0;                  // (unique ids for the kits' clip paths)
+
+  function catOf(id) { var c = NS.Teams.CATEGORIES; for (var i = 0; i < c.length; i++) if (c[i].id === id) return c[i]; return null; }
+  function isNat(catId) { var c = catOf(catId); return !!c && c.type === 'NATIONAL'; }
+  function catsOfKind(nat) { return NS.Teams.CATEGORIES.filter(function (c) { return (c.type === 'NATIONAL') === nat; }); }
+  // '🇲🇦 Botola Pro (Morocco)' -> ['🇲🇦', 'Botola Pro (Morocco)']
+  function catParts(c) { var i = c.label.indexOf(' '); return [c.label.slice(0, i), c.label.slice(i + 1)]; }
+  function starsText(n) { var out = ''; for (var i = 0; i < 5; i++) out += i < n ? '★' : '☆'; return out; }
+
+  // a team's crest: a shield in its two colours with its code
+  function crestSvg(tm) {
+    var c1 = NS.Assets.hexToCss(tm.c1), c2 = NS.Assets.hexToCss(tm.c2), id = 'cr' + (++kitN);
+    return '<svg viewBox="0 0 100 110" aria-hidden="true"><defs><clipPath id="' + id + '"><path d="M50 4 L94 18 V52 C94 82 50 106 50 106 C50 106 6 82 6 52 V18 Z"/></clipPath></defs>' +
+      '<g clip-path="url(#' + id + ')"><rect width="100" height="110" fill="' + c1 + '"/><polygon points="100,0 100,110 30,110" fill="' + c2 + '"/></g>' +
+      '<path d="M50 4 L94 18 V52 C94 82 50 106 50 106 C50 106 6 82 6 52 V18 Z" fill="none" stroke="#fff" stroke-width="4"/>' +
+      '<rect x="18" y="44" width="64" height="24" rx="5" fill="rgba(2,13,12,0.82)"/>' +
+      '<text x="50" y="62" font-family="Arial,sans-serif" font-size="' + (tm.code.length > 3 ? 15 : 18) + '" font-weight="900" fill="#fff" text-anchor="middle">' + tm.code + '</text></svg>';
+  }
+  // a team's shirt (its pattern: solid, stripes, hoops, sash) over its shorts
+  function kitSvg(tm) {
+    var c1 = NS.Assets.hexToCss(tm.c1), c2 = NS.Assets.hexToCss(tm.c2), sh = NS.Assets.hexToCss(tm.shorts), id = 'kt' + (++kitN);
+    var shirt = 'M30 8 L42 4 Q50 13 58 4 L70 8 L94 26 L83 44 L72 37 L72 80 L28 80 L28 37 L17 44 L6 26 Z';
+    var pat = '';
+    if (tm.pattern === 'STRIPES') pat = '<rect x="34" y="0" width="8" height="90" fill="' + c2 + '"/><rect x="50" y="0" width="8" height="90" fill="' + c2 + '"/><rect x="18" y="0" width="8" height="90" fill="' + c2 + '"/><rect x="66" y="0" width="8" height="90" fill="' + c2 + '"/>';
+    else if (tm.pattern === 'HOOPS') pat = '<rect x="0" y="26" width="100" height="9" fill="' + c2 + '"/><rect x="0" y="46" width="100" height="9" fill="' + c2 + '"/><rect x="0" y="66" width="100" height="9" fill="' + c2 + '"/>';
+    else if (tm.pattern === 'SASH') pat = '<polygon points="22,10 36,10 80,82 66,82" fill="' + c2 + '"/>';
+    return '<svg viewBox="0 0 100 112" aria-hidden="true"><defs><clipPath id="' + id + '"><path d="' + shirt + '"/></clipPath></defs>' +
+      '<path d="M28 80 L72 80 L75 108 L54 108 L50 92 L46 108 L25 108 Z" fill="' + sh + '" stroke="rgba(0,0,0,0.35)" stroke-width="1.5"/>' +
+      '<g clip-path="url(#' + id + ')"><rect width="100" height="90" fill="' + c1 + '"/>' + pat +
+      '<polygon points="6,26 17,44 28,37 28,20" fill="' + c2 + '" opacity="0.9"/><polygon points="94,26 83,44 72,37 72,20" fill="' + c2 + '" opacity="0.9"/></g>' +
+      '<path d="' + shirt + '" fill="none" stroke="rgba(0,0,0,0.4)" stroke-width="1.5"/>' +
+      '<path d="M42 4 Q50 13 58 4" fill="none" stroke="' + c2 + '" stroke-width="3"/></svg>';
+  }
+
+  // ATT / MID / DEF: the average ratings of side t's starters in each line (the keeper counts with the defence)
+  function lineRatings(t) {
+    var s = World.session, tm = NS.Teams.byId(t ? s.awayTeamId : s.homeTeamId);
+    var layout = NS.FORMATIONS[s.formations[t]], roster = s.rosters[t], sum = [0, 0, 0], n = [0, 0, 0];
+    for (var i = 0; i < layout.length; i++) {
+      if (!roster[i]) continue;
+      var r = layout[i].role, k = r === 'FWD' ? 0 : (r === 'MID' ? 1 : 2);
+      sum[k] += NS.Players.statsFor(tm, roster[i]).ovr;
+      n[k]++;
+    }
+    return [0, 1, 2].map(function (k) { return n[k] ? String(Math.round(sum[k] / n[k])) : '-'; });
+  }
+
+  // a row whose value left / right change (◀ ▶ around it, the mouse clicks them); OK: onStep(0)
+  function cycleBtn(cls, key, onStep) {
+    var b = btn('cyc ' + cls, '', key, function () { onStep(0); });
+    b._step = onStep;
+    var l = el('span', 'cyc-arrow', '◀'), r = el('span', 'cyc-arrow', '▶');
+    l.addEventListener('click', function (e) { e.stopPropagation(); onStep(-1); });
+    r.addEventListener('click', function (e) { e.stopPropagation(); onStep(1); });
+    b._mid = el('span', 'cyc-mid');
+    b.appendChild(l);
+    b.appendChild(b._mid);
+    b.appendChild(r);
+    return b;
+  }
+  // cursor c onto the button with this key
+  function focusKeyC(c, key) {
+    var list = visibleFocusables();
+    for (var i = 0; i < list.length; i++) if (list[i].getAttribute('data-k') === key && mayFocus(c, list[i])) { setF(c, list[i]); return; }
+  }
 
   function buildTeams() {
     var wrap = screens.TEAMS;
-    var cols = el('div', 'two-cols');
+    var stage = el('div', 'tp-stage');
     [0, 1].forEach(function (t) {
       var P = TP[t];
-      var card = el('div', 'panel-card ' + (t ? 'away' : 'home'));
+      var card = el('div', 'tp-panel ' + (t ? 'away' : 'home'));
       card.setAttribute('data-panel', String(t));
-      var hh = el('div', 'col-head');
-      P.sw = el('span', 'swatch');
-      P.title = el('div', 'col-title');
-      hh.appendChild(P.sw);
-      var box = el('div');
-      var tags = el('div', 'row');
-      tags.appendChild(el('div', 'tag ' + (t ? 'blue' : 'red'), T(t ? 'teams.away' : 'teams.home')));
-      P.owner = el('span', 'owner-chip');
-      tags.appendChild(P.owner);
-      box.appendChild(tags);
-      box.appendChild(P.title);
-      hh.appendChild(box);
-      P.stars = el('span', 'stars');
-      hh.appendChild(P.stars);
-      card.appendChild(hh);
-      P.crumb = el('div', 'team-crumb muted small');
-      card.appendChild(P.crumb);
-      P.list = el('div', 'team-list');
-      card.appendChild(P.list);
-      cols.appendChild(card);
+      card.appendChild(el('div', 'tp-edge', T(t ? 'tp.away' : 'tp.home')));
+      var body = el('div', 'tp-body');
+      var kinds = el('div', 'tp-kinds');
+      P.kinds = [false, true].map(function (nat) {
+        var b = btn('tp-kind', T(nat ? 'tp.nations' : 'tp.clubs'), 'k' + t + ':' + (nat ? 'n' : 'c'), function () { teamKind(t, nat); });
+        kinds.appendChild(b);
+        return b;
+      });
+      P.owner = el('span', 'owner-chip hidden');
+      kinds.appendChild(P.owner);
+      body.appendChild(kinds);
+      P.cat = cycleBtn('tp-cat', 'l' + t, function (d) { teamStep(t, 'cat', d); });
+      body.appendChild(P.cat);
+      P.team = cycleBtn('tp-team', 't' + t, function (d) { teamStep(t, 'team', d); });
+      P.team.setAttribute('data-default', '1');
+      P.crest = el('span', 'tp-crest');
+      P.name = el('span', 'tp-name');
+      P.team._mid.appendChild(P.crest);
+      P.team._mid.appendChild(P.name);
+      body.appendChild(P.team);
+      P.stars = el('div', 'tp-stars');
+      body.appendChild(P.stars);
+      var rates = el('div', 'tp-rates');
+      P.rv = ['tp.att', 'tp.mid', 'tp.def'].map(function (k) {
+        var c = el('div', 'tp-rate');
+        c.appendChild(el('span', null, T(k)));
+        var v = el('b', null, '-');
+        c.appendChild(v);
+        rates.appendChild(c);
+        return v;
+      });
+      body.appendChild(rates);
+      P.league = el('div', 'tp-league');
+      body.appendChild(P.league);
+      card.appendChild(body);
+      stage.appendChild(card);
+      if (t === 0) {
+        var mid = el('div', 'tp-mid');
+        mid.appendChild(el('div', 'tp-vs', 'VS'));
+        mid.appendChild(btn('tp-act', '⇄  ' + T('tp.swap'), 'tswap', function () {
+          var s = World.session, h = s.homeTeamId, hc = s.activeCategory;
+          s.homeTeamId = s.awayTeamId; s.activeCategory = s.awayCategory;
+          s.awayTeamId = h; s.awayCategory = hc;
+          NS.Match.syncRosters();
+          renderTeams();
+        }));
+        mid.appendChild(btn('tp-act', '🎲  ' + T('tp.random'), 'trand', function () {
+          var s = World.session, all = NS.Teams.TEAMS;
+          var a = all[Math.floor(Math.random() * all.length)], b = a;
+          while (b === a) b = all[Math.floor(Math.random() * all.length)];
+          s.homeTeamId = a.id; s.activeCategory = a.cat;
+          s.awayTeamId = b.id; s.awayCategory = b.cat;
+          NS.Match.syncRosters();
+          renderTeams();
+        }));
+        stage.appendChild(mid);
+      }
     });
-    wrap.appendChild(cols);
+    wrap.appendChild(stage);
 
     var foot = el('div', 'foot');
     foot.appendChild(btn('', T('nav.back_sides'), 'back', back));
@@ -862,81 +989,67 @@
     wrap.appendChild(foot);
   }
 
-  // a screen drawn again after cursor `actor` pressed key k: that cursor stays there, the other one where it was
-  function redrawKeys(k) {
-    var k0 = keyOf(focused), k1 = keyOf(focus2);
-    if (actor === 1) k1 = k; else k0 = k;
-    return [k0, k1];
-  }
-
-  function teamButton(t, isHome) {
-    var s = World.session;
-    var sel = (isHome ? s.homeTeamId : s.awayTeamId) === t.id;
-    var b = btn('team' + (sel ? ' sel ' + (isHome ? 'home' : 'away') : ''), '', (isHome ? 'h:' : 'a:') + t.id, function () {
-      if (isHome) s.homeTeamId = t.id; else s.awayTeamId = t.id;
+  // Clubs / National teams: the first league of that kind and its first team (nothing changes if it is that kind already)
+  function teamKind(t, nat) {
+    var s = World.session, catKey = t ? 'awayCategory' : 'activeCategory';
+    if (isNat(s[catKey]) !== nat) {
+      s[catKey] = catsOfKind(nat)[0].id;
+      s[t ? 'awayTeamId' : 'homeTeamId'] = NS.Teams.byCategory(s[catKey])[0].id;
       NS.Match.syncRosters();
-      renderTeams(redrawKeys((isHome ? 'h:' : 'a:') + t.id));
-    });
-    var sw = el('span', 'swatch');
-    sw.style.background = 'linear-gradient(135deg,' + NS.Assets.hexToCss(t.c1) + ' 50%,' + NS.Assets.hexToCss(t.c2) + ' 50%)';
-    b.appendChild(sw);
-    var box = el('div', 'team-box');
-    box.appendChild(el('div', 'team-name', t.name));
-    box.appendChild(el('div', 'team-sub', t.code + ' • ' + new Array(t.stars + 1).join('★')));
-    b.appendChild(box);
-    return b;
+    }
+    renderTeams();
   }
 
-  // keys: [P1's cursor, P2's] after the redraw (none: as they are)
-  function renderTeams(keys) {
-    var s = World.session;
-    var cats = NS.Teams.CATEGORIES;
-    keys = keys || [keyOf(focused), keyOf(focus2)];
-    var two = twoPlayers();
+  // left / right (d -1 / +1) on side t's league or team row; d 0 (OK): on to the next row (from the team: Next, for P1)
+  function teamStep(t, what, d) {
+    var s = World.session, catKey = t ? 'awayCategory' : 'activeCategory', idKey = t ? 'awayTeamId' : 'homeTeamId';
+    if (!d) {
+      if (what === 'cat') focusKeyC(actor, 't' + t);
+      else if (actor === 0) focusKeyC(0, 'next');
+      return;
+    }
+    if (what === 'cat') {
+      var cats = catsOfKind(isNat(s[catKey])), i = 0;
+      for (var k = 0; k < cats.length; k++) if (cats[k].id === s[catKey]) i = k;
+      s[catKey] = cats[(i + d + cats.length) % cats.length].id;
+      s[idKey] = NS.Teams.byCategory(s[catKey])[0].id;
+    } else {
+      var list = NS.Teams.byCategory(s[catKey]), j = 0;
+      for (var m = 0; m < list.length; m++) if (list[m].id === s[idKey]) j = m;
+      s[idKey] = list[(j + d + list.length) % list.length].id;
+    }
+    NS.Match.syncRosters();
+    renderTeams();
+  }
+
+  // (the panels are built once; this only writes their texts)
+  function renderTeams() {
+    var s = World.session, two = twoPlayers();
     [0, 1].forEach(function (t) {
       var P = TP[t], catKey = t ? 'awayCategory' : 'activeCategory';
-      var cat = null;
-      for (var i = 0; i < cats.length; i++) if (cats[i].id === s[catKey]) cat = cats[i];
-      clear(P.list);
-      if (teamView[t] === 'cats' || !cat) {
-        // its leagues / continents: the one its team is from marked
-        P.crumb.textContent = T('teams.pickcat');
-        cats.forEach(function (c) {
-          var b = btn('team cat' + (s[catKey] === c.id ? ' sel ' + (t ? 'away' : 'home') : ''), '', 'c' + t + ':' + c.id, function () {
-            s[catKey] = c.id;
-            teamView[t] = 'teams';
-            var cur = t ? s.awayTeamId : s.homeTeamId, list = NS.Teams.byCategory(c.id), k = list.length ? list[0].id : '';
-            for (var j = 0; j < list.length; j++) if (list[j].id === cur) k = cur;
-            renderTeams(redrawKeys((t ? 'a:' : 'h:') + k));
-          });
-          var box = el('div', 'team-box');
-          box.appendChild(el('div', 'team-name', c.label));
-          box.appendChild(el('div', 'team-sub', NS.Teams.byCategory(c.id).length + ' ' + T('teams.count')));
-          b.appendChild(box);
-          P.list.appendChild(b);
-        });
-      } else {
-        // its teams, and the way back to the leagues first
-        P.crumb.textContent = cat.label;
-        var bk = btn('team back', '', 'tb' + t, function () { teamView[t] = 'cats'; renderTeams(redrawKeys('c' + t + ':' + cat.id)); });
-        bk.appendChild(el('div', 'team-name', '◀  ' + T('teams.leagues')));
-        P.list.appendChild(bk);
-        NS.Teams.byCategory(cat.id).forEach(function (tm) { P.list.appendChild(teamButton(tm, t === 0)); });
-      }
       var tm = NS.Teams.byId(t ? s.awayTeamId : s.homeTeamId);
-      P.title.textContent = tm.name + ' (' + tm.code + ')';
-      P.stars.textContent = new Array(tm.stars + 1).join('★');
-      P.sw.style.background = 'linear-gradient(135deg,' + NS.Assets.hexToCss(tm.c1) + ' 50%,' + NS.Assets.hexToCss(tm.c2) + ' 50%)';
+      if (!catOf(s[catKey]) || NS.Teams.byCategory(s[catKey]).indexOf(tm) < 0) s[catKey] = tm.cat;
+      var nat = isNat(s[catKey]), cp = catParts(catOf(s[catKey])), list = NS.Teams.byCategory(s[catKey]);
+      P.kinds[0].classList.toggle('sel', !nat);
+      P.kinds[1].classList.toggle('sel', nat);
+      clear(P.cat._mid);
+      P.cat._mid.appendChild(el('span', 'tp-flag', cp[0]));
+      P.cat._mid.appendChild(el('span', 'tp-catname', cp[1]));
+      P.crest.innerHTML = crestSvg(tm);
+      P.name.textContent = tm.name;
+      P.stars.textContent = starsText(tm.stars);
+      var r = lineRatings(t);
+      for (var i = 0; i < 3; i++) P.rv[i].textContent = r[i];
+      P.league.textContent = cp[1] + '   ' + (list.indexOf(tm) + 1) + ' / ' + list.length;
       // who picks here: P1 / P2 (two players), else nobody's name
       var own = two ? (panelOf(0) === t ? 0 : 1) : -1;
       P.owner.textContent = own >= 0 ? 'P' + (own + 1) : '';
       P.owner.className = 'owner-chip' + (own >= 0 ? ' p' + (own + 1) : ' hidden');
     });
-    refocus(keys[0], keys[1]);
   }
 
-  // Back on a two-cursor screen: the panel cursor c is in steps back first (its team list -> its leagues; the game plan:
-  // a starter picked for a swap is let go). True = done there.
+  // Back on a two-cursor screen: the panel cursor c is in steps back first (the game plan: a starter picked for a swap
+  // is let go). True = done there.
   function panelBack(c) {
     var f = getF(c), pn = f && f.closest ? f.closest('[data-panel]') : null;
     var t = pn ? +pn.getAttribute('data-panel') : (twoPlayers() ? panelOf(c) : -1);
@@ -944,11 +1057,6 @@
     var s = World.session;
     actor = c;
     try {
-      if (current === 'TEAMS' && teamView[t] === 'teams') {
-        teamView[t] = 'cats';
-        renderTeams(redrawKeys('c' + t + ':' + (t ? s.awayCategory : s.activeCategory)));
-        return true;
-      }
       if (current === 'GAMEPLAN' && s.selStarter[t] !== null) {
         var k = 's' + t + ':' + s.selStarter[t];
         s.selStarter[t] = null;
@@ -961,24 +1069,47 @@
 
   /* ------------------------------ GAME PLAN ------------------------------ */
 
-  // Split in two: each side's panel (formation, tactics, starters and bench) next to the other's, so two players set
-  // their teams up at the same time, each with his own cursor (one player: his cursor goes to both).
-  var GP = [{}, {}];             // each side's panel: { title, owner, forms, tac[], hint, starters, subs, stats }
+  // FC's Team Management: the starters as cards on a pitch (in the formation's places), the bench under it, the
+  // formation, the tactics and the focused player's ratings beside it. One player: one team at a time (a tab per team,
+  // L / R switch); two players: both teams next to each other, each with his own cursor. A card picked, then another one
+  // (on the pitch or the bench) = they swap.
+  var GP = [{}, {}];             // each side's panel: { card, title, owner, tac[], hint, pitch, bench, dName, dSub, dOvr, dBars[] }
+  var gpSide = 0;                // (one player) the team shown
 
   function buildGamePlan() {
     var wrap = screens.GAMEPLAN;
-    var cols = el('div', 'gp-split');
+    refs.gpTabs = el('div', 'tabs gp-tabs');
+    refs.gpTab = [0, 1].map(function (t) {
+      var b = btn('tab', '', 'gs:' + t, function () { gpSide = t; renderGamePlan(['gs:' + t, '']); });
+      refs.gpTabs.appendChild(b);
+      return b;
+    });
+    wrap.appendChild(refs.gpTabs);
+    refs.gpSplit = el('div', 'gp-split');
     [0, 1].forEach(function (t) {
       var P = GP[t];
-      var card = el('div', 'panel-card gp-panel ' + (t ? 'away' : 'home'));
+      var card = el('div', 'gp-panel ' + (t ? 'away' : 'home'));
       card.setAttribute('data-panel', String(t));
+      P.card = card;
+      // the pitch and the bench
+      var left = el('div', 'gp-left');
       var head = el('div', 'row gp-head');
       P.title = el('div', 'tag ' + (t ? 'blue' : 'red'));
       head.appendChild(P.title);
       P.owner = el('span', 'owner-chip');
       head.appendChild(P.owner);
-      card.appendChild(head);
-      // the formation
+      left.appendChild(head);
+      P.pitch = el('div', 'gp-pitch');
+      left.appendChild(P.pitch);
+      var bh = el('div', 'gp-bench-row');
+      bh.appendChild(el('div', 'gp-bench-tag', T('gp.bench')));
+      P.bench = el('div', 'gp-bench');
+      bh.appendChild(P.bench);
+      left.appendChild(bh);
+      card.appendChild(left);
+      // the formation, the tactics, the player
+      var right = el('div', 'gp-right');
+      right.appendChild(el('div', 'tag amber', T('gp.form')));
       var forms = el('div', 'row gp-forms');
       NS.FORMATION_KEYS.forEach(function (f) {
         var b = btn('form', f, 'f' + t + ':' + f, function () {
@@ -991,10 +1122,11 @@
         b.setAttribute('data-form', f);
         forms.appendChild(b);
       });
-      card.appendChild(forms);
+      right.appendChild(forms);
       // tactics: what each block (defence, midfield, attack) is told to do; confirm cycles defensive / balanced /
       // attacking; the 4th: counter-attacks (rarely / when it is on / always)
-      var tac = el('div', 'row gp-tac');
+      right.appendChild(el('div', 'tag green', T('gp.tactics')));
+      var tac = el('div', 'gp-tac');
       P.tac = [];
       [0, 1, 2, 3].forEach(function (b) {
         var bt = btn('tac', '', 'tac' + t + ':' + b, function () {
@@ -1005,31 +1137,42 @@
         P.tac.push(bt);
         tac.appendChild(bt);
       });
-      card.appendChild(tac);
+      right.appendChild(tac);
       P.hint = el('div', 'muted small tac-hint');
-      card.appendChild(P.hint);
-      // the players: a starter picked, then a bench player = they swap
-      var lists = el('div', 'gp-lists');
-      var c1 = el('div', 'list-col');
-      c1.appendChild(el('div', 'tag amber', T('gp.starters')));
-      P.starters = el('div', 'stack');
-      c1.appendChild(P.starters);
-      var c2 = el('div', 'list-col');
-      c2.appendChild(el('div', 'tag blue', T('gp.bench')));
-      P.subs = el('div', 'stack');
-      c2.appendChild(P.subs);
-      lists.appendChild(c1);
-      lists.appendChild(c2);
-      card.appendChild(lists);
-      P.stats = el('div', 'gp-statline muted small');
-      card.appendChild(P.stats);
-      cols.appendChild(card);
+      right.appendChild(P.hint);
+      // the focused player (FC's player panel)
+      var det = el('div', 'gp-det');
+      var dh = el('div', 'gp-det-head');
+      P.dOvr = el('div', 'gp-det-ovr');
+      dh.appendChild(P.dOvr);
+      var dn = el('div', 'gp-det-id');
+      P.dName = el('div', 'gp-det-name');
+      P.dSub = el('div', 'gp-det-sub');
+      dn.appendChild(P.dName);
+      dn.appendChild(P.dSub);
+      dh.appendChild(dn);
+      det.appendChild(dh);
+      P.dBars = STAT_KEYS.map(function (k) {
+        var row = el('div', 'gp-st-row');
+        row.appendChild(el('span', 'gp-st-name', T(k[1])));
+        var bar = el('span', 'gp-st-bar');
+        var fill = el('i');
+        bar.appendChild(fill);
+        row.appendChild(bar);
+        var v = el('span', 'gp-st-val');
+        row.appendChild(v);
+        det.appendChild(row);
+        return [fill, v];
+      });
+      right.appendChild(det);
+      card.appendChild(right);
+      refs.gpSplit.appendChild(card);
     });
-    wrap.appendChild(cols);
-    wrap.appendChild(el('p', 'muted small gp-hint', T('gp.hint')));
+    wrap.appendChild(refs.gpSplit);
 
     var foot = el('div', 'foot');
     foot.appendChild(btn('', T('nav.back'), 'back', back));
+    foot.appendChild(el('p', 'muted small gp-hint', T('gp.hint')));
     var right = el('div', 'row');
     refs.btnResume = plusKey(btn('good', T('nav.resume'), 'resume', resumeMatch));
     refs.btnResume.setAttribute('data-default', '1');
@@ -1041,13 +1184,42 @@
     wrap.appendChild(foot);
   }
 
-  // the six ratings of a player in one line (the one picked for a swap, else the first)
   var STAT_KEYS = [['spd', 'st.spd'], ['drb', 'st.drb'], ['sht', 'st.sht'], ['sta', 'st.sta'], ['hdr', 'st.hdr'], ['def', 'st.def']];
-  function statLine(teamObj, name) {
-    if (!name) return '';
-    var st = NS.Players.statsFor(teamObj, name), out = name + '  ' + st.pos + ' ' + st.ovr + '   ';
-    for (var i = 0; i < STAT_KEYS.length; i++) out += T(STAT_KEYS[i][1]).toUpperCase() + ' ' + st[STAT_KEYS[i][0]] + '  ';
-    return out;
+
+  // the player panel of side t: roster place idx (a starter or a substitute)
+  function gpDetail(t, idx) {
+    var s = World.session, P = GP[t], roster = s.rosters[t], name = roster && roster[idx];
+    if (!P.dName || !name) return;
+    var tm = NS.Teams.byId(t ? s.awayTeamId : s.homeTeamId), layout = NS.FORMATIONS[s.formations[t]];
+    var st = NS.Players.statsFor(tm, name);
+    P.dOvr.textContent = String(st.ovr);
+    P.dName.textContent = name;
+    P.dSub.textContent = st.pos + '   ·   ' + (idx < layout.length ? layout[idx].role + '  #' + layout[idx].num : T('gp.sub'));
+    for (var i = 0; i < STAT_KEYS.length; i++) {
+      var v = st[STAT_KEYS[i][0]];
+      P.dBars[i][0].style.width = v + '%';
+      P.dBars[i][0].className = v >= 75 ? 'hi' : (v >= 55 ? 'mid' : 'lo');
+      P.dBars[i][1].textContent = String(v);
+    }
+  }
+
+  // swap two roster places of side t (starters change places; a substitute comes on)
+  function gpSwap(t, a, b) {
+    var s = World.session, roster = s.rosters[t], tmp = roster[a];
+    roster[a] = roster[b];
+    roster[b] = tmp;
+    s.selStarter[t] = null;
+    if (matchRunning()) NS.Match.refreshFromSession();
+  }
+
+  // a player's card: rating, place, name (the kit colour along its top)
+  function playerCard(cls, key, kit, ovr, role, name) {
+    var b = btn('pc ' + cls, '', key, null);
+    b.style.borderTopColor = kit;
+    b.appendChild(el('b', 'pc-ovr', String(ovr)));
+    b.appendChild(el('span', 'pc-role', role));
+    b.appendChild(el('span', 'pc-name', name));
+    return b;
   }
 
   // keys: [P1's cursor, P2's] after the redraw (none: as they are)
@@ -1056,6 +1228,8 @@
     keys = keys || [keyOf(focused), keyOf(focus2)];
     var two = twoPlayers();
     if (!s.selStarter) s.selStarter = [null, null];
+    refs.gpTabs.classList.toggle('hidden', two);
+    refs.gpSplit.classList.toggle('dual', two);
     [0, 1].forEach(function (t) {
       var P = GP[t];
       var teamObj = NS.Teams.byId(t === 0 ? s.homeTeamId : s.awayTeamId);
@@ -1063,11 +1237,15 @@
       var layout = NS.FORMATIONS[formKey];
       var roster = s.rosters[t];
       var picked = s.selStarter[t];
+      var kit = NS.Assets.hexToCss(teamObj.c1);
+      P.card.classList.toggle('off', !two && t !== gpSide);
+      refs.gpTab[t].textContent = T(t ? 'tp.away' : 'tp.home') + '  ·  ' + teamObj.name;
+      refs.gpTab[t].classList.toggle('sel', t === gpSide);
       P.title.textContent = teamObj.name + '  ·  ' + formKey;
       var own = two ? (panelOf(0) === t ? 0 : 1) : -1;
       P.owner.textContent = own >= 0 ? 'P' + (own + 1) : '';
       P.owner.className = 'owner-chip' + (own >= 0 ? ' p' + (own + 1) : ' hidden');
-      var fb = GP[t].title.parentNode.parentNode.querySelectorAll('[data-form]');
+      var fb = P.card.querySelectorAll('[data-form]');
       for (var i = 0; i < fb.length; i++) fb[i].classList.toggle('sel', fb[i].getAttribute('data-form') === formKey);
       var trow = s.tactics[t], hint = [];
       if (trow[3] === undefined) trow[3] = 1;
@@ -1077,40 +1255,42 @@
         hint.push(T('tac.h' + tb + trow[tb]));
       }
       P.hint.textContent = hint.join('  ·  ');
-      clear(P.starters);
-      clear(P.subs);
-      P.starters.parentNode.parentNode.classList.toggle('nobench', roster.length <= layout.length); // (no bench: two columns of starters)
+      // the starters on the pitch: attacking up, x (own goal -52 .. halfway 0) down the pitch, z across it
+      clear(P.pitch);
+      P.pitch.appendChild(el('i', 'gp-mark box'));
+      P.pitch.appendChild(el('i', 'gp-mark arc'));
       layout.forEach(function (slot, n) {
-        var b = btn('player' + (picked === n ? ' sel' : ''), '', 's' + t + ':' + n, function () {
-          s.selStarter[t] = s.selStarter[t] === n ? null : n;
+        var name = roster[n] || ('PLAYER ' + (n + 1));
+        var b = playerCard(picked === n ? 'sel' : '', 's' + t + ':' + n, kit, NS.Players.statsFor(teamObj, roster[n]).ovr, slot.role, name);
+        b.style.left = (8 + (slot.z + 34) / 68 * 84).toFixed(1) + '%';
+        b.style.top = (10 + Math.min(1, -slot.x / 52) * 80).toFixed(1) + '%';
+        b._pl = [t, n];
+        b.addEventListener('click', function () {
+          var at = s.selStarter[t];
+          if (at === null || at === n) s.selStarter[t] = at === n ? null : n;
+          else gpSwap(t, at, n);
           renderGamePlan(redrawKeys('s' + t + ':' + n));
         });
-        b.appendChild(el('span', 'role', slot.role));
-        b.appendChild(el('span', 'pname', roster[n] || ('PLAYER ' + (n + 1))));
-        b.appendChild(el('span', 'ovr', String(NS.Players.statsFor(teamObj, roster[n]).ovr)));
-        b.appendChild(el('span', 'num', '#' + slot.num));
-        P.starters.appendChild(b);
+        P.pitch.appendChild(b);
       });
+      // the bench
+      clear(P.bench);
       for (var j = layout.length; j < roster.length; j++) {
         (function (k) {
-          var b = btn('player sub', '', 'b' + t + ':' + k, function () {
+          var b = playerCard('sub' + (picked !== null ? ' ready' : ''), 'b' + t + ':' + k, '#475569', NS.Players.statsFor(teamObj, roster[k]).ovr,
+            picked !== null ? T('gp.swap') : T('gp.sub'), roster[k]);
+          b._pl = [t, k];
+          b.addEventListener('click', function () {
             var at = s.selStarter[t];
             if (at === null) return;
-            var tmp = roster[at];
-            roster[at] = roster[k];
-            roster[k] = tmp;
-            s.selStarter[t] = null;
-            if (matchRunning()) NS.Match.refreshFromSession();
+            gpSwap(t, at, k);
             renderGamePlan(redrawKeys('s' + t + ':' + at));
           });
-          b.appendChild(el('span', 'role sub', T('gp.sub')));
-          b.appendChild(el('span', 'pname', roster[k]));
-          b.appendChild(el('span', 'ovr', String(NS.Players.statsFor(teamObj, roster[k]).ovr)));
-          b.appendChild(el('span', 'num good', picked !== null ? T('gp.swap') : T('gp.ready')));
-          P.subs.appendChild(b);
+          P.bench.appendChild(b);
         })(j);
       }
-      P.stats.textContent = statLine(teamObj, roster[picked !== null ? picked : 0]);
+      if (roster.length <= layout.length) P.bench.appendChild(el('span', 'muted small', '-'));
+      gpDetail(t, picked !== null ? picked : 0);
     });
     refocus(keys[0], keys[1]);
   }
@@ -2474,7 +2654,7 @@
       buildResult();
       buildLearn();
       NS.Match.syncRosters();
-      lastFocusKey.TEAMS = 'h:' + World.session.homeTeamId;
+      lastFocusKey.TEAMS = 't0';
     },
     show: show,
     hide: hide,
@@ -2489,6 +2669,8 @@
     padSide: sideMove,
     // a controller's L / R (d -1 / +1): the Settings page goes to the tab before / after (round). false = not on Settings
     tabStep: function (d) {
+      // the game plan (one player): the other team
+      if (open && current === 'GAMEPLAN' && !twoPlayers()) { refs.gpTab[1 - gpSide].click(); return true; }
       if (!open || current !== 'SETTINGS') return false;
       var tabs = [].filter.call(refs.setTabs.querySelectorAll('[data-group]'), function (b) { return b.offsetParent !== null; });
       if (!tabs.length) return true;
@@ -2531,6 +2713,9 @@
         return;
       }
       var c = DUAL[current] ? cursorOf(dev) : 0;
+      // a ◀ ▶ row (the teams' league / team): left / right change it
+      var cf = getF(c);
+      if ((action === 'left' || action === 'right') && cf && cf._step) { cf._step(action === 'left' ? -1 : 1); return; }
       switch (action) {
         case 'left': move(0, c); break;
         case 'right': move(1, c); break;

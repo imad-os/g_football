@@ -1237,6 +1237,19 @@
   Object.assign(D.fr, { 'hint.select': 'Choisir', 'hint.back': 'Retour', 'hint.side': 'Deplacer la manette', 'hint.tabs': 'Onglets' });
   Object.assign(D.es, { 'hint.select': 'Elegir', 'hint.back': 'Atras', 'hint.side': 'Mover mando', 'hint.tabs': 'Pestanas' });
   Object.assign(D.ar, { 'hint.select': 'اختيار', 'hint.back': 'رجوع', 'hint.side': 'تحريك الذراع', 'hint.tabs': 'التبويبات' });
+  // v1.61: FC-style team select and game plan
+  Object.assign(D.en, { 'tp.home': 'HOME', 'tp.away': 'AWAY', 'tp.clubs': 'Clubs', 'tp.nations': 'National teams', 'tp.swap': 'Swap teams',
+    'tp.random': 'Random', 'tp.att': 'ATT', 'tp.mid': 'MID', 'tp.def': 'DEF', 'gp.form': 'FORMATION', 'gp.tactics': 'TACTICS',
+    'hint.change': 'Change', 'hint.team': 'Other team' });
+  Object.assign(D.fr, { 'tp.home': 'DOMICILE', 'tp.away': 'EXTERIEUR', 'tp.clubs': 'Clubs', 'tp.nations': 'Selections', 'tp.swap': 'Inverser',
+    'tp.random': 'Au hasard', 'tp.att': 'ATT', 'tp.mid': 'MIL', 'tp.def': 'DEF', 'gp.form': 'FORMATION', 'gp.tactics': 'TACTIQUE',
+    'hint.change': 'Changer', 'hint.team': 'Autre equipe' });
+  Object.assign(D.es, { 'tp.home': 'LOCAL', 'tp.away': 'VISITANTE', 'tp.clubs': 'Clubes', 'tp.nations': 'Selecciones', 'tp.swap': 'Intercambiar',
+    'tp.random': 'Aleatorio', 'tp.att': 'DEL', 'tp.mid': 'MED', 'tp.def': 'DEF', 'gp.form': 'FORMACION', 'gp.tactics': 'TACTICA',
+    'hint.change': 'Cambiar', 'hint.team': 'Otro equipo' });
+  Object.assign(D.ar, { 'tp.home': 'المضيف', 'tp.away': 'الضيف', 'tp.clubs': 'الأندية', 'tp.nations': 'المنتخبات', 'tp.swap': 'تبديل الفريقين',
+    'tp.random': 'عشوائي', 'tp.att': 'هجوم', 'tp.mid': 'وسط', 'tp.def': 'دفاع', 'gp.form': 'الخطة', 'gp.tactics': 'التكتيك',
+    'hint.change': 'تغيير', 'hint.team': 'الفريق الآخر' });
 
   var lang = 'en';
 
