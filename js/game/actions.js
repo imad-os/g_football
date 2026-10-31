@@ -15,6 +15,13 @@
   var THROW_Y = 1.2;  // a throw-in comes down to the receiver at this height (his waist)
   // pressed shoulder to shoulder (Actions.shoulder): for BUMP_T seconds his kicks miss by BUMP_ACC x more, BUMP_POW of the pace
   var BUMP_T = 1.2, BUMP_ACC = 2.2, BUMP_POW = 0.88;
+  // a CPU / checkoAI tackle that misses the ball but catches the man is a foul this often (standing, sliding)
+  var FOUL_STAND = 0.03, FOUL_SLIDE = 0.06, FOUL_BOX = 0.35; // (in his own box he is that much more careful)
+  // the tackler is a human's own player (the one a person controls, not the CPU's or checkoAI's)
+  function byHuman(p) {
+    var s = World.slots;
+    return (s[0].active && !s[0].ai && s[0].player === p) || (s[1].active && !s[1].ai && s[1].player === p);
+  }
   // shot: realistic ball speeds from SHOT_MIN (a placed finish) to SHOT_MAX (a full-lace thunderbolt)
   var SHOT_MIN = 22, SHOT_MAX = 42;
   var GH = [[0.10, NS.BALL_R], [0.11, 0.55], [0.30, 1.15], [0.40, 1.75], [0.50, NS.GOAL_HEIGHT], [1.0, 6.8]]; // (50%: the bar)
@@ -63,6 +70,10 @@
   }
 
   function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+  // A shot's pace factor v (1 = no effect) with its effect scaled by the Shot factors setting `key` (Settings > Shot
+  // factors: 0.7 keeps 70% of what it takes off or adds, 1.2 makes it 20% stronger)
+  function sf(v, key) { var s = World.settings, k = s && s[key] > 0 ? s[key] : 1; return 1 - (1 - v) * k; }
+  function keep(v) { return v; }
   function gaussR() { return (Math.random() + Math.random() + Math.random() - 1.5) * 2; } // ~N(0, 1)
 
   var Actions = {
@@ -298,8 +309,8 @@
           var tz = side * (GOAL_HALF_W - 0.55);
           var cvx = goalX - ball.pos.x, cvz = tz - ball.pos.z;
           var cd0 = Math.sqrt(cvx * cvx + cvz * cvz) || 1;
-          this.shotForm(p, goalX, tz);
-          speed = (24 + power * 10) * (0.88 + p.st.sht / 99 * 0.16) * this.shotPow * (p.bumpT > 0 ? BUMP_POW : 1) * this.powMul(ACT.SHOOT);
+          this.shotForm(p, goalX, tz, true);
+          speed = (24 + power * 10) * sf(0.88 + p.st.sht / 99 * 0.16, 'sfStat') * this.shotPow * (p.bumpT > 0 ? sf(BUMP_POW, 'sfShoulder') : 1) * this.powMul(ACT.SHOOT);
           var kd = cd0 * AIR_K / speed;
           var cT = kd < 0.85 ? -Math.log(1 - kd) / AIR_K : cd0 / speed * 1.4;
           var chord = Math.atan2(cvx, cvz);
@@ -348,7 +359,7 @@
           var cdx = chipFar ? attack * 32 : goalX - attack - p.pos.x;
           var cdz = chipFar ? 0 : cz - p.pos.z;
           var cd = Math.sqrt(cdx * cdx + cdz * cdz) || 1;
-          this.shotForm(p, goalX, cz);
+          this.shotForm(p, goalX, cz, true);
           var ce = (0.6 + dg / 30) * (accuracy || 1) * this.shotErr * (1.7 - p.st.sht / 99 * 1.1) * (p.bumpT > 0 ? BUMP_ACC : 1);
           if (NS.teamClass) ce *= clamp(1 - 0.3 * NS.teamClass(p.team), 0.6, 1.5);
           var ca = gaussR() * 0.07 * ce, cc = Math.cos(ca), sn = Math.sin(ca);
@@ -479,13 +490,15 @@
       }
       return 1;
     },
-    shotForm: function (p, goalX, goalZ) {
+    // shot: a shot (its pace factors follow Settings > Shot factors; a pass keeps them as they are)
+    shotForm: function (p, goalX, goalZ, shot) {
+      var F = shot ? sf : keep;
       var gx = goalX - p.pos.x, gz = goalZ - p.pos.z, gl = Math.sqrt(gx * gx + gz * gz) || 1;
       var f = (1 + (Math.sin(p.facing) * gx + Math.cos(p.facing) * gz) / gl) / 2;
       var m = World.match, dead = (m.penalty || m.restart) && m.setTaker === p;
       if (dead) f = 1;
       var fin = p.st ? clamp(1.55 - p.st.sht / 99, 0.55, 1.1) : 1;
-      var pow = 1 - 0.5 * (1 - Math.pow(f, 0.7)) * fin;
+      var pow = F(1 - 0.5 * (1 - Math.pow(f, 0.7)) * fin, 'sfOrient');
       var err = 1 + 4 * Math.pow(1 - f, 1.3) * fin;
       var near = 99, pl = World.players;
       for (var i = 0; i < pl.length; i++) {
@@ -494,9 +507,10 @@
         var dx = q.pos.x - p.pos.x, dz = q.pos.z - p.pos.z, d = Math.sqrt(dx * dx + dz * dz);
         if (d < near) near = d;
       }
-      if (near < 1.6) { pow *= 0.9; err *= 1.7; } else if (near < 3.2) err *= 1 + 0.35 * (3.2 - near) / 1.6;
-      var v = dead ? 9 : Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z);
-      pow *= 0.92 + clamp((v - 4) / 11, 0, 1) * 0.16;
+      if (near < 1.6) { pow *= F(0.9, 'sfPress'); err *= 1.7; } else if (near < 3.2) err *= 1 + 0.35 * (3.2 - near) / 1.6;
+      // (a dead ball struck off a run-up, match.js fkRun, gets all of a running strike's pace)
+      var v = dead ? (this.fkGo ? 15 : 9) : Math.sqrt(p.vel.x * p.vel.x + p.vel.z * p.vel.z);
+      pow *= F(0.92 + clamp((v - 4) / 11, 0, 1) * 0.16, 'sfPace');
       err *= 1 + clamp((v - 11) / 5, 0, 1) * 0.25;
       // his strong foot (p.foot): a shot with it is cleaner, with the other one weaker and wilder (Actions.footFor)
       var ft = this.footFor(p, goalX - p.pos.x, goalZ - p.pos.z);
@@ -504,9 +518,9 @@
       // (the weak foot by his weak-foot rating: 1, as good as the strong one; 0.5, the usual WEAK_ERR / WEAK_POW)
       var wf = p.wf >= 0 ? p.wf : 0.5;
       if ((ft > 0) === (p.foot !== 'L')) err *= STRONG_ERR;
-      else { err *= 1 + (WEAK_ERR - 1) * 2 * (1 - wf); pow *= 1 - (1 - WEAK_POW) * 2 * (1 - wf); }
+      else { err *= 1 + (WEAK_ERR - 1) * 2 * (1 - wf); pow *= F(1 - (1 - WEAK_POW) * 2 * (1 - wf), 'sfWeak'); }
       // how cleanly the ball is met where it is (js/game/touch.js): stretched, first time, a volley, off balance
-      if (!dead && NS.Touch) { NS.Touch.quality(p); err *= NS.Touch.qErr; pow *= NS.Touch.qPow; }
+      if (!dead && NS.Touch) { NS.Touch.quality(p); err *= NS.Touch.qErr; pow *= F(NS.Touch.qPow, 'sfContact'); }
       this.shotPow = pow; this.shotErr = err;
     },
     shotPow: 1, shotErr: 1,
@@ -539,10 +553,10 @@
       var err = (0.016 + sd * 0.0015) * (accuracy || 1) * (0.6 + g * 0.7) * (2.1 - p.st.sht / 99 * 1.65);
       if (p.bumpT > 0) err *= BUMP_ACC;
       if (NS.teamClass) err *= clamp(1 - 0.3 * NS.teamClass(p.team), 0.6, 1.5);
-      this.shotForm(p, goalX, goalZ);
+      this.shotForm(p, goalX, goalZ, true);
       err *= this.shotErr;
       var angle = Math.atan2(sdx, sdz) + gaussR() * err;
-      var speed = this.shotSpeed(g) * (0.84 + p.st.sht / 99 * 0.24) * this.shotPow * (p.bumpT > 0 ? BUMP_POW : 1) * this.powMul(ACT.SHOOT);
+      var speed = this.shotSpeed(g) * sf(0.84 + p.st.sht / 99 * 0.24, 'sfStat') * this.shotPow * (p.bumpT > 0 ? sf(BUMP_POW, 'sfShoulder') : 1) * this.powMul(ACT.SHOOT);
       var ty = this.gaugeHeight(g);
       var vy;
       if (ty < 0) {
@@ -1042,6 +1056,18 @@
             p.vel.multiplyScalar(0.45);
             NS.Audio.kick(false);
           } else {
+            // a CPU (or checkoAI) tackle that misses the ball but catches the man: now and then a trip, a foul (a human
+            // player's own tackles are left to him)
+            var ownBox = Math.abs(carrier.pos.x + NS.attack(p.team) * HALF_W) < NS.BOX_D && Math.abs(carrier.pos.z) < NS.BOX_HW;
+            if (!byHuman(p) && dx * dx + dz * dz < reach && this.onFoul &&
+                Math.random() < (p.tackleSlide ? FOUL_SLIDE : FOUL_STAND) * (ownBox ? FOUL_BOX : 1)) {
+              p.tackleT = 0;
+              p.stun = 1.0;
+              carrier.fallT = 0.55;
+              if (NS.dbg) NS.dbg('foul_trip', p.team);
+              this.onFoul(p, carrier);
+              return;
+            }
             if (NS.dbg) NS.dbg(p.tackleSlide ? 'slide_contact_lost' : 'tackle_contact_lost', p.team);
             p.stun = (p.tackleSlide ? 0.85 : 0.45) + (front < -0.35 ? 0.25 : 0);
             p.tackleT = 0;

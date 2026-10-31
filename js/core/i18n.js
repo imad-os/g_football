@@ -1195,6 +1195,7 @@
     'learn.hint': 'كل مكافأة درس للحركات التي أدت إليها: الأخضر يجعله يكررها أكثر، والأحمر أقل. تقليد Legend يعلمه كيف يتحرك اللاعب الجيد.' });
 
   // v1.51: Dev mode tab (aim arrow, kick powers, pass assist, ball), checkoAI lessons
+  Object.assign(D.en, { 'set.g.shotf': 'SHOT FACTORS', 'set.sf.stat': 'Shooter rating', 'set.sf.orient': 'Body turned to the goal', 'set.sf.press': 'Man close to him', 'set.sf.pace': 'His running pace', 'set.sf.weak': 'Weak foot', 'set.sf.contact': 'How the ball is met', 'set.sf.shoulder': 'Shoulder to shoulder', 'set.sf.h': 'How much this factor changes the shot pace: 0.7 = 30% less of its effect, 1 = as now, 1.2 = 20% more' });
   Object.assign(D.en, { 'set.g.dev': 'DEV MODE',
     'set.devarrow': 'Aim arrow', 'set.devarrow.h': 'An arrow on the grass shows where a pass / shot goes (direction and power) while you aim it, and where it really went',
     'set.powlow': 'Low pass power', 'set.powthru': 'Through pass power', 'set.powlobthru': 'Long through pass power', 'set.powlong': 'Long pass power', 'set.powshot': 'Shot power',
@@ -1204,6 +1205,7 @@
     'set.bounce': 'Ball bounce', 'set.bounce.h': 'How much of its speed the ball keeps when it bounces on the grass',
     'set.perf': 'Performance', 'set.perf.h': 'Frame rate, slowest frame, and the time of the game, checkoAI and the drawing per frame',
     'aima.lessons': 'Lessons', 'learn.w.lesson': 'Lesson', 'aima.newopt': 'New brain (options 2.0)', 'aima.tr.bench': 'Benchmark (no learning)' });
+  Object.assign(D.fr, { 'set.g.shotf': 'FACTEURS DE TIR', 'set.sf.stat': 'Note du tireur', 'set.sf.orient': 'Corps tourné vers le but', 'set.sf.press': 'Adversaire proche', 'set.sf.pace': 'Sa vitesse de course', 'set.sf.weak': 'Mauvais pied', 'set.sf.contact': 'Prise de balle', 'set.sf.shoulder': 'Épaule contre épaule', 'set.sf.h': 'Effet de ce facteur sur la vitesse du tir : 0.7 = 30 % d’effet en moins, 1 = comme maintenant, 1.2 = 20 % de plus' });
   Object.assign(D.fr, { 'set.g.dev': 'MODE DEV',
     'set.devarrow': 'Fleche de visee', 'set.devarrow.h': 'Une fleche au sol montre ou va la passe / le tir (direction et puissance) pendant la visee, et ou il est vraiment alle',
     'set.powlow': 'Puissance passe courte', 'set.powthru': 'Puissance passe en profondeur', 'set.powlobthru': 'Puissance passe longue en profondeur', 'set.powlong': 'Puissance passe longue', 'set.powshot': 'Puissance de tir',
@@ -1213,6 +1215,7 @@
     'set.perf': 'Performances', 'set.perf.h': 'Images par seconde, image la plus lente, temps du jeu, de checkoAI et du dessin par image',
     'set.bounce': 'Rebond du ballon', 'set.bounce.h': 'Part de sa vitesse que le ballon garde en rebondissant sur la pelouse',
     'aima.lessons': 'Lecons', 'learn.w.lesson': 'Lecon', 'aima.newopt': 'Nouveau cerveau (options 2.0)', 'aima.tr.bench': 'Test (sans apprendre)' });
+  Object.assign(D.es, { 'set.g.shotf': 'FACTORES DE TIRO', 'set.sf.stat': 'Valoración del tirador', 'set.sf.orient': 'Cuerpo de cara a la portería', 'set.sf.press': 'Rival encima', 'set.sf.pace': 'Su velocidad de carrera', 'set.sf.weak': 'Pie malo', 'set.sf.contact': 'Cómo golpea el balón', 'set.sf.shoulder': 'Hombro con hombro', 'set.sf.h': 'Cuánto cambia este factor la velocidad del tiro: 0.7 = 30 % menos de efecto, 1 = como ahora, 1.2 = 20 % más' });
   Object.assign(D.es, { 'set.g.dev': 'MODO DEV',
     'set.devarrow': 'Flecha de apuntado', 'set.devarrow.h': 'Una flecha en el cesped muestra adonde va el pase / tiro (direccion y potencia) al apuntar, y adonde fue',
     'set.powlow': 'Potencia pase corto', 'set.powthru': 'Potencia pase al hueco', 'set.powlobthru': 'Potencia pase largo al hueco', 'set.powlong': 'Potencia pase largo', 'set.powshot': 'Potencia de tiro',
@@ -1222,6 +1225,7 @@
     'set.perf': 'Rendimiento', 'set.perf.h': 'Imagenes por segundo, imagen mas lenta, tiempo del juego, de checkoAI y del dibujo por imagen',
     'set.bounce': 'Bote del balon', 'set.bounce.h': 'Cuanta velocidad conserva el balon al botar en el cesped',
     'aima.lessons': 'Lecciones', 'learn.w.lesson': 'Leccion', 'aima.newopt': 'Nuevo cerebro (opciones 2.0)', 'aima.tr.bench': 'Prueba (sin aprender)' });
+  Object.assign(D.ar, { 'set.g.shotf': 'عوامل التسديد', 'set.sf.stat': 'تقييم المسدد', 'set.sf.orient': 'اتجاه الجسم نحو المرمى', 'set.sf.press': 'خصم قريب منه', 'set.sf.pace': 'سرعة جريه', 'set.sf.weak': 'القدم الضعيفة', 'set.sf.contact': 'طريقة لمس الكرة', 'set.sf.shoulder': 'كتف بكتف', 'set.sf.h': 'مدى تأثير هذا العامل على سرعة التسديدة: 0.7 = تأثير أقل بـ 30٪، 1 = كما الآن، 1.2 = أكثر بـ 20٪' });
   Object.assign(D.ar, { 'set.g.dev': 'وضع المطور',
     'set.devarrow': 'سهم التصويب', 'set.devarrow.h': 'سهم على العشب يبين اتجاه وقوة التمريرة / التسديدة أثناء التصويب، وأين ذهبت فعلاً',
     'set.powlow': 'قوة التمريرة القصيرة', 'set.powthru': 'قوة التمريرة البينية', 'set.powlobthru': 'قوة التمريرة البينية الطويلة', 'set.powlong': 'قوة التمريرة الطويلة', 'set.powshot': 'قوة التسديد',

@@ -316,7 +316,7 @@
   var FK_DIST = 10 * NS.M;
   // free kicks: QUICK seconds to play it at once (the fouled side's man on the ball, nobody set); then, in range of
   // goal, it is set: a wall, the best shooter on it with a run-up, the camera behind him (fkSetup)
-  var FK_QUICK = 2, FK_RANGE = 36 * NS.M, FK_RUNUP = 2.6 * NS.M, WALL_REACH = 2.05 * NS.M;
+  var FK_QUICK = 2, FK_RANGE = 36 * NS.M, FK_RUNUP = 3.5 * NS.M, WALL_REACH = 2.05 * NS.M;
   function keepAway(p, x, z, r) {
     var dx = p.pos.x - x, dz = p.pos.z - z, d2 = dx * dx + dz * dz;
     if (d2 >= r * r) return;
@@ -1277,6 +1277,7 @@
       p.wX = p.pos.x; p.wZ = p.pos.z;
       p.vel.set(0, 0, 0);
       p.stun = 0; p.tackleT = 0; p.slideT = 0; p.lungeT = 0; p.runToT = 0; p.throwIn = false; p.gkHands = false;
+      p.fkSpot = null; p.fkPend = null;
     }
     var taker = m.setTaker;
     var bx = m.setX, bz = m.setZ;
@@ -1308,9 +1309,12 @@
       m.penalty = true;
       m.setX = bx; m.setZ = bz; m.fkCam = 1; // (the camera behind the ball, facing the goal, until it is struck)
       taker.aiT = 0;
-      taker.pos.set(bx - a * 0.95, 0, bz);
-      taker.facing = a > 0 ? Math.PI / 2 : -Math.PI / 2;
+      // he stands back from the spot for a run-up (as at a set free kick: match.js fkRun), on the side of his strong foot
+      var pfs = taker.foot === 'L' ? -1 : 1, pra = Math.atan2(a, 0) + Math.PI - 0.45 * pfs;
+      taker.pos.set(bx + Math.sin(pra) * FK_RUNUP, 0, bz + Math.cos(pra) * FK_RUNUP);
+      taker.facing = Math.atan2(bx - taker.pos.x, bz - taker.pos.z);
       taker.carry = 0.95;
+      taker.fkSpot = { x: bx, z: bz };
     } else if (kind === 3) {
       var sz = bz > 0 ? 1 : -1;
       bz = sz * HALF_H;

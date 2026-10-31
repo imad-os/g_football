@@ -2,7 +2,7 @@
 (function (NS) {
   'use strict';
 
-  NS.VERSION = '1.65.0';
+  NS.VERSION = '1.66.0';
 
   // Pitch geometry (world units; x = length, z = width, y = up). NS.M: world units per metre, from the players: an
   // average footballer (1.81 m) is 2.9 units tall. Everything is at real size at that scale: the ball, the players,
@@ -96,6 +96,8 @@
     powLow: 1.0,
     powThru: 1.0,
     powLobThru: 1.0, // the long through ball (lofted over the defenders)
+    // Shot factors (Settings > Shot factors): how much of its effect on a shot's pace each factor keeps (1 = as it is)
+    sfStat: 1, sfOrient: 1, sfPress: 1, sfPace: 1, sfWeak: 1, sfContact: 1, sfShoulder: 1,
     powLong: 1.0,
     powShot: 1.0,
     passAssist: 60,
@@ -104,9 +106,10 @@
   };
 
   // Settings groups (the tabs of the Settings screen)
-  NS.SETTING_GROUPS = [['game', 'set.g.game'], ['video', 'set.g.video'], ['audio', 'set.g.audio'], ['comm', 'set.g.comm'], ['aima', 'set.g.aima'], ['dev', 'set.g.dev']];
+  NS.SETTING_GROUPS = [['game', 'set.g.game'], ['video', 'set.g.video'], ['audio', 'set.g.audio'], ['comm', 'set.g.comm'], ['aima', 'set.g.aima'], ['dev', 'set.g.dev'], ['shotf', 'set.g.shotf']];
 
   // Dev mode kick power: x the normal pace
+  var SF = [[0.7, '0.7'], [0.8, '0.8'], [0.9, '0.9'], [1, '1'], [1.1, '1.1'], [1.2, '1.2']];
   var POW = [[0.7, 'x0.7'], [0.85, 'x0.85'], [1.0, 'x1'], [1.15, 'x1.15'], [1.3, 'x1.3'], [1.5, 'x1.5']];
 
   // Settings schema: drives the Settings screen, validation and the app_config merge.
@@ -196,7 +199,15 @@
       options: [[0, '0 m'], [0.2, '0.2 m'], [0.4, '0.4 m'], [0.6, '0.6 m']] },
     // how much of its vertical speed the ball keeps when it bounces on the grass
     { key: 'ballBounce', group: 'dev', label: 'set.bounce', hint: 'set.bounce.h',
-      options: [[0.5, '0.50'], [0.58, '0.58'], [0.68, '0.68'], [0.75, '0.75'], [0.82, '0.82']] }
+      options: [[0.5, '0.50'], [0.58, '0.58'], [0.68, '0.68'], [0.75, '0.75'], [0.82, '0.82']] },
+    // Shot factors: each factor that changes a shot's pace, its effect x 0.7 .. 1.2 (Actions sf)
+    { key: 'sfStat', group: 'shotf', label: 'set.sf.stat', hint: 'set.sf.h', options: SF },
+    { key: 'sfOrient', group: 'shotf', label: 'set.sf.orient', hint: 'set.sf.h', options: SF },
+    { key: 'sfPress', group: 'shotf', label: 'set.sf.press', hint: 'set.sf.h', options: SF },
+    { key: 'sfPace', group: 'shotf', label: 'set.sf.pace', hint: 'set.sf.h', options: SF },
+    { key: 'sfWeak', group: 'shotf', label: 'set.sf.weak', hint: 'set.sf.h', options: SF },
+    { key: 'sfContact', group: 'shotf', label: 'set.sf.contact', hint: 'set.sf.h', options: SF },
+    { key: 'sfShoulder', group: 'shotf', label: 'set.sf.shoulder', hint: 'set.sf.h', options: SF }
   ];
 
   // Returns the validated value for a setting, or undefined when it is not allowed.
