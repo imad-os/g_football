@@ -132,6 +132,35 @@ h1, h2, p { margin: 0; }
 #event-title { font-size: 3rem; font-weight: 900; font-style: italic; letter-spacing: 0.12em; color: var(--amber); }
 #event-sub { font-size: 1.4rem; font-weight: 800; margin-top: 0.5rem; }
 
+/* v1.65: the broadcast caption under the scoreboard (HUD.osd): a coloured tag (FOUL / PENALTY / OFFSIDE) that wipes in,
+ * then the strip with the player, his card and what is given. Transform / opacity / clip-path only. */
+#hud-osd { position: absolute; top: calc(2.2% + 3.1rem); left: 2.5%; display: flex; align-items: stretch; height: 2.3rem;
+  font-weight: 800; filter: drop-shadow(0 0.25rem 0.6rem rgba(0, 0, 0, 0.45)); --osd: var(--amber); }
+#hud-osd.k-pen { --osd: #ef4444; }
+#hud-osd.k-off { --osd: #3b82f6; }
+.osd-tag { display: flex; align-items: center; gap: 0.45rem; padding: 0 1.2rem 0 0.7rem; background: var(--osd); color: #0b0f19;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 0.7rem) 100%, 0 100%); z-index: 1; }
+#osd-title { font-size: 1.1rem; font-style: italic; letter-spacing: 0.08em; text-transform: uppercase; }
+#osd-ico { display: block; width: 1.3rem; height: 1.3rem; }
+#osd-ico svg { display: block; width: 100%; height: 100%; }
+.osd-body { display: flex; align-items: center; gap: 0.55rem; margin-left: -0.7rem; padding: 0 1rem 0 1.3rem;
+  background: linear-gradient(90deg, rgba(9, 14, 28, 0.96), rgba(15, 23, 42, 0.9)); color: #f8fafc; font-size: 1rem;
+  border-bottom: 2px solid var(--osd); clip-path: polygon(0 0, 100% 0, calc(100% - 0.5rem) 100%, 0 100%); }
+#osd-badge { display: inline-block; width: 0.8rem; height: 0.8rem; border-radius: 2px; border: 1px solid rgba(255, 255, 255, 0.7); }
+#osd-card { display: none; width: 0.7rem; height: 1rem; border-radius: 0.12rem; border: 1px solid rgba(0, 0, 0, 0.5); }
+#osd-card.c1 { display: inline-block; background: #22c55e; }
+#osd-card.c2 { display: inline-block; background: #facc15; }
+#osd-card.c3 { display: inline-block; background: #ef4444; }
+#osd-sub { color: #94a3b8; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+#osd-sub::before { content: ''; display: inline-block; width: 1px; height: 0.9rem; margin-right: 0.55rem; vertical-align: -0.1rem; background: #475569; }
+#hud-osd.play .osd-tag { animation: osdWipe 0.35s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+#hud-osd.play .osd-body { animation: osdSlide 0.4s 0.15s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+#hud-osd.play #osd-card { animation: osdCard 0.5s 0.45s cubic-bezier(0.2, 1.6, 0.4, 1) both; }
+#hud-osd.out { opacity: 0; transform: translateX(-1.5rem); transition: opacity 0.3s, transform 0.3s; }
+@keyframes osdWipe { 0% { clip-path: polygon(0 0, 0 0, 0 100%, 0 100%); } 100% { clip-path: polygon(0 0, 100% 0, calc(100% - 0.7rem) 100%, 0 100%); } }
+@keyframes osdSlide { 0% { transform: translateX(-2rem); opacity: 0; } 100% { transform: none; opacity: 1; } }
+@keyframes osdCard { 0% { transform: scale(0.2) rotate(-30deg); } 100% { transform: none; } }
+
 /* ------------------------------------------------------------------ MENU */
 #menu-root {
   position: fixed; inset: 0; z-index: 40;
@@ -633,7 +662,7 @@ h1, h2, p { margin: 0; }
 .rp-key { display: inline-block; min-width: 1.6rem; margin-right: 0.4rem; padding: 0 0.4rem; border-radius: 0.35rem; text-align: center;
   background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.35); color: #fff; font-weight: 900; }
 #hud.replay-on #hud-bottom, #hud.replay-on #aima-box, #hud.replay-on #clap-fx, #hud.replay-on #hud-hint,
-#hud.replay-on #goal-fx, #hud.replay-on #event-banner { display: none !important; }
+#hud.replay-on #goal-fx, #hud.replay-on #event-banner, #hud.replay-on #hud-osd { display: none !important; }
 
 /* v1.29: full time: the result and the match statistics */
 #screen-result { gap: 0.7rem; }

@@ -17,6 +17,13 @@
   var boxes = [{ l: 0, r: 0, t: 2, b: 2 }, { l: 0, r: 0, t: 2, b: 2 }, { l: 0, r: 0, t: 2, b: 2 }];
   var covered = [false, false, false];
   var hintTimer = 0;
+  var osdTimer = 0, osdOut = 0;
+  // the broadcast caption's icons (HUD.osd): a whistle (foul), the penalty spot in the box, the assistant's flag (offside)
+  var OSD_ICO = {
+    foul: '<svg viewBox="0 0 24 24"><circle cx="9" cy="14" r="6" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M13 9h9v4h-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/><circle cx="9" cy="14" r="2" fill="currentColor"/></svg>',
+    pen: '<svg viewBox="0 0 24 24"><path d="M3 4h18v12H3z" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M8 4v5h8V4" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="12" cy="19.5" r="2.2" fill="currentColor"/></svg>',
+    off: '<svg viewBox="0 0 24 24"><path d="M5 2v20" stroke="currentColor" stroke-width="2.4"/><path d="M6 3h13v9H6z" fill="currentColor"/><path d="M6 3h6.5v4.5H6zM12.5 7.5H19V12h-6.5z" fill="#0b0f19" opacity="0.35"/></svg>'
+  };
   var clapTimer = 0;
   // checkoAI: a white rooster's head (named after the owner's rooster)
   var ROOSTER = '<svg viewBox="0 0 64 64" aria-hidden="true"><path fill="#ef4444" d="M20 18c-2-8 6-12 9-6 1-8 10-8 10 0 3-6 11-3 8 4 5 0 6 6 1 8H22c-4-1-5-4-2-6z"/>' +
@@ -53,7 +60,8 @@
       var ids = ['hud', 'hud-comp', 'hud-home-badge', 'hud-home-name', 'hud-score-home', 'hud-score-away', 'hud-away-name',
         'hud-away-badge', 'hud-clock', 'hud-telemetry', 'hud-fps', 'hud-quality', 'hud-radar-box', 'radar-canvas',
         'event-banner', 'event-title', 'event-sub', 'hud-hint', 'goal-fx', 'goal-word', 'goal-sub', 'hud-home-cards', 'hud-away-cards',
-        'aima-box', 'aima-name', 'aima-ico', 'aima-txt', 'aima-gauge', 'clap-fx', 'clap-pct', 'hud-sub'];
+        'aima-box', 'aima-name', 'aima-ico', 'aima-txt', 'aima-gauge', 'clap-fx', 'clap-pct', 'hud-sub',
+        'hud-osd', 'osd-ico', 'osd-title', 'osd-badge', 'osd-name', 'osd-card', 'osd-sub'];
       var i;
       for (i = 0; i < ids.length; i++) el[ids[i]] = $(ids[i]);
       for (i = 1; i <= 2; i++) {
@@ -75,7 +83,7 @@
 
     show: function (v) {
       el.hud.classList.toggle('hidden', !v);
-      if (!v) this.hideBanner();
+      if (!v) { this.hideBanner(); this.hideOsd(); }
       else this.measure();
     },
 
@@ -237,6 +245,25 @@
     },
     hideBanner: function () { el['event-banner'].classList.add('hidden'); bannerTimer = 0; },
 
+    // The broadcast caption under the scoreboard (a foul, a penalty, an offside), like a TV channel's: kind 'foul' |
+    // 'pen' | 'off', the title, the player (and his team's colour, his card 0..3), what is given; for `seconds`.
+    osd: function (kind, title, name, team, card, sub, seconds) {
+      var b = el['hud-osd'];
+      if (!b) return;
+      b.className = 'k-' + kind;
+      el['osd-ico'].innerHTML = OSD_ICO[kind] || '';
+      el['osd-title'].textContent = title.replace(/[!¡]/g, '').trim();
+      el['osd-badge'].style.background = team === 1 ? awayCss : homeCss;
+      el['osd-name'].textContent = name || '';
+      el['osd-card'].className = card ? 'c' + (card === 3 ? 3 : (card === 2 ? 2 : 1)) : '';
+      el['osd-sub'].textContent = sub || '';
+      el['osd-sub'].style.display = sub ? '' : 'none';
+      void b.offsetWidth; // (restart the animations)
+      b.classList.add('play');
+      osdTimer = seconds || 2; osdOut = 0;
+    },
+    hideOsd: function () { if (el['hud-osd']) el['hud-osd'].className = 'hidden'; osdTimer = 0; osdOut = 0; },
+
     hint: function (txt, seconds) {
       el['hud-hint'].textContent = txt;
       el['hud-hint'].classList.remove('hidden');
@@ -253,6 +280,8 @@
     tick: function (dt) {
       if (goalTimer > 0) { goalTimer -= dt; if (goalTimer <= 0) el['goal-fx'].classList.add('hidden'); }
       if (hintTimer > 0) { hintTimer -= dt; if (hintTimer <= 0) el['hud-hint'].classList.add('hidden'); }
+      if (osdTimer > 0) { osdTimer -= dt; if (osdTimer <= 0) { el['hud-osd'].classList.add('out'); osdOut = 0.35; } }
+      else if (osdOut > 0) { osdOut -= dt; if (osdOut <= 0) el['hud-osd'].className = 'hidden'; }
     },
 
     // Radar is repainted every third frame.

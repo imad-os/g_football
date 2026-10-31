@@ -639,10 +639,20 @@
       }
 
       // a pass is on its way to this player: he goes to meet it (a lofted ball: where it comes down, or at head
-      // height when a header was asked for). The stick is ignored until somebody has the ball.
-      if (!has && receiving(p)) {
+      // height when a header was asked for)
+      var rcvNow = !has && receiving(p);
+      // (a ball on its way to him: the stick sets his first touch, he meets it by himself; one running away from him,
+      // or lying loose: the stick steers him, sprint too, so it is never out of the human's hands)
+      var coming = rcvNow && (p.pos.x - ball.pos.x) * ball.vel.x + (p.pos.z - ball.pos.z) * ball.vel.z > 0 &&
+        ball.vel.x * ball.vel.x + ball.vel.z * ball.vel.z > 9;
+      if (rcvNow && len > 0.3 && !coming) {
+        p.runToT = 0;
+      } else if (rcvNow) {
         var chase = slot.knockT > 0 ? 14.4 : 0; // his own knock-on: flat out after it
-        World.intercept(p, chase || (sprint ? 12.5 : 11), slot.evActive && slot.evCtx === 3 ? 3.1 : 1.9);
+        // (looked for up to 4 s ahead; a ball he cannot meet in that time: he runs on after it, never to a stale spot)
+        if (World.intercept(p, chase || (sprint ? 12.5 : 11), slot.evActive && slot.evCtx === 3 ? 3.1 : 1.9, 80) >= 99) {
+          World.icX = ball.pos.x + ball.vel.x * 0.6; World.icZ = ball.pos.z + ball.vel.z * 0.6;
+        }
         // a through ball: he sprints on into the space it is played into and meets it there (only once it is close to
         // him does he go to the ball itself)
         if (Actions.runOn(p)) { World.icX = ball.thruX; World.icZ = ball.thruZ; chase = 12.8; }

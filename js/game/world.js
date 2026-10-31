@@ -410,10 +410,11 @@
 
     // Earliest time player p (running at `speed`) can meet the ball at a height he can play (<= reachY).
     // Sets World.icX / icZ to the meeting point. For a lofted ball this is where it comes down.
-    intercept: function (p, speed, reachY) {
+    // steps: how far ahead it looks (x 0.05 s, 50 by default)
+    intercept: function (p, speed, reachY, steps) {
       loadState(P);
-      var h = 0.05;
-      for (var i = 0; i <= 50; i++) {
+      var h = 0.05, n = steps || 50;
+      for (var i = 0; i <= n; i++) {
         var t = i * h;
         if (i > 0) { integrate(P, h); collide(P, false, h); }
         if (P.y > reachY) continue;

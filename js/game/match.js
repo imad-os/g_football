@@ -23,6 +23,9 @@
   var hurried = false; // a human pressed A / B: the other team's restart is played at once (hurryRestart)
   // the referee (not one of World.players: he never touches the ball)
   var ref = null;
+  // his signals (refSignal; animate shows them): a free kick, the arm out the way it goes; a penalty, the arm pointing at
+  // the spot as he runs towards it; an offside, the arm raised straight up (an indirect free kick)
+  var SIG_FOUL = 1, SIG_PEN = 2, SIG_OFF = 3, SIG_T = 2.0;
   var scorer = null;
   var breakClock = 0;
   var dangerT = 0;
@@ -280,6 +283,13 @@
       hipY -= 0.04 * hs * tw;
     }
 
+    if (p.sigT > 0 && p.sigK) {
+      // the referee's signal (refStep): the right arm raised to it, eased in and out
+      var sg = clamp(Math.min((SIG_T - p.sigT) / 0.25, p.sigT / 0.3), 0, 1);
+      var aim = p.sigK === SIG_OFF ? -2.95 : (p.sigK === SIG_PEN ? -1.3 : -1.65);
+      armR = armR * (1 - sg) + aim * sg; elbR *= 1 - sg; outR = outR * (1 - sg) + 0.1 * sg;
+      if (p.sigK === SIG_FOUL) { armL = armL * (1 - sg) - 0.25 * sg; } // (the other hand by his side: the whistle)
+    }
     mesh.body.position.y = hipY;
     mesh.body.rotation.x = lean;
     mesh.body.rotation.z = roll;
@@ -826,11 +836,11 @@
     m.setZ = clamp(victim.pos.z, -HALF_H + 2, HALF_H - 2);
     m.setTaker = victim;
     m.setPieceTimer = 1.6;
-    stopPlay();
-    ball.vel.set(0, 0, 0);
+    stopPlay(); // (the ball is not stopped dead: it runs on and slows down, rollOut)
     NS.Audio.whistle(0);
-    NS.HUD.banner(NS.I18n.t(inBox ? 'hud.penalty' : 'hud.foul'),
-      NS.I18n.t(CARD_KEY[card]) + ' - ' + tackler.name + '  •  ' + NS.I18n.t(inBox ? 'hud.penalty.sub' : 'hud.freekick'), 1.5);
+    NS.HUD.osd(inBox ? 'pen' : 'foul', NS.I18n.t(inBox ? 'hud.penalty' : 'hud.foul'), tackler.name, tackler.team,
+      card, NS.I18n.t(inBox ? 'hud.penalty.sub' : 'hud.freekick'), card === 3 ? 2.6 : 2);
+    refSignal(inBox ? SIG_PEN : SIG_FOUL, victim.team, inBox ? NS.attack(victim.team) * (HALF_W - NS.PEN_D) : m.setX, inBox ? 0 : m.setZ);
     if (card === 3) m.setPieceTimer = 2.2;
   }
 
@@ -851,9 +861,33 @@
     gk.diveRoll = -side * Math.sin(gk.facing) > 0 ? -1.25 : 1.25;
   }
 
+  function refSignal(kind, team, x, z) {
+    if (!ref) return;
+    ref.sigK = kind; ref.sigT = SIG_T; ref.sigX = x; ref.sigZ = z;
+    ref.sigA = kind === SIG_PEN ? Math.atan2(x - ref.pos.x, z - ref.pos.z) : Math.atan2(NS.attack(team), 0);
+  }
+
   function refStep(dt) {
     if (!ref) return;
     var ball = World.ball;
+    if (ref.sigT > 0) {
+      // signalling: he stops where he is (a penalty: he runs towards the spot first) and shows it
+      ref.sigT -= dt;
+      var k0 = Math.min(1, 6 * dt), gx0 = 0, gz0 = 0;
+      if (ref.sigK === SIG_PEN) {
+        var px = ref.sigX - ref.pos.x, pz = ref.sigZ - ref.pos.z, pd = Math.sqrt(px * px + pz * pz);
+        if (pd > 7) { gx0 = px / pd * 9.5; gz0 = pz / pd * 9.5; }
+        ref.sigA = Math.atan2(px, pz);
+      }
+      ref.vel.x += (gx0 - ref.vel.x) * k0;
+      ref.vel.z += (gz0 - ref.vel.z) * k0;
+      ref.pos.x += ref.vel.x * dt;
+      ref.pos.z += ref.vel.z * dt;
+      ref.facing = ref.sigA;
+      ref.mesh.root.rotation.y = ref.facing;
+      animate(ref, dt);
+      return;
+    }
     var tx = ball.pos.x - (ball.pos.x > 0 ? 5 : -5);
     var tz = ball.pos.z - 13;
     if (tz < -HALF_H + 2) tz = ball.pos.z + 13;
@@ -1014,15 +1048,15 @@
     if (NS.dbg) NS.dbg('offside_caught', q.team);
     if (NS.Stats) NS.Stats.offside(q.team);
     say('OFFSIDE', q.team);
-    World.ball.vel.set(0, 0, 0);
-    m.setPiece = 6;
+    m.setPiece = 6; // (the ball is not stopped dead in the air: it runs on and slows down, rollOut)
     m.setTeam = 1 - q.team;
     m.setX = clamp(q.pos.x, -HALF_W + 2, HALF_W - 2);
     m.setZ = clamp(q.pos.z, -HALF_H + 2, HALF_H - 2);
     m.setTaker = null;
     m.setPieceTimer = 1.4;
     NS.Audio.whistle(0);
-    NS.HUD.banner(NS.I18n.t('hud.offside'), q.name, 1.2);
+    NS.HUD.osd('off', NS.I18n.t('hud.offside'), q.name, q.team, 0, NS.I18n.t('hud.freekick'), 2);
+    refSignal(SIG_OFF, 1 - q.team, m.setX, m.setZ);
   }
 
   function nearestOf(t, x, z, skip) {
@@ -1272,6 +1306,7 @@
         k++;
       }
       m.penalty = true;
+      m.setX = bx; m.setZ = bz; m.fkCam = 1; // (the camera behind the ball, facing the goal, until it is struck)
       taker.aiT = 0;
       taker.pos.set(bx - a * 0.95, 0, bz);
       taker.facing = a > 0 ? Math.PI / 2 : -Math.PI / 2;
@@ -1506,7 +1541,7 @@
       World.pressT[1] = 0;
       World.gkRush[0] = World.gkRush[1] = 0;
       walking = false;
-      if (ref) { ref.pos.set(-3, 0, -12); ref.vel.set(0, 0, 0); ref.facing = 0; }
+      if (ref) { ref.pos.set(-3, 0, -12); ref.vel.set(0, 0, 0); ref.facing = 0; ref.sigT = 0; }
       m.setPieceTimer = 0; m.setPiece = 0; m.penalty = false; m.protectT = 0; m.restart = 0; m.setTaker = null;
       m.fkQuick = 0; m.fkSet = false; m.fkCam = 0; m.fkShooting = false;
       World.ball.offTeam = -1;
@@ -1668,7 +1703,10 @@
           p.pos.z = clamp(p.pos.z + p.vel.z * dt, -HALF_H - 0.3, HALF_H + 0.3);
           animate(p, dt);
         }
-        if (outK) rollOut(dt);
+        // (never a frozen ball: out of play, a foul or an offside, it runs on and slows down; after a whistle a player
+        // stops it a little sooner)
+        if (!outK) { var bd0 = Math.exp(-1.6 * dt); ball.vel.x *= bd0; ball.vel.z *= bd0; }
+        rollOut(dt);
         refStep(dt);
         if (m.setPieceTimer <= 0) startSetPiece();
         if (outK) NS.Scene.followBall(dt, ball.pos.x, ball.pos.z, settings.cameraMode);
@@ -1688,7 +1726,8 @@
         m.fkQuick -= dt;
         if (m.fkQuick <= 0 && m.fkShooting) fkSetup();
       }
-      if (m.fkCam > 0 && !m.fkSet) m.fkCam -= dt;
+      var penWait = m.penalty && ball.owner === m.setTaker;
+      if (m.fkCam > 0 && !m.fkSet && !penWait) m.fkCam -= dt;
       if (m.restart) {
         m.restartT += dt;
         if (ball.owner !== m.setTaker) {
@@ -1704,6 +1743,7 @@
       if (m.penalty && ball.owner !== m.setTaker && (ball.owner === null || ball.owner.team !== m.setTeam)) {
         m.penalty = false;
         if (NS.dbg) NS.dbg('penalty_taken', m.setTeam);
+        m.fkCam = 1.3; // (the camera stays behind it and watches it fly)
         if (!ball.owner) penaltyGuess(m.setTeam);
       }
 
@@ -2059,7 +2099,7 @@
         else NS.Scene.setRing(2 + i, false, 0, 0);
       }
       aimArrows(dt);
-      if (m.fkCam > 0) NS.Scene.fkView(dt, m.setX, m.setZ, NS.attack(m.setTeam) * HALF_W, !m.fkSet);
+      if (m.fkCam > 0) NS.Scene.fkView(dt, m.setX, m.setZ, NS.attack(m.setTeam) * HALF_W, !m.fkSet && !(m.penalty && ball.owner === m.setTaker));
       else NS.Scene.followBall(dt, ball.pos.x, ball.pos.z, settings.cameraMode);
     },
 
